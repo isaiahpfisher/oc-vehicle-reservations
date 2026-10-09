@@ -1,0 +1,13 @@
+[Unit]
+Description=NodeJS Course List App  
+After=network.target
+ 
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nodeapps/2026/project3/t1
+ExecStart=/home/ubuntu/.nvm/versions/node/v18.20.8/bin/node server.js
+Restart=on-failure
+ 
+[Install]
+WantedBy=multi-user.target
