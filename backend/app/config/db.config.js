@@ -6,6 +6,7 @@ const dbConfig = {
   PASSWORD: process.env.DB_PW || "",
   DB: process.env.DB_NAME || "courses-db",
   dialect: "mysql",
+  timezone: process.env.DB_TIMEZONE || "America/Chicago",
   pool: {
     max: 5,
     min: 0,

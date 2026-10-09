@@ -2,7 +2,7 @@
 
 Spec-Driven Development (SDD) starter kit — **empty product shell**.
 
-Specifications define *what* to build (`features/`). Cursor rules define *how* (`.cursor/rules/`). Tests verify both.
+Specifications define _what_ to build (`features/`). Cursor rules define _how_ (`.cursor/rules/`). Tests verify both.
 
 This repository was generated from the Speckit starter kit. Replace this README’s product name, database, and API prefix, then add `features/feature-1-….md` before writing application code.
 
@@ -12,11 +12,11 @@ This repository was generated from the Speckit starter kit. Replace this README�
 
 ## Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | Vue 3, Vuetify 4, Vite, vue-router, axios |
-| Backend | Node.js (ES modules), Express, Sequelize, MySQL |
-| Tests | Jest + supertest (backend), Vitest + `@vue/test-utils` (frontend) |
+| Layer    | Technology                                                        |
+| -------- | ----------------------------------------------------------------- |
+| Frontend | Vue 3, Vuetify 4, Vite, vue-router, axios                         |
+| Backend  | Node.js (ES modules), Express, Sequelize, MySQL                   |
+| Tests    | Jest + supertest (backend), Vitest + `@vue/test-utils` (frontend) |
 
 Default ports: frontend `8082`, backend `3200`. API mount: `/api` (change in `backend/server.js` and `frontend/src/services/services.js`).
 
@@ -46,11 +46,11 @@ Works on **macOS, Windows, and Linux** — use `npm run …` for all tooling (PD
 
 ## Branching
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Starter kit only — no feature implementation |
-| `dev` | Integration |
-| `feature/N-*` | One feature at a time |
+| Branch        | Purpose                                      |
+| ------------- | -------------------------------------------- |
+| `main`        | Starter kit only — no feature implementation |
+| `dev`         | Integration                                  |
+| `feature/N-*` | One feature at a time                        |
 
 ```bash
 git checkout -b dev
