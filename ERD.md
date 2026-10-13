@@ -19,7 +19,9 @@ erDiagram
     ISSUE_REPORT |o--o{ NOTE : " "
     MAINTENANCE_NEED |o--o{ NOTE : " "
     USER ||--o{ NOTE : " "
-    VEHICLE_REQUEST ||--o{ ISSUE_REPORT : " "
+    VEHICLE_REQUEST |o--o{ ISSUE_REPORT : " "
+    VEHICLE ||--o{ ISSUE_REPORT : " "
+    USER ||--o{ ISSUE_REPORT : " "
     USER |o--o{ ISSUE_REPORT : " "
     ISSUE_REPORT |o--o{ MAINTENANCE_NEED : " "
     USER ||--o{ MAINTENANCE_NEED : " "
@@ -112,7 +114,6 @@ erDiagram
       string license_plate "unique"
       date license_plate_expiration_date
       enum status "active, retired"
-      enum type "car, truck, van, golf_cart"
     }
 
     VEHICLE_REQUEST {
@@ -141,7 +142,6 @@ erDiagram
       int issue_report_id FK "optional"
       int maintenance_need_id FK "optional"
       int author_id FK
-      enum type
       text content
       boolean is_visible
       boolean include_in_email
@@ -149,7 +149,9 @@ erDiagram
 
     ISSUE_REPORT {
       int id PK
-      int vehicle_request_id FK
+      int vehicle_request_id FK "optional"
+      int vehicle_id FK
+      int author_id FK
       int assignee_id FK "optional"
       enum type "low_gas, dirty, maintenance, other"
       text description
