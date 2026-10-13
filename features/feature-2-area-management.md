@@ -482,3 +482,4 @@ Any signed in user may create, edit, delete, or read the list of areas.
 - An area row with `id` and `name`
 - `GET /api/areas` returns every area for any valid session
 - Delete removes an existing area unconditionally and returns `200`
+ 
