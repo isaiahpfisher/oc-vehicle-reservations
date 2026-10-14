@@ -14,7 +14,7 @@
 ### US-2.1: Create areas
 
 **As a** signed-in user
-**I want to** create an area with a name
+**I want to** create an area with a name and logo
 **So that** users managing and requesting vehicles can do so with a particular area
 
 **Priority:** P1
@@ -71,6 +71,8 @@
 - **FR-002**: `name` MUST be trimmed before save. An empty name MUST be rejected.
 - **FR-003**: An area MUST store `name`. `id` is assigned by the database.
 - **FR-004**: `name` MUST be unique. Creating an area with a name identical to an existing name MUST be rejected. Updating an area to have a different name that is also identical to an existing name MUST be rejected.
+- **FR-005**: `logo` MUST be trimmed before save.
+- **FR-006**: `logo` MUST be a URL or "".
 
 ---
 
@@ -121,7 +123,8 @@ Any signed in user may create, edit, delete, or read the list of areas.
 
 ```json
 {
-  "name": "Athletics"
+  "name": "Athletics",
+  "logo": "https://example.com/logo.png"
 }
 ```
 
@@ -131,6 +134,7 @@ Any signed in user may create, edit, delete, or read the list of areas.
 {
   "id": 1,
   "name": "Athletics",
+    "logo": "https://example.com/logo.png",
   "createdAt": "2026-07-02T12:00:00.000Z",
   "updatedAt": "2026-07-02T12:00:00.000Z"
 }
@@ -148,9 +152,9 @@ Any signed in user may create, edit, delete, or read the list of areas.
 **Single Vue view** (`Areas.vue`) — no sidebar / main-panel split.
 
 - Heading: **Area Management**
-- Primary action: **+ New Area** opens a `<v-dialog>` with **Name**, plus **Create** / **Cancel**.
-- Display areas as rows. Each row shows **name**.
-- **Edit** icon opens a `<v-dialog>` pre-filled with the current name; **Save** / **Cancel**.
+- Primary action: **+ New Area** opens a `<v-dialog>` with **Name** and **Logo**, plus **Create** / **Cancel**.
+- Display areas as rows. Each row shows **name** and the rendered logo, if any.
+- **Edit** icon opens a `<v-dialog>` pre-filled with the current name and logo; **Save** / **Cancel**.
 - **Delete** icon opens a confirmation `<v-dialog>`.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit area**, **Delete area**).
 - **Empty state:** **"No areas yet. Create your first area."** when there are no areas.
@@ -175,6 +179,7 @@ Any signed in user may create, edit, delete, or read the list of areas.
 |-------|------|-------|
 | `id` | INTEGER PK | Auto-increment |
 | `name` | STRING | Required; trimmed; unique; max 255 |
+| `logo` | TEXT | Optional; trimmed |
 | `createdAt` | DATE | Sequelize timestamps |
 | `updatedAt` | DATE | Sequelize timestamps |
 
@@ -192,12 +197,12 @@ Any signed in user may create, edit, delete, or read the list of areas.
 
 - **Given** I am signed in on the areas view
 - **When** I click **+ New Area**
-- **Then** a dialog opens with **Name** field
+- **Then** a dialog opens with **Name** and **Logo** fields
 
 #### Scenario: User saves area
 
 - **Given** I am signed in on the areas view
-- **When** I submit the create dialog with name `Athletics`
+- **When** I submit the create dialog with name `Athletics` and logo `https://example.com/logo.png`
 - **Then** the API returns `201` with that area
 - **And** `Athletics` appears in the areas list
 
@@ -206,6 +211,14 @@ Any signed in user may create, edit, delete, or read the list of areas.
 - **Given** I am signed in on the areas view
 - **When** I submit the create dialog without a name
 - **Then** validation blocks the request and I see a `Required field.` message
+
+#### Scenario: User creates area with missing logo
+
+- **Given** I am signed in on the areas view
+- **When** I submit the create dialog with name `Athletics` and no logo
+- **Then** the API returns `201` with that area
+- **And** `Athletics` appears in the areas list
+- **And** the response includes `logo: ""`
 
 #### Scenario: User requests to create an area with a missing name
 
@@ -251,15 +264,35 @@ Any signed in user may create, edit, delete, or read the list of areas.
 - **When** I request `POST /api/areas` with `{ name: "Athletics" }`
 - **Then** the API returns `400` with `{ message: "Name already taken." }`
 
+#### Scenario: User creates an area with a bad logo URL
+
+- **Given** I am signed in on the areas view
+- **When** I submit the create dialog with name `Athletics` and logo `logo.png`
+- **Then** validation blocks the request and I see an `Invalid logo URL.` message
+
+#### Scenario: User requests to create an area with a bad logo URL
+
+- **Given** I am signed in on the areas view
+- **When** I request `POST /api/areas` with name `Athletics` and logo `logo.png`
+- **Then** the API returns `400` with `{ message: "Invalid logo URL." }`
+
 ---
 
 ### US-2.2 — View areas
 
 #### Scenario: Areas view lists areas
 
-- **Given** I am signed in and areas exist
+- **Given** I am signed in and areas exist 
 - **When** I open the areas view
-- **Then** each row shows the area name
+- **Then** each row shows the area name 
+
+#### Scenario: Areas view lists areas with logo corresponding to if the logo exists
+
+- **Given** I am signed in
+- **And** Areas `Athletics` with logo `https://example.com/logo.png` and `Support Central` with no logo exist
+- **When** I open the areas view
+- **Then** I see a row `Athletics` with the rendered image corresponding to `https://example.com/logo.png`
+- **And** I see a row `Support Central` with no rendered logo
 
 #### Scenario: Areas empty state
 
@@ -288,12 +321,29 @@ Any signed in user may create, edit, delete, or read the list of areas.
 - **Then** the API returns `200` with the updated area
 - **And** the list shows `Athletics A`
 
+#### Scenario: User edits an area logo
+
+- **Given** I am signed in and an area with name `Athletics` and logo `https://example.com/logo.png` exists
+- **When** I change the logo to `https://example.com/logo2.png` and submit
+- **Then** the API returns `200` with the updated area
+- **And** the list still shows `Athletics`
+- **And** the response includes `logo: "https://example.com/logo2.png"`
+
 #### Scenario: User edits an area to have a missing name
 
 - **Given** I am signed in on the areas view
 - **And** I am editing an existing area
 - **When** I submit the edit dialog without a name
 - **Then** validation blocks the request and I see a `Required field.` message
+
+#### Scenario: User edits an area to have a missing logo
+
+- **Given** I am signed in and an area with name `Athletics` and logo `https://example.com/logo.png` exists
+- **And** I am editing the `Athletics` area
+- **When** I submit the edit dialog without a logo
+- **Then** the API returns `200` with the updated area
+- **And** the list still shows `Athletics`
+- **And** the response includes `logo: ""`
 
 #### Scenario: User requests to edit an area to have a missing name
 
@@ -346,6 +396,20 @@ Any signed in user may create, edit, delete, or read the list of areas.
 - **And** Another area exists with name `Support Central` and id `2`
 - **When** I request `PUT /api/areas/2` with `{ name: "Athletics" }`
 - **Then** the API returns `400` with `{ message: "Name already taken." }`
+
+#### Scenario: User updates an area to have a bad logo URL
+
+- **Given** I am signed in on the areas view
+- **And** I am editing an existing area
+- **When** I submit the edit dialog with a logo `logo.png`
+- **Then** validation blocks the request and I see an `Invalid logo URL.` message
+
+#### Scenario: User requests to update an area to have a bad logo URL
+
+- **Given** I am signed in on the areas view
+- **And** An area with name `Athletics` exists with id `1`
+- **When** I request `PUT /api/areas/1` with logo `logo.png`
+- **Then** the API returns `400` with `{ message: "Invalid logo URL." }`
 
 #### Scenario: User deletes an area
 
@@ -423,6 +487,8 @@ Any signed in user may create, edit, delete, or read the list of areas.
 | US-2.1 | User saves area | `backend/tests/areas.test.js` | `User saves area` |
 | US-2.1 | User saves area | `frontend/tests/Areas.test.js` | `User saves area` |
 | US-2.1 | User creates area with missing name | `frontend/tests/Areas.test.js` | `User creates area with missing name` |
+| US-2.1 | User creates area with missing logo | `backend/tests/areas.test.js` | `User creates area with missing logo` |
+| US-2.1 | User creates area with missing logo | `frontend/tests/Areas.test.js` | `User creates area with missing logo` |
 | US-2.1 | User requests to create an area with a missing name | `backend/tests/areas.test.js` | `User requests to create an area with a missing name` |
 | US-2.1 | User creates area with a whitespace-only name | `frontend/tests/Areas.test.js` | `User creates area with a whitespace-only name` |
 | US-2.1 | User requests to create an area with a whitespace-only name | `backend/tests/areas.test.js` | `User requests to create an area with a whitespace-only name` |
@@ -430,12 +496,19 @@ Any signed in user may create, edit, delete, or read the list of areas.
 | US-2.1 | User requests to create an area with name longer than 255 characters | `backend/tests/areas.test.js` | `User requests to create an area with name longer than 255 characters` |
 | US-2.1 | User creates an area with a non-unique name | `frontend/tests/Areas.test.js` | `User creates an area with a non-unique name` |
 | US-2.1 | User requests to create an area with a non-unique name | `backend/tests/areas.test.js` | `User requests to create an area with a non-unique name` |
+| US-2.1 | User creates an area with a bad logo URL | `frontend/tests/Areas.test.js` | `User creates an area with a bad logo URL` |
+| US-2.1 | User requests to create an area with a bad logo URL | `backend/tests/areas.test.js` | `User requests to create an area with a bad logo URL` |
 | US-2.2 | Areas view lists areas | `frontend/tests/Areas.test.js` | `Areas view lists areas` |
+| US-2.2 | Areas view lists areas with logo corresponding to if the logo exists | `frontend/tests/Areas.test.js` | `Areas view lists areas with logo corresponding to if the logo exists` |
 | US-2.2 | Areas empty state | `frontend/tests/Areas.test.js` | `Areas empty state` |
 | US-2.3 | Area rows have edit and delete actions | `frontend/tests/Areas.test.js` | `Area rows have edit and delete actions` |
 | US-2.4 | User edits an area name | `backend/tests/areas.test.js` | `User edits an area name` |
 | US-2.4 | User edits an area name | `frontend/tests/Areas.test.js` | `User edits an area name` |
+| US-2.4 | User edits an area logo | `backend/tests/areas.test.js` | `User edits an area logo` |
+| US-2.4 | User edits an area logo | `frontend/tests/Areas.test.js` | `User edits an area logo` |
 | US-2.4 | User edits an area to have a missing name | `frontend/tests/Areas.test.js` | `User edits an area to have a missing name` |
+| US-2.4 | User edits an area to have a missing logo | `backend/tests/areas.test.js` | `User edits an area to have a missing logo` |
+| US-2.4 | User edits an area to have a missing logo | `frontend/tests/Areas.test.js` | `User edits an area to have a missing logo` |
 | US-2.4 | User requests to edit an area to have a missing name | `backend/tests/areas.test.js` | `User requests to edit an area to have a missing name` |
 | US-2.4 | User edits an area to have a whitespace-only name | `frontend/tests/Areas.test.js` | `User edits an area to have a whitespace-only name` |
 | US-2.4 | User requests to edit an area to have a whitespace-only name | `backend/tests/areas.test.js` | `User requests to edit an area to have a whitespace-only name` |
@@ -443,6 +516,8 @@ Any signed in user may create, edit, delete, or read the list of areas.
 | US-2.4 | User requests to edit an area to have a name longer than 255 characters | `backend/tests/areas.test.js` | `User requests to edit an area to have a name longer than 255 characters` |
 | US-2.4 | User updates an area to have a non-unique name | `frontend/tests/Areas.test.js` | `User updates an area to have a non-unique name` |
 | US-2.4 | User requests to update an area to have a non-unique name | `backend/tests/areas.test.js` | `User requests to update an area to have a non-unique name` |
+| US-2.4 | User updates an area to have a bad logo URL | `frontend/tests/Areas.test.js` | `User updates an area to have a bad logo URL` |
+| US-2.4 | User requests to update an area to have a bad logo URL | `backend/tests/areas.test.js` | `User requests to update an area to have a bad logo URL` |
 | US-2.4 | User deletes an area | `backend/tests/areas.test.js` | `User deletes an area` |
 | US-2.4 | User deletes an area | `frontend/tests/Areas.test.js` | `User deletes an area` |
 | US-2.4 | User updates an area that does not exist | `backend/tests/areas.test.js` | `User updates an area that does not exist` |
@@ -458,7 +533,7 @@ Any signed in user may create, edit, delete, or read the list of areas.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-004** satisfied)
+- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-006** satisfied)
 - [ ] **Success Criteria (SC-001**–**SC-003)** met
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
@@ -472,7 +547,7 @@ Any signed in user may create, edit, delete, or read the list of areas.
 
 - Role checks on area endpoints
 - Role-specific area screens
-- Area logo
+- Area logo in object storage
 - Restricting deletion based on entities that reference an area
 
 ---
