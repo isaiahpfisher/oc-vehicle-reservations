@@ -7,15 +7,21 @@ erDiagram
     AREA |o--o{ ROLE : " "
     AREA ||--o{ VEHICLE : " "
     USER ||--o{ VEHICLE_REQUEST : " "
-    DRIVER ||--o{ VEHICLE_REQUEST : " "
+    VEHICLE_TYPE ||--o{ VEHICLE : " "
+    VEHICLE_TYPE ||--|{ VEHICLE_TYPE_INSTRUCTIONS : " "
+    AREA |o--o{ VEHICLE_TYPE_INSTRUCTIONS : " "
     DESTINATION ||--o{ VEHICLE_REQUEST : " "
     VEHICLE |o--o{ VEHICLE_REQUEST : " "
     AREA ||--o{ VEHICLE_REQUEST : " "
+    DRIVER ||--o{ VEHICLE_REQUEST_DRIVER : " "
+    VEHICLE_REQUEST ||--o{ VEHICLE_REQUEST_DRIVER : " "
     VEHICLE_REQUEST |o--o{ NOTE : " "
     ISSUE_REPORT |o--o{ NOTE : " "
     MAINTENANCE_NEED |o--o{ NOTE : " "
     USER ||--o{ NOTE : " "
-    VEHICLE_REQUEST ||--o{ ISSUE_REPORT : " "
+    VEHICLE_REQUEST |o--o{ ISSUE_REPORT : " "
+    VEHICLE ||--o{ ISSUE_REPORT : " "
+    USER ||--o{ ISSUE_REPORT : " "
     USER |o--o{ ISSUE_REPORT : " "
     ISSUE_REPORT |o--o{ MAINTENANCE_NEED : " "
     USER ||--o{ MAINTENANCE_NEED : " "
@@ -27,7 +33,7 @@ erDiagram
     MAINTENANCE_NEED |o--o{ SERVICE_LOG : " "
     USER ||--o{ MILEAGE_LOG : " "
     VEHICLE ||--o{ MILEAGE_LOG : " "
-    VEHICLE_REQUEST |o--o{ MILEAGE_LOG : " "
+    MILEAGE_LOG ||--o| SERVICE_LOG : " "
 
     USER {
       int id PK
@@ -56,6 +62,7 @@ erDiagram
       int user_id FK "optional"
       string first_name
       string last_name
+      string phone_number
       string license_state
       date license_expiration_date
       timestamp approved_at
@@ -78,12 +85,24 @@ erDiagram
       int id PK
       string name
       string logo "url to image"
-      text email_template
+    }
+
+    VEHICLE_TYPE {
+      int id PK
+      string name
+    }
+
+    VEHICLE_TYPE_INSTRUCTIONS {
+      int id PK
+      int vehicle_type_id FK "unique per area_id"
+      int area_id FK "optional"
+      text content
     }
 
     VEHICLE {
       int id PK
       int area_id FK
+      int vehicle_type_id FK
       string university_id "unique"
       string make
       string model
@@ -95,21 +114,26 @@ erDiagram
       string license_plate "unique"
       date license_plate_expiration_date
       enum status "active, retired"
-      enum type "car, truck, van, golf_cart"
     }
 
     VEHICLE_REQUEST {
       int id PK
       int user_id FK
-      int driver_id FK
       int destination_id FK
       int area_id FK
       int vehicle_id FK "optional"
+      text purpose
       date start_date
       date end_date
       boolean all_day
       int number_of_people
       enum status "pending, awaiting_vehicle, reserved, returned, cancelled, denied"
+    }
+
+    VEHICLE_REQUEST_DRIVER {
+      int id PK
+      int driver_id FK
+      int vehicle_request_id FK
     }
 
     NOTE {
@@ -118,14 +142,16 @@ erDiagram
       int issue_report_id FK "optional"
       int maintenance_need_id FK "optional"
       int author_id FK
-      enum type
       text content
       boolean is_visible
+      boolean include_in_email
     }
 
     ISSUE_REPORT {
       int id PK
-      int vehicle_request_id FK
+      int vehicle_request_id FK "optional"
+      int vehicle_id FK
+      int author_id FK
       int assignee_id FK "optional"
       enum type "low_gas, dirty, maintenance, other"
       text description
@@ -149,6 +175,8 @@ erDiagram
     SERVICE_TYPE {
       int id PK
       string name "unique"
+      int service_frequency_days
+      int service_frequency_miles
     }
 
     SERVICE_LOG {
@@ -156,6 +184,7 @@ erDiagram
       int user_id FK
       int vehicle_id FK
       int service_type_id FK
+      int mileage_log_id FK "must log miles at every servicing"
       int maintenance_need_id FK "optional"
       date serviced_at
     }
@@ -164,7 +193,6 @@ erDiagram
       int id PK
       int user_id FK
       int vehicle_id FK
-      int vehicle_request_id FK "optional"
       int odometer_reading
       date recorded_at
     }
