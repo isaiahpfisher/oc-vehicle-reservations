@@ -80,6 +80,16 @@
 **Priority:** P1
 **Acceptance scenarios:** see ### US-3.7 under Acceptance Criteria
 
+### US-3.8: Bootstrap the first admin
+
+**As a** system administrator deploying the app
+**I want to** run a script that makes an existing account an admin by email
+**So that** someone can manage roles in a fresh install where every account comes from Google sign-in
+
+**Priority:** P1
+**Independent test:** Sign in with Google once, run `npm run make-admin -- <your email>` in `backend/`, reload the app, and confirm you hold the admin role.
+**Acceptance scenarios:** see ### US-3.8 under Acceptance Criteria
+
 ---
 
 ## Requirements
@@ -93,12 +103,21 @@
 - **FR-005**: area_admin users can access vehicles, requests, vehicle_instructions, issue reports, maintenance_needs, and destinations (all scoped to their area, except destinations which has a global scope)
 - **FR-006**: Maintenance users can access vehicles, maintenance needs, service types
 - **FR-007**: Users with no special roles can only access their own vehicle requests (and create new ones)
+- **FR-008**: `backend/scripts/make-admin.mjs` (run as `npm run make-admin -- <email>` from `backend/`) takes one email, trimmed and matched case-insensitively. If a user with that email exists, it adds the `admin` role and exits `0`. If the user is already an admin, it changes nothing and exits `0`. If no user has that email, or no email is given, it prints an error, changes nothing, and exits `1`. The logic is exported as `makeAdmin(email)` so tests can call it without spawning a process.
+- **FR-009**: The backend is the source of truth for roles. `authenticate` loads the user's roles from the database on every request. The frontend refreshes the stored `user`'s roles from `GET /api/users/:userId` on the first navigation after each page load, before any role check runs.
+- **FR-010**: `authorizeRoles(...roles)` is a middleware factory. It authenticates like `authenticate`, then passes if the user holds **any** of the listed roles (admin always passes). Otherwise it returns `403`. `authenticateAdmin`, `authenticateMaintenance`, and `authenticateAreaAdmin` are defined as `authorizeRoles('admin')`, `authorizeRoles('maintenance')`, and `authorizeRoles('area_admin')`.
+- **FR-011**: Frontend routes declare required roles as `meta: { roles: [...] }`. The user needs **any one** of the listed roles (admin always passes). A route without `meta.roles` is open to every signed-in user. `router.beforeEach` and the navigation both read `meta.roles` through `useRoles().hasAnyRole()`, so there is one rule for both.
 
 ---
 
 ## Assumptions
 
 - User management does NOT use **dialog-based** workflows. Edit gets its own page. Only delete confirmation uses a dialog. Users register through Google, so no user creation.
+- The first admin signs in with Google once to create their account, then someone with server access runs `make-admin` for their email (**FR-008**). After that, admins grant admin through the Edit User page. There is no API endpoint for bootstrapping admins.
+- `useRoles()` exposes:
+  - `hasRole(role, areaId?)`: true only if the user holds that exact role. For `area_admin`, passing an `areaId` checks that specific area, and leaving it out matches any area. Admins are **not** treated as holding other roles here, so `hasRole` stays accurate for display (chips, labels).
+  - `hasAnyRole(roles)`: true if the user holds any listed role **or** is an admin. Use this for access checks (route guards, nav links, action buttons).
+  - `areaAdminAreaIds`: the ids of every area the user is area admin of, for scoping area admin UI.
 
 ## Edge Cases
 
@@ -119,13 +138,13 @@
 
 Only signed-in admin users may view, edit, and delete users. A user may also edit their information (from a profile page accessible from the profile dropdown) and view their roles, but they cannot change their roles unless they're an admin. Even admins cannot remove their own admin role.
 
-| Rule                    | Requirement                                                                                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **User Read All Scope** | `GET /api/users` require require `req.user.role` `admin`.                                                                                                         |
-| **User Read One Scope** | `GET /api/users/:userId` require require `req.user.role` `admin` or `:userId` = `req.user.id`                                                                     |
-| **User Write Scope**    | `PUT` and `DELETE` `/api/users/:userId` require `req.user.role` `admin` or `:userId` = `req.user.id`, admin's cannot delete themselves or remove their admin role |
-| **Role Read Scope**     | `GET`, `PUT` - `/api/roles/:userId` require `req.user.role` `admin`                                                                                               |
-| **Role Delete Scope**   | `GET`, `PUT` - `/api/roles/:userId` require `req.user.role` `admin`                                                                                               |
+| Rule                    | Requirement                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **User Read All Scope** | `GET /api/users` require require `req.user.roles` `admin`.                                                                                                         |
+| **User Read One Scope** | `GET /api/users/:userId` require require `req.user.roles` `admin` or `:userId` = `req.user.id`                                                                     |
+| **User Write Scope**    | `PUT` and `DELETE` `/api/users/:userId` require `req.user.roles` `admin` or `:userId` = `req.user.id`, admin's cannot delete themselves or remove their admin role |
+| **Role Read Scope**     | `GET`, `PUT` - `/api/roles/:userId` require `req.user.roles` `admin`                                                                                               |
+| **Role Delete Scope**   | `GET`, `PUT` - `/api/roles/:userId` require `req.user.roles` `admin`                                                                                               |
 
 ---
 
@@ -199,8 +218,10 @@ Defined in a previous feature
 
 ### Associations (in `models/index.js`)
 
-- User has many roles (0 to many)
-- Role belongs to User (exactly 1)
+- User has many Roles
+- Role belongs to User
+- Area has many Roles
+- Roles belongs to Area (nullable)
 
 ---
 
@@ -484,9 +505,21 @@ Defined in a previous feature
 - **When** a user without the area_admin or admin role calls it
 - **Then** the API returns `403` with **"Area admin role required."**
 
+#### Scenario: `authorizeRoles` allows any listed role
+
+- **Given** a route protected with `[authorizeRoles('area_admin', 'maintenance')]`
+- **When** a user with only the maintenance role calls it
+- **Then** the request reaches the controller
+
+#### Scenario: `authorizeRoles` rejects users with none of the listed roles
+
+- **Given** a route protected with `[authorizeRoles('area_admin', 'maintenance')]`
+- **When** a user with no roles calls it
+- **Then** the API returns `403` with **"One of these roles is required: area_admin, maintenance."**
+
 #### Scenario: Admin passes every role middleware
 
-- **Given** a route protected with `[authenticateMaintenance]` or `[authenticateAreaAdmin]`
+- **Given** a route protected with `[authenticateMaintenance]`, `[authenticateAreaAdmin]`, or `[authorizeRoles(...)]` without `admin` in the list
 - **When** an admin calls it
 - **Then** the request reaches the controller
 
@@ -514,11 +547,93 @@ Defined in a previous feature
 - **When** `hasRole('admin')` from `useRoles()` is called
 - **Then** it returns `false`
 
+#### Scenario: `hasRole` checks a specific area
+
+- **Given** the stored `user` is area admin of Athletics only
+- **When** `hasRole('area_admin', athleticsId)` and `hasRole('area_admin', musicId)` are called
+- **Then** they return `true` and `false`
+
+#### Scenario: `hasRole` without an area matches any area
+
+- **Given** the stored `user` is area admin of Athletics only
+- **When** `hasRole('area_admin')` is called
+- **Then** it returns `true`
+
+#### Scenario: `hasAnyRole` passes admins but `hasRole` does not
+
+- **Given** the stored `user` holds only the admin role
+- **When** `hasAnyRole(['maintenance'])` and `hasRole('maintenance')` are called
+- **Then** they return `true` and `false`
+
 #### Scenario: `router.beforeEach` redirects users without the required role
 
 - **Given** I am signed in without the admin role
 - **When** I navigate to the `users` route
 - **Then** `router.beforeEach` redirects me to `home`
+
+#### Scenario: `meta.roles` allows any listed role
+
+- **Given** a route with `meta: { roles: ['area_admin', 'maintenance'] }` and I hold only the maintenance role
+- **When** I navigate to that route
+- **Then** the route opens
+
+#### Scenario: Routes without `meta.roles` are open to every signed-in user
+
+- **Given** a route with no `meta.roles` and I hold no roles
+- **When** I navigate to that route
+- **Then** the route opens
+
+#### Scenario: Roles refresh on page load
+
+- **Given** my stored `user` has no roles and an admin has since given me the maintenance role
+- **When** I reload the app
+- **Then** `GET /api/users/:userId` is called before the first route check, my stored `user` includes the maintenance role, and maintenance-only links are visible
+
+#### Scenario: Removed role is dropped on page load
+
+- **Given** my stored `user` includes the admin role but an admin has since removed it
+- **When** I reload the app and navigate to the `users` route
+- **Then** I am redirected to `home` and the **Users** link is not visible
+
+#### Scenario: Role refresh with an invalid session
+
+- **Given** my stored `user` has an expired or deleted session
+- **When** I reload the app and the role refresh returns `401`
+- **Then** the stored `user` is cleared and I am redirected to `login`
+
+---
+
+### US-3.8 — Bootstrap the first admin
+
+#### Scenario: Script makes an existing user an admin
+
+- **Given** a user `jane@example.com` exists without the admin role
+- **When** I run `make-admin` with `jane@example.com`
+- **Then** that user holds the `admin` role and the script exits `0`
+
+#### Scenario: Script matching ignores case and spaces
+
+- **Given** a user `jane@example.com` exists without the admin role
+- **When** I run `make-admin` with `" Jane@Example.com "`
+- **Then** that user holds the `admin` role
+
+#### Scenario: Script with an unknown email
+
+- **Given** no user has the email `sam@example.com`
+- **When** I run `make-admin` with `sam@example.com`
+- **Then** it prints **"No account found for sam@example.com. Sign in with Google first."**, creates no user or role, and exits `1`
+
+#### Scenario: Script on an existing admin
+
+- **Given** a user `jane@example.com` already holds the admin role
+- **When** I run `make-admin` with `jane@example.com`
+- **Then** no duplicate role is created and the script exits `0`
+
+#### Scenario: Script without an email
+
+- **Given** the script is run
+- **When** no email argument is given
+- **Then** it prints **"Usage: npm run make-admin -- <email>"** and exits `1`
 
 ---
 
@@ -576,13 +691,28 @@ Defined in a previous feature
 | US-3.7 | `authenticateMaintenance` rejects other users                 | `backend/tests/authorization.test.js`  | `authenticateMaintenance rejects other users`                 |
 | US-3.7 | `authenticateAreaAdmin` allows area admins of any area        | `backend/tests/authorization.test.js`  | `authenticateAreaAdmin allows area admins of any area`        |
 | US-3.7 | `authenticateAreaAdmin` rejects other users                   | `backend/tests/authorization.test.js`  | `authenticateAreaAdmin rejects other users`                   |
+| US-3.7 | `authorizeRoles` allows any listed role                       | `backend/tests/authorization.test.js`  | `authorizeRoles allows any listed role`                       |
+| US-3.7 | `authorizeRoles` rejects users with none of the listed roles  | `backend/tests/authorization.test.js`  | `authorizeRoles rejects users with none of the listed roles`  |
 | US-3.7 | Admin passes every role middleware                            | `backend/tests/authorization.test.js`  | `Admin passes every role middleware`                          |
 | US-3.7 | Area admin controllers scope by `req.user` areas              | `backend/tests/authorization.test.js`  | `Area admin controllers scope by req.user areas`              |
 | US-3.7 | Stored user includes roles                                    | `backend/tests/auth.test.js`           | `Stored user includes roles`                                  |
 | US-3.7 | Stored user includes roles                                    | `frontend/tests/Login.test.js`         | `Stored user includes roles`                                  |
 | US-3.7 | `useRoles` returns true for held roles                        | `frontend/tests/Authorization.test.js` | `useRoles returns true for held roles`                        |
 | US-3.7 | `useRoles` returns false for missing roles                    | `frontend/tests/Authorization.test.js` | `useRoles returns false for missing roles`                    |
+| US-3.7 | `hasRole` checks a specific area                              | `frontend/tests/Authorization.test.js` | `hasRole checks a specific area`                              |
+| US-3.7 | `hasRole` without an area matches any area                    | `frontend/tests/Authorization.test.js` | `hasRole without an area matches any area`                    |
+| US-3.7 | `hasAnyRole` passes admins but `hasRole` does not             | `frontend/tests/Authorization.test.js` | `hasAnyRole passes admins but hasRole does not`               |
 | US-3.7 | `router.beforeEach` redirects users without the required role | `frontend/tests/Authorization.test.js` | `router.beforeEach redirects users without the required role` |
+| US-3.7 | `meta.roles` allows any listed role                           | `frontend/tests/Authorization.test.js` | `meta.roles allows any listed role`                           |
+| US-3.7 | Routes without `meta.roles` are open to every signed-in user  | `frontend/tests/Authorization.test.js` | `Routes without meta.roles are open to every signed-in user`  |
+| US-3.7 | Roles refresh on page load                                    | `frontend/tests/Authorization.test.js` | `Roles refresh on page load`                                  |
+| US-3.7 | Removed role is dropped on page load                          | `frontend/tests/Authorization.test.js` | `Removed role is dropped on page load`                        |
+| US-3.7 | Role refresh with an invalid session                          | `frontend/tests/Authorization.test.js` | `Role refresh with an invalid session`                        |
+| US-3.8 | Script makes an existing user an admin                        | `backend/tests/makeAdmin.test.js`      | `Script makes an existing user an admin`                      |
+| US-3.8 | Script matching ignores case and spaces                       | `backend/tests/makeAdmin.test.js`      | `Script matching ignores case and spaces`                     |
+| US-3.8 | Script with an unknown email                                  | `backend/tests/makeAdmin.test.js`      | `Script with an unknown email`                                |
+| US-3.8 | Script on an existing admin                                   | `backend/tests/makeAdmin.test.js`      | `Script on an existing admin`                                 |
+| US-3.8 | Script without an email                                       | `backend/tests/makeAdmin.test.js`      | `Script without an email`                                     |
 
 ## Definition of Done
 
@@ -590,6 +720,7 @@ Defined in a previous feature
 - [ ] **Success Criteria (SC-001**–**SC-003)** met
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
+- [ ] `make-admin` script added to `backend/package.json` and documented in the README setup steps
 - [ ] `features/reference/data-model.md` updated (if schema changed)
 - [ ] `features/reference/api.md` updated (if API changed)
 - [ ] `features/reference/behavior.md` updated (if product rules changed)
