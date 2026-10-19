@@ -155,13 +155,13 @@ Any signed in user may create, edit, delete, or read the list of areas.
 - Primary action: **+ New Area** opens a `<v-dialog>` with **Name** and **Logo**, plus **Create** / **Cancel**.
 - Display areas as rows. Each row shows **name** and the rendered logo, if any.
 - **Edit** icon opens a `<v-dialog>` pre-filled with the current name and logo; **Save** / **Cancel**.
-- **Delete** icon opens a confirmation `<v-dialog>`.
+- **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit area**, **Delete area**).
 - **Empty state:** **"No areas yet. Create your first area."** when there are no areas.
 - **Loading state:** skeleton or progress indicator while areas are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
 
-**Implementation note:** one route/view for areas; create, edit, and delete dialogs are reusable components in `components/common` folder.
+**Implementation note:** one route/view for areas; delete dialog is a reusable component in `components/common` folder; create and edit dialogs should be components stored in a dedicated components/areas folder and modeled after existing create and edit dialogs in `components/` folders.
 
 ---
 
