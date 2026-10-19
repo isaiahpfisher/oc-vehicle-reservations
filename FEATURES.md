@@ -8,6 +8,8 @@ There’s an example in the league repository (including an example spec, but th
 
 Name and logo. Logo will require finding a way to store images. I recommend an S3 bucket. AWS charges money. Supabase is free last I checked. We can wait to do logos until a later feature so it doesn't block us.
 
+Note: I wrote the feature spec to store the logo URL. (Lana) 
+
 Blocked by: Auth
 
 ## 3. Roles/Permissions
