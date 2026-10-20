@@ -67,7 +67,7 @@
 
 ### Functional Requirements
 
-- **FR-001**: All vehicle type endpoints MUST require a valid session and `admin` role (`authenticateAdmin` middleware).
+- **FR-001**: All vehicle type endpoints MUST require a valid session and `admin` role (`authorizeRoles('admin')` middleware).
 - **FR-002**: `name` MUST be trimmed before save. An empty vehicle type name MUST be rejected.
 - **FR-003**: A vehicle type MUST store `name`. `id` is assigned by the database.
 - **FR-004**: `name` MUST be unique (not case-sensitive). Creating a vehicle type with a name identical to an existing name MUST be rejected. Updating a vehicle type to have a different name that is also identical to an existing name MUST be rejected.
