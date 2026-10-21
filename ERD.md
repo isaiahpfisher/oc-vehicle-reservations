@@ -90,6 +90,7 @@ erDiagram
     VEHICLE_TYPE {
       int id PK
       string name
+      enum identifier "VIN, serial"
     }
 
     VEHICLE_TYPE_INSTRUCTIONS {
