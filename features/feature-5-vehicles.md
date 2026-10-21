@@ -14,7 +14,7 @@
 ### US-5.1: Create vehicles
 
 **As a** signed-in admin user
-**I want to** create a vehicle with an area, vehicle type, university id, make, model, year, purchase date, color, passenger capacity, license plate, license plate expiration date, and status.
+**I want to** create a vehicle with an area, vehicle type, university id, make, model, year, identifier (VIN or serial), purchase date, color, passenger capacity, license plate, license plate expiration date, and status.
 **So that** users managing vehicle requests can assign a particular vehicle
 
 **Priority:** P1
@@ -67,26 +67,27 @@
 
 ### Functional Requirements
 
------------------------
-First Change Feature 4 Spec.
-Add enum of whether the identifier for that type is a serial number or a VIN.
------------------------
-
 - **FR-001**: All vehicle endpoints MUST require a valid session and `admin` role (`authorizeRoles('admin')` middleware).
-- **FR-002**: `area_id` MUST correspond to an existing area.
-- **FR-003**: `vehicle_type_id` MUST correspond to an existing vehicle type.
-- **FR-004**: `university_id`, `make`, `model` and `license_plate` MUST be trimmed before save. An empty university id, make, model, or license plate MUST be rejected. 
-- **FR-004**: `vin` and `serial` MUST be trimmed before save. Each vehicle MUST have one and only one of either `vin` or `serial`. If both or neither are empty they MUST be rejected.
-- **FR-004**: `serial` corresponds to vehicle type `Golf Cart`. Any vehicle with 
-- **FR-005**: `purchased_at` and `license_plate_expiration_date` MUST be valid dates. Empty purchase date or license plate expiration date MUST be rejected.
-- **FR-006**: `color` and `status` MUST be selected from existing enum values. --Note: There are too many colors to be practical to list. Use an API to get colors by VIN?
-- **FR-007**: `year` MUST be an integer between 1950 and 2100. Empty year MUST be rejected.
-- **FR-008**: `passenger_capacity` MUST be an integer between 1 and 300, inclusive. Empty passenger capacity MUST be rejected.
-- **FR-008**: `university_id` MUST be unique. Creating a vehicle with a university id identical to an existing university id MUST be rejected. Updating a vehicle to have a different university id that is also identical to an existing university id MUST be rejected.
-- **FR-009**: `vin` MUST be unique (not case-sensitive). Creating a vehicle with a VIN identical to an existing VIN MUST be rejected. Updating a vehicle to have a different VIN that is also identical to an existing VIN MUST be rejected.
-- **FR-009**: `serial` MUST be unique (not case-sensitive). Creating a vehicle with a serial number identical to an existing serial number MUST be rejected. Updating a vehicle to have a different serial number that is also identical to an existing serial number MUST be rejected.
-- **FR-010**: `id` is assigned by the database.
-- **FR-011**: `status` must be one of `active`, `retired`
+- **FR-002**: `id` is assigned by the database.
+- **FR-003**: `area_id` MUST correspond to an existing area.
+- **FR-004**: `vehicle_type_id` MUST correspond to an existing vehicle type.
+- **FR-005**: `university_id` MUST be trimmed before save. An empty university id MUST be rejected. 
+- **FR-006**: `university_id` MUST be unique. Creating a vehicle with a university id identical to an existing university id MUST be rejected. Updating a vehicle to have a different university id that is also identical to an existing university id MUST be rejected.
+- **FR-007**: `make` MUST be trimmed before save. An empty make MUST be rejected. 
+- **FR-008**: `model` MUST be trimmed before save. An empty model MUST be rejected. 
+- **FR-009**: `year` MUST be an integer between 1950 and 2100, inclusive. An empty year MUST be rejected.
+- **FR-010**: `identifier` MUST be trimmed before save. An empty identifier MUST be rejected.
+- **FR-011**: `identifier` MUST be unique. Creating a vehicle with an identifier identical to an existing identifier MUST be rejected. Updating a vehicle to have a different identifier that is also identical to an existing identifier MUST be rejected.
+- **FR-012**: If the vehicle type corresponding to the `vehicle_type_id` has identifier `VIN`, then `vehicle_type_id` MUST be 17 characters after trim. Any other length MUST be rejected. 
+- **FR-013**: `purchased_at` MUST be a valid date between 01-01-1950 and the current date, inclusive. Empty purchase date MUST be rejected.
+- **FR-014**: `license_plate_expiration_date` MUST be a valid date after or the same as the current date. Not required.
+- **FR-015**: `color` MUST be trimmed before save. An empty color MUST be rejected. 
+- **FR-016**: `passenger_capacity` MUST be an integer between 1 and 300, inclusive. Empty passenger capacity MUST be rejected.
+- **FR-017**: `license_plate` MUST be trimmed before save. Not required.
+- **FR-018**: `license_plate` MUST be unique. Creating a vehicle with a license plate identical to an existing license plate MUST be rejected. Updating a vehicle to have a different license plate that is also identical to an existing license plate MUST be rejected.
+- **FR-019**: `license_plate_expiration_date` MUST be a valid date the same as or after the current date. Not required.
+- **FR-020**: `status` MUST be selected from existing enum of `active`, `retired`. Empty status MUST be rejected. 
+
 
 ---
 
