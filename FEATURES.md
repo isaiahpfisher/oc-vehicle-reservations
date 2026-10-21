@@ -24,6 +24,8 @@ Be sure to go back and use the new roles to enforce role access to the Area feat
 
 Just a name. Maybe add some default types like car, van, bus, and golf cart, but admin should be able to add custom vehicle types.
 
+I added a vehicle identifier of enum Serial Number or VIN because golf carts don't have VINs but serial numbers. 
+
 Blocked by: Roles
 
 ## 5. Vehicles
