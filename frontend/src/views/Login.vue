@@ -1,77 +1,121 @@
 <script setup>
-import { ref } from "vue";
+import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import authServices from "../services/authServices.js";
+import { readRedirectIdToken, startGoogleSignIn } from "../services/googleAuth.js";
 import Utils from "../config/utils.js";
-import { emailRules } from "../config/validation.js";
 import { useRequest } from "../composables/useRequest.js";
 
 const router = useRouter();
-const form = ref(null);
-const email = ref("");
-const password = ref("");
-
-const passwordRules = [(value) => !!value || "Password is required."];
-
 const { data, loading, error, run } = useRequest(authServices.loginUser, { fallback: "Login failed." });
 
-const submit = async () => {
-  const { valid } = await form.value.validate();
-  if (!valid) return;
-
-  const credentials = { email: email.value.trim(), password: password.value };
-
-  const result = await run(credentials);
-  if (!result) return;
+const finish = async (credential) => {
+  const result = await run({ googleCredentials: credential });
+  if (!result) {
+    return;
+  }
 
   Utils.setStore("user", data.value);
   window.dispatchEvent(new CustomEvent("user-logged-in"));
   await router.push({ name: "home" });
 };
+
+const signIn = async () => {
+  const credential = await startGoogleSignIn();
+  if (credential) {
+    await finish(credential);
+  }
+};
+
+onMounted(async () => {
+  const credential = readRedirectIdToken();
+  if (credential) {
+    await finish(credential);
+  }
+});
 </script>
 
 <template>
-  <v-container class="fill-height">
-    <v-row align="center" justify="center" class="fill-height">
-      <v-col cols="12" sm="8" md="5" lg="4">
-        <v-card elevation="2">
-          <v-card-title class="text-h5">Sign in</v-card-title>
+  <div class="auth-split">
+    <div class="auth-brand bg-primary" />
 
-          <v-card-text>
-            <v-form ref="form" @submit.prevent="submit">
-              <v-text-field
-                v-model="email"
-                label="Email"
-                type="email"
-                density="comfortable"
-                autocomplete="email"
-                :rules="emailRules"
-                class="mb-2"
-              />
+    <div class="auth-copy auth-copy-brand">
+      <div class="text-h4 text-white font-weight-bold mb-3">Vehicle Registration System</div>
+      <p class="text-body-1 text-white mb-0">Sign in with your OC Google account to reserve a vehicle.</p>
+    </div>
 
-              <v-text-field
-                v-model="password"
-                label="Password"
-                type="password"
-                density="comfortable"
-                autocomplete="current-password"
-                :rules="passwordRules"
-                class="mb-2"
-              />
+    <div class="auth-copy auth-copy-form">
+      <div class="text-h4 text-primary font-weight-bold mb-3">Log in with Google</div>
+      <p class="text-body-1 mb-8">Use your @oc.edu or @eagles.oc.edu account. No separate password is required.</p>
 
-              <v-alert v-if="error" type="error" density="compact" class="mb-4">
-                {{ error }}
-              </v-alert>
+      <v-alert v-if="error" type="error" class="mb-6">
+        {{ error }}
+      </v-alert>
 
-              <v-btn type="submit" color="primary" variant="elevated" block :loading="loading"> Sign in </v-btn>
-            </v-form>
-          </v-card-text>
-
-          <v-card-actions>
-            <v-btn variant="text" :to="{ name: 'register' }"> Create an account </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+      <v-btn
+        color="primary"
+        variant="elevated"
+        size="large"
+        block
+        class="oc-cta"
+        prepend-icon="mdi-google"
+        :loading="loading"
+        @click="signIn"
+      >
+        Log in with Google
+      </v-btn>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.auth-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr auto 1fr;
+  min-height: 100vh;
+}
+
+.auth-brand {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.auth-copy {
+  width: min(420px, calc(100% - 96px));
+  justify-self: center;
+}
+
+.auth-copy-brand {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.auth-copy-form {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+@media (max-width: 959px) {
+  .auth-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .auth-brand {
+    grid-row: 1;
+    min-height: 280px;
+  }
+
+  .auth-copy-brand {
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .auth-copy-form {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 40px 0;
+  }
+}
+</style>

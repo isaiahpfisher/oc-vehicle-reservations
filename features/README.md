@@ -16,6 +16,7 @@ No application code may be written unless it maps to a requirement in one of the
 
 | ID | File | Branch | Depends on |
 |----|------|--------|------------|
+| 1 | [feature-1-user-authentication-session-management.md](./feature-1-user-authentication-session-management.md) | `feature/1-user-authentication-session-management` | — |
 | 4 | [feature-4-faculty-management.md](./feature-4-faculty-management.md) | `feature/4-faculty-management` | Feature 1 (auth) |
 | 6 | [feature-6-enrollment-management.md](./feature-6-enrollment-management.md) | `feature/6-enrollment-management` | Feature 1 (auth), Feature 3 (courses), Feature 5 (sections) |
 | 7 | [feature-7-course-listing.md](./feature-7-course-listing.md) | `feature/7-course-listing` | Feature 1 (auth), Feature 2 (semesters), Feature 3 (courses), Feature 5 (sections), Feature 6 (enrollments) |

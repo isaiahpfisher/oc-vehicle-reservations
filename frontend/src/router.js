@@ -1,13 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Utils from "./config/utils.js";
 import Login from "./views/Login.vue";
-import Register from "./views/Register.vue";
 import Faculty from "./views/Faculty.vue";
 import Courses from "./views/Courses.vue";
 import Semesters from "./views/Semesters.vue";
 import CourseListing from "./views/CourseListing.vue";
 
-const publicRouteNames = new Set(["login", "register"]);
+const publicRouteNames = new Set(["login"]);
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -16,11 +15,6 @@ const router = createRouter({
       path: "/login",
       name: "login",
       component: Login,
-    },
-    {
-      path: "/register",
-      name: "register",
-      component: Register,
     },
     {
       path: "/",
