@@ -255,7 +255,7 @@ describe("Feature 7 — Course Listing UI", () => {
       await mountAppAt("/course-listing");
 
       expect(router.currentRoute.value.name).toBe("login");
-      expect(pageText()).toContain("Sign in");
+      expect(pageText()).toContain("Log in with Google");
       expect(listingGets()).toHaveLength(0);
     });
 

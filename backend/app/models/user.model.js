@@ -20,19 +20,10 @@ export default (sequelize, Sequelize) => {
         allowNull: false,
         unique: true,
       },
-      password: {
-        type: Sequelize.STRING(255),
-        allowNull: false,
-      },
       role: {
         type: Sequelize.STRING(20),
         allowNull: false,
         defaultValue: "student",
-      },
-    },
-    {
-      defaultScope: {
-        attributes: { exclude: ["password"] },
       },
     },
   );

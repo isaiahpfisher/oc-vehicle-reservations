@@ -14,7 +14,7 @@
 ### US-1.1: Create account
 
 **As a** new user
-**I want to** sign in using google auth with a pre-existing @eagles.oc.edu google account
+**I want to** sign in using google auth with a pre-existing OC Google account (`@oc.edu` or `@eagles.oc.edu`)
 **So that** I can sign in and use the vehicle registration app
 
 **Priority:** P1
@@ -24,7 +24,7 @@
 ### US-1.2: Sign in
 
 **As a** returning user
-**I want to** sign in with my pre-existing @eagles.oc.edu google account
+**I want to** sign in with my pre-existing OC Google account (`@oc.edu` or `@eagles.oc.edu`)
 **So that** I can access the application
 
 **Priority:** P1
@@ -81,7 +81,7 @@
 - **FR-003**: Session lifetime MUST be **24 hours** from creation.
 - **FR-004**: Every authenticated request MUST resolve to exactly one user via `req.user.id` from the session token (`authenticate`).
 - **FR-005**: User API calls MUST require a Bearer token. Opening `/` with no session MUST redirect to login.
-- **FR-006**: Login verifies `googleCredentials` and reads the user's email, first name, and last name from that Google token. The email must end with `@eagles.oc.edu`.
+- **FR-006**: Login verifies `googleCredentials` and reads the user's email, first name, and last name from that Google token. The email domain must be `oc.edu` or a subdomain such as `eagles.oc.edu`. Every successful login stores that first and last name on the user. The user cannot change their name or email.
 
 ## Assumptions
 
@@ -176,6 +176,7 @@ File: `frontend/src/views/Home.vue`.
 
 - Title **Vehicle Registration System**
 - Session present: avatar menu with name/email and **Sign out**
+- Name and email are display only. **Edit Profile** has no first name, last name, or email fields.
 - **Sign out** calls `POST /api/logout`, removes `localStorage` `user`, navigates to `login`
 
 Axios (`frontend/src/services/services.js`) attaches `Authorization: Bearer <token>` from `localStorage` `user` when present.
@@ -234,9 +235,17 @@ No `username` column.
 - **And** I am redirected back to the vehicle registration app
 - **Then** POST /api/login returns `200` with `email`, `firstName`, `lastName`, `userId`, and `token`
 - **And** the user entry is not duplicated in the database.
+- **And** the stored first and last name match that Google token
 - **And** a session row exists for me in the database
 - **And** I am sent to home
 - **And** my session is stored in `localStorage` under the key `user`
+
+#### Scenario: User cannot change name or email
+
+- **Given** I am signed in
+- **When** I update my profile with a different first name, last name, or email
+- **Then** my stored name and email stay unchanged
+- **And** the profile form has no first name, last name, or email fields
 
 ---
 
@@ -324,6 +333,22 @@ Each scenario above must map to at least one automated test. `it("…")` titles 
 
 | Story  | Scenario                                            | Test file                      | Test name                                             |
 | ------ | --------------------------------------------------- | ------------------------------ | ----------------------------------------------------- |
+| US-1.1 | User registers with valid information               | `backend/tests/auth.test.js`   | `User registers with valid information`               |
+| US-1.1 | User registers with valid information               | `frontend/tests/Login.test.js` | `User registers with valid information`               |
+| US-1.2 | Returning User Signs in                             | `backend/tests/auth.test.js`   | `Returning User Signs in`                             |
+| US-1.2 | Returning User Signs in                             | `frontend/tests/Login.test.js` | `Returning User Signs in`                             |
+| US-1.2 | User cannot change name or email                    | `backend/tests/auth.test.js`   | `User cannot change name or email`                    |
+| US-1.2 | User cannot change name or email                    | `frontend/tests/Login.test.js` | `User cannot change name or email`                    |
+| US-1.3 | Signed-in user refreshes the home page              | `frontend/tests/Login.test.js` | `Signed-in user refreshes the home page`              |
+| US-1.3 | API request includes session token                  | `frontend/tests/Login.test.js` | `API request includes session token`                  |
+| US-1.3 | Protected API request succeeds with a valid session | `backend/tests/auth.test.js`   | `Protected API request succeeds with a valid session` |
+| US-1.3 | Signed-in user visits the login page                | `frontend/tests/Login.test.js` | `Signed-in user visits the login page`                |
+| US-1.3 | Expired or invalid session token                    | `backend/tests/auth.test.js`   | `Expired or invalid session token`                    |
+| US-1.4 | User logs out                                       | `backend/tests/auth.test.js`   | `User logs out`                                       |
+| US-1.4 | User logs out                                       | `frontend/tests/Login.test.js` | `User logs out`                                       |
+| US-1.5 | Unauthenticated user is sent to login               | `frontend/tests/Login.test.js` | `Unauthenticated user is sent to login`               |
+| US-1.5 | Protected API is called without a token             | `backend/tests/auth.test.js`   | `Protected API is called without a token`             |
+| US-1.7 | Signed-in user changes pages                        | `frontend/tests/Login.test.js` | `Signed-in user changes pages`                        |
 
 ## Agent implementation request
 

@@ -7,22 +7,26 @@ import { flushPromises, mount } from "@vue/test-utils";
 import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
+import { startGoogleSignIn } from "../src/services/googleAuth.js";
 import { vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
 }));
 
+vi.mock("../src/services/googleAuth.js", () => ({
+  startGoogleSignIn: vi.fn(),
+  readRedirectIdToken: vi.fn(() => null),
+}));
+
 const storedUser = {
   userId: 1,
-  email: "jane@example.com",
+  email: "jane@eagles.oc.edu",
   firstName: "Jane",
   lastName: "Doe",
   role: "student",
   token: "session-token",
 };
-
-const apiError = (status, message) => Object.assign(new Error(message), { response: { status, data: { message } } });
 
 /** Let Vuetify validation, API promises, and router navigation finish. */
 const settle = async () => {
@@ -57,22 +61,7 @@ const mountAppAt = async (path) => {
   return wrapper;
 };
 
-const field = (label) =>
-  wrapper
-    .findAll(".v-text-field")
-    .find((f) => f.find("label").exists() && f.find("label").text() === label)
-    .find("input");
-
 const button = (text) => wrapper.findAll("button, a").find((b) => b.text().trim() === text);
-
-const fillAndSubmit = async (values, submitText) => {
-  for (const [label, value] of Object.entries(values)) {
-    await field(label).setValue(value);
-  }
-  expect(button(submitText).attributes("type")).toBe("submit");
-  await wrapper.find("form").trigger("submit");
-  await settle();
-};
 
 const readStoredUser = () => JSON.parse(localStorage.getItem("user"));
 
@@ -92,94 +81,50 @@ afterEach(() => {
 describe("Feature 1 — User Authentication and Session Management UI", () => {
   describe("US-1.1 — Create account", () => {
     it("User registers with valid information", async () => {
+      startGoogleSignIn.mockResolvedValueOnce("google-id-token");
       apiClient.post.mockResolvedValueOnce({ data: storedUser });
       await mountAppAt("/login");
 
-      await button("Create an account").trigger("click");
-      await waitFor(() => expect(router.currentRoute.value.name).toBe("register"));
-      await settle();
-
-      await fillAndSubmit(
-        {
-          "First name": "Jane",
-          "Last name": "Doe",
-          Email: "jane@example.com",
-          Password: "password1",
-          "Confirm password": "password1",
-        },
-        "Create account",
-      );
+      await button("Log in with Google").trigger("click");
 
       await waitFor(() => expect(router.currentRoute.value.name).toBe("home"));
       expect(apiClient.post).toHaveBeenCalledTimes(1);
-      expect(apiClient.post).toHaveBeenCalledWith("register", {
-        firstName: "Jane",
-        lastName: "Doe",
-        email: "jane@example.com",
-        password: "password1",
-      });
-      expect(router.currentRoute.value.name).toBe("home");
+      expect(apiClient.post).toHaveBeenCalledWith("login", { googleCredentials: "google-id-token" });
       expect(readStoredUser()).toEqual(storedUser);
-    });
-
-    it("User registers with a duplicate email", async () => {
-      apiClient.post.mockRejectedValueOnce(apiError(400, "Email is already registered."));
-      await mountAppAt("/register");
-
-      await fillAndSubmit(
-        {
-          "First name": "Jane",
-          "Last name": "Doe",
-          Email: "jane@example.com",
-          Password: "password1",
-          "Confirm password": "password1",
-        },
-        "Create account",
-      );
-
-      await waitFor(() => expect(wrapper.find(".v-alert").text()).toContain("Email is already registered."));
-      expect(apiClient.post).toHaveBeenCalledTimes(1);
-      expect(router.currentRoute.value.name).toBe("register");
-      expect(localStorage.getItem("user")).toBeNull();
     });
   });
 
   describe("US-1.2 — Sign in", () => {
-    it("User logs in with valid credentials", async () => {
+    it("Returning User Signs in", async () => {
+      startGoogleSignIn.mockResolvedValueOnce("google-id-token");
       apiClient.post.mockResolvedValueOnce({ data: storedUser });
       await mountAppAt("/login");
 
-      await fillAndSubmit({ Email: "jane@example.com", Password: "password1" }, "Sign in");
+      await button("Log in with Google").trigger("click");
 
       await waitFor(() => expect(router.currentRoute.value.name).toBe("home"));
-      expect(apiClient.post).toHaveBeenCalledTimes(1);
-      expect(apiClient.post).toHaveBeenCalledWith("login", { email: "jane@example.com", password: "password1" });
-      expect(router.currentRoute.value.name).toBe("home");
+      expect(apiClient.post).toHaveBeenCalledWith("login", { googleCredentials: "google-id-token" });
       expect(readStoredUser()).toEqual(storedUser);
     });
 
-    it("User logs in with an unknown email", async () => {
-      apiClient.post.mockRejectedValueOnce(apiError(401, "Invalid email or password."));
-      await mountAppAt("/login");
+    it("User cannot change name or email", async () => {
+      localStorage.setItem("user", JSON.stringify(storedUser));
+      await mountAppAt("/");
 
-      await fillAndSubmit({ Email: "nobody@example.com", Password: "password1" }, "Sign in");
+      await wrapper.find('[aria-label="Open profile menu"]').trigger("click");
+      const editProfile = await waitFor(() => {
+        const item = [...document.body.querySelectorAll("button")].find((el) => el.textContent.trim() === "Edit Profile");
+        expect(item).toBeDefined();
+        return item;
+      });
+      editProfile.click();
 
-      await waitFor(() => expect(wrapper.find(".v-alert").text()).toContain("Invalid email or password."));
-      expect(apiClient.post).toHaveBeenCalledTimes(1);
-      expect(router.currentRoute.value.name).toBe("login");
-      expect(localStorage.getItem("user")).toBeNull();
-    });
-
-    it("User logs in with an invalid password", async () => {
-      apiClient.post.mockRejectedValueOnce(apiError(401, "Invalid email or password."));
-      await mountAppAt("/login");
-
-      await fillAndSubmit({ Email: "jane@example.com", Password: "wrong-password" }, "Sign in");
-
-      await waitFor(() => expect(wrapper.find(".v-alert").text()).toContain("Invalid email or password."));
-      expect(apiClient.post).toHaveBeenCalledWith("login", { email: "jane@example.com", password: "wrong-password" });
-      expect(router.currentRoute.value.name).toBe("login");
-      expect(localStorage.getItem("user")).toBeNull();
+      await waitFor(() => expect(document.body.textContent).toContain("Edit Profile"));
+      expect(document.body.querySelector('input[autocomplete="given-name"]')).toBeNull();
+      expect(document.body.querySelector('input[autocomplete="family-name"]')).toBeNull();
+      expect(document.body.querySelector('input[autocomplete="email"]')).toBeNull();
+      expect(document.body.textContent).not.toContain("First name");
+      expect(document.body.textContent).not.toContain("Last name");
     });
   });
 
@@ -246,7 +191,8 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
       await mountAppAt("/");
 
       expect(router.currentRoute.value.name).toBe("login");
-      expect(wrapper.text()).toContain("Sign in");
+      expect(wrapper.text()).toContain("Log in with Google");
+      expect(wrapper.text()).toContain("Use your @oc.edu or @eagles.oc.edu account.");
       expect(wrapper.find('[aria-label="Open profile menu"]').exists()).toBe(false);
     });
   });

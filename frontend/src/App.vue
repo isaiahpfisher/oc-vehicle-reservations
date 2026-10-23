@@ -1,11 +1,16 @@
 <script setup>
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 import ConfirmProvider from "./components/common/ConfirmProvider.vue";
 import MenuBar from "./components/MenuBar.vue";
+
+const route = useRoute();
+const showMenu = computed(() => route.name !== "login");
 </script>
 
 <template>
   <v-app>
-    <MenuBar />
+    <MenuBar v-if="showMenu" />
     <v-main>
       <router-view />
     </v-main>

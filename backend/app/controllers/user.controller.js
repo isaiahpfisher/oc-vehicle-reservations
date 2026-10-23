@@ -1,9 +1,5 @@
-import bcrypt from "bcryptjs";
-import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
-
-const SALT_ROUNDS = 10;
 
 const exports = {};
 
@@ -50,51 +46,17 @@ exports.update = async (req, res) => {
       return res.status(400).send({ message: "Invalid user id." });
     }
 
-    const user = await db.user.unscoped().findByPk(userId);
+    const user = await db.user.findByPk(userId);
     if (!user) {
       return res.status(404).send({ message: `User with id=${userId} not found.` });
     }
 
-    const { firstName, lastName, email, password, role } = req.body;
+    const { role } = req.body;
 
-    if (!firstName?.trim()) {
-      return res.status(400).send({ message: "First name is required." });
-    }
-    if (!lastName?.trim()) {
-      return res.status(400).send({ message: "Last name is required." });
-    }
-    if (!email?.trim()) {
-      return res.status(400).send({ message: "Email is required." });
-    }
-
-    const trimmedEmail = email.trim();
-
-    const existingEmail = await db.user.findOne({
-      where: {
-        email: trimmedEmail,
-        id: { [Op.ne]: user.id },
-      },
-    });
-    if (existingEmail) {
-      return res.status(400).send({ message: "Email is already registered." });
-    }
-
-    if (password !== undefined && password !== null && password !== "") {
-      if (password.length < 8) {
-        return res.status(400).send({ message: "Password must be at least 8 characters." });
-      }
-
-      user.password = await bcrypt.hash(password, SALT_ROUNDS);
-    }
-
-    user.firstName = firstName.trim();
-    user.lastName = lastName.trim();
-    user.email = trimmedEmail;
     if (role !== undefined && role !== null && String(role).trim()) {
       user.role = String(role).trim();
+      await user.save();
     }
-
-    await user.save();
 
     const updatedUser = await db.user.findByPk(userId);
     return res.send(updatedUser);

@@ -11,6 +11,18 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | [data-model.md](./data-model.md) | Tables / columns |
 | **This file** | Ownership, sort, validation, UI rules |
 
+## Authentication
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Sign-in uses a Google ID token | `POST /api/login` body is `{ googleCredentials }`. The server reads email and name from the verified token. | Feature 1, FR-001, FR-006 |
+| Stored name follows Google | Every successful login writes `given_name` and `family_name` onto the user. Profile update does not change `firstName`, `lastName`, or `email`. | Feature 1, FR-006 |
+| Only OC emails can sign in | The domain must be `oc.edu` or a subdomain such as `eagles.oc.edu`. Any other verified email returns `401` `{ "message": "Non OC email used." }` and creates nothing. | Feature 1, FR-006 |
+| Session is an app JWT for 24 hours | Stored in `sessions` and `localStorage` key `user`. Later calls send `Authorization: Bearer`. An unexpired session for that user is reused. | Feature 1, FR-002, FR-003 |
+| Opening `/` without a session redirects to login | Router guard. A stored session that opens `/login` redirects home. | Feature 1, FR-005 |
+| Sign out deletes that session | `POST /api/logout` deletes the matching session row and the client removes `user`. | Feature 1, US-1.4 |
+| `authenticate` sets `req.user.id` | Bearer token must match an unexpired session row. | Feature 1, FR-004 |
+
 ## Enrollment
 
 | Rule | Enforcement | Provenance |

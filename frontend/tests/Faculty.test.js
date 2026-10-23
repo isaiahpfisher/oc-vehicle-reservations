@@ -526,7 +526,7 @@ describe("Feature 4 — Faculty Management UI", () => {
       await mountAppAt("/faculty");
 
       expect(router.currentRoute.value.name).toBe("login");
-      expect(wrapper.text()).toContain("Sign in");
+      expect(wrapper.text()).toContain("Log in with Google");
       expect(facultyServices.getFaculty).not.toHaveBeenCalled();
     });
 

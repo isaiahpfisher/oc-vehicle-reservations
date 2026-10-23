@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import Utils from "../config/utils.js";
-import { emailRules } from "../config/validation.js";
 import authServices from "../services/authServices.js";
 import userServices from "../services/userServices.js";
 
@@ -13,16 +12,7 @@ const loggingOut = ref(false);
 const savingProfile = ref(false);
 const profileError = ref("");
 
-const firstName = ref("");
-const lastName = ref("");
-const email = ref("");
-const password = ref("");
-const confirmPassword = ref("");
 const role = ref("student");
-const firstNameRules = [(value) => !!value?.trim() || "First name is required."];
-const lastNameRules = [(value) => !!value?.trim() || "Last name is required."];
-const passwordRules = [(value) => !value || value.length >= 8 || "Password must be at least 8 characters."];
-const confirmPasswordRules = [(value) => !password.value || value === password.value || "Passwords do not match."];
 
 const displayName = computed(() => {
   if (!user.value) {
@@ -47,17 +37,8 @@ onUnmounted(() => {
   window.removeEventListener("user-logged-out", refreshUser);
 });
 
-const resetPasswordFields = () => {
-  password.value = "";
-  confirmPassword.value = "";
-};
-
 const populateEditForm = (profile) => {
-  firstName.value = profile.firstName ?? "";
-  lastName.value = profile.lastName ?? "";
-  email.value = profile.email ?? "";
   role.value = profile.role ?? "student";
-  resetPasswordFields();
 };
 
 const openEditDialog = async () => {
@@ -82,7 +63,6 @@ const openEditDialog = async () => {
 const closeEditDialog = () => {
   editDialogOpen.value = false;
   profileError.value = "";
-  resetPasswordFields();
 };
 
 const handleSaveProfile = async () => {
@@ -97,15 +77,8 @@ const handleSaveProfile = async () => {
 
   try {
     const payload = {
-      firstName: firstName.value.trim(),
-      lastName: lastName.value.trim(),
-      email: email.value.trim(),
       role: role.value.trim(),
     };
-
-    if (password.value) {
-      payload.password = password.value;
-    }
 
     const response = await userServices.updateUser(user.value.userId, payload);
     const currentUser = Utils.getStore("user");
@@ -144,7 +117,7 @@ const handleLogout = async () => {
 
 <template>
   <v-app-bar color="primary" density="comfortable">
-    <v-app-bar-title>Course Management System</v-app-bar-title>
+    <v-app-bar-title>Vehicle Registration System</v-app-bar-title>
 
     <v-btn v-if="user?.role === 'admin'" variant="text" color="white" to="/faculty"> Faculty </v-btn>
     <v-btn v-if="user" variant="text" color="white" to="/">Courses</v-btn>
@@ -200,54 +173,6 @@ const handleLogout = async () => {
         <v-card-text>
           <v-form ref="editForm" @submit.prevent="handleSaveProfile">
             <v-row>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="firstName"
-                  label="First name"
-                  density="comfortable"
-                  autocomplete="given-name"
-                  :rules="firstNameRules"
-                />
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="lastName"
-                  label="Last name"
-                  density="comfortable"
-                  autocomplete="family-name"
-                  :rules="lastNameRules"
-                />
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                  v-model="email"
-                  label="Email"
-                  type="email"
-                  density="comfortable"
-                  autocomplete="email"
-                  :rules="emailRules"
-                />
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="password"
-                  label="New password"
-                  type="password"
-                  density="comfortable"
-                  autocomplete="new-password"
-                  :rules="passwordRules"
-                />
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="confirmPassword"
-                  label="Confirm password"
-                  type="password"
-                  density="comfortable"
-                  autocomplete="new-password"
-                  :rules="confirmPasswordRules"
-                />
-              </v-col>
               <v-col cols="12" md="6">
                 <v-text-field v-model="role" label="Role" density="comfortable" />
               </v-col>
