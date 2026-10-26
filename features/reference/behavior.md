@@ -1,6 +1,6 @@
 # Behavior & Rules Reference
 
-**Living snapshot** of product rules currently in force. Feature 6 enrollment rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules and Feature 6 enrollment rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -22,6 +22,16 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Opening `/` without a session redirects to login | Router guard. A stored session that opens `/login` redirects home. | Feature 1, FR-005 |
 | Sign out deletes that session | `POST /api/logout` deletes the matching session row and the client removes `user`. | Feature 1, US-1.4 |
 | `authenticate` sets `req.user.id` | Bearer token must match an unexpired session row. | Feature 1, FR-004 |
+
+## Areas
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Any signed-in user can manage areas | `GET`, `POST`, `PUT`, and `DELETE /api/areas` use `authenticate`. No role check. `/areas` is not limited to admins. A visitor with no session is sent to `/login`. | Feature 2, FR-001 |
+| Name is trimmed, required, unique, and at most 255 characters | Empty or whitespace-only name returns `400` `{ "message": "Missing name." }`. A longer name returns `{ "message": "Name too long." }`. A name already stored on a different area returns `{ "message": "Name already taken." }`. Saving an area with its own current name is allowed. | Feature 2, FR-002, FR-004 |
+| Logo is a URL or an empty string | The value is trimmed. `""` is stored when the logo is omitted or blank. `logo.png` returns `400` `{ "message": "Invalid logo URL." }`. A non-empty logo must be an `http` or `https` URL. The areas list renders an image only when `logo` is not empty. | Feature 2, FR-005, FR-006 |
+| Delete removes the area | `DELETE` returns `200` and does not check for other rows that point at the area. | Feature 2, Assumptions |
+| Areas are managed on one screen | `/areas` heading is **Area Management**. Create and edit use a dialog with **Name** and **Logo**. Delete uses the shared confirmation dialog. Empty list copy is **No areas yet. Create your first area.** | Feature 2, Screen Requirements |
 
 ## Enrollment
 
