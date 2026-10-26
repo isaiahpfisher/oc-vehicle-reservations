@@ -1576,6 +1576,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **When** I request `DELETE /api/vehicles/1`
 - **Then** the API returns `401` with `{ message: "Not authorized for the specified area" }`
 
+----------------------------- Deleting areas and vehicle types scenarios ------------------
 
 ---
 
