@@ -48,6 +48,8 @@ Map these into Vuetify’s `theme.themes.light.colors` (and Material-style alias
 
 Suggested scale from base × 1.25: 16 → 20 → 25 → 31.25 → 39. Prefer Vuetify type props / theme typography over ad-hoc `font-size` in components.
 
+**Vuetify 4 uses Material 3 type classes.** Use `text-headline-{large,medium,small}`, `text-title-{large,medium,small}`, `text-body-{large,medium,small}`, `text-label-{large,medium,small}`. The old MD2 classes (`text-h4`, `text-subtitle-1`, `text-body-1`, `text-caption`, …) **do not exist** in Vuetify 4 and silently do nothing. Inter is wired to these classes via `--v-font-body` / `--v-font-heading` in `App.vue`.
+
 ## Spacing
 
 - Base unit: **4px**
@@ -82,9 +84,70 @@ For users with additional roles, use a sidebar instead of a menu bar. The sideba
 </v-app>
 ```
 
-Hide `MenuBar` / `Sidebar` on login and register routes (Feature 1). Introduce `MenuBar` in Feature 2.
+Hide `MenuBar` / `Sidebar` on login and register routes (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links.
 
 Add breadcrumbs to the top of all nested pages so users can easily get back to the previous page(s).
+
+## Page Shells (required for every view)
+
+Build every routed view from the shared shells in `frontend/src/components/layout/` so pages stay consistent. Do **not** hand-roll `<v-container>` + `<h2>` headers, title/subtitle card headers, or two-column detail layouts in views.
+
+| Component | Use for | Key props / slots |
+| --- | --- | --- |
+| `PageShell` | The outer frame of **every** view | `title`, `subtitle`, `breadcrumbs` (required on nested pages); `#actions` for header CTAs (e.g. **+ New Vehicle**); `loading` / `error` for whole-page loads (`#loading` slot for a custom skeleton); `maxWidth` for narrow single-column pages |
+| `SectionCard` | Any titled card of content or settings | `title`, `subtitle`; `#append` for a header CTA; default slot = body; `#actions` = footer buttons under a divider (secondary/cancel first, primary last) |
+| `DetailHeader` | The identity card at the top of a detail page | `title` (rendered as the page `h2`), `subtitle`, `meta`, `initials` or `icon`; `#append` for status/role chips |
+| `DetailLayout` | Detail page body | `#header` (a `DetailHeader`), `#aside` (narrow column: what the record is / its settings, as `SectionCard`s), default slot (wide column: tabs and tables of related activity) |
+
+Pair them with the existing shared pieces in `components/common/`:
+
+- `ListState` — loading / empty / error / no-results for lists (keep it **inside** `PageShell` so search and filters stay visible).
+- `ComingSoon` — placeholder for a section a later feature fills in (`compact` inside a `SectionCard`).
+- `useConfirm()` (rendered by `ConfirmProvider`) — every delete/destructive confirm.
+
+### List page
+
+```vue
+<PageShell title="Vehicles">
+  <template #actions>
+    <v-btn color="primary" variant="elevated" class="oc-cta" @click="openCreate">+ New Vehicle</v-btn>
+  </template>
+
+  <v-row><!-- search + filters --></v-row>
+
+  <ListState :loading :error :empty="!items.length" :no-results="!filtered.length" empty-title="No vehicles yet.">
+    <v-data-table :items="filtered" ... />
+  </ListState>
+</PageShell>
+```
+
+### Detail page
+
+```vue
+<PageShell :breadcrumbs :loading :error="loadError">
+  <DetailLayout>
+    <template #header>
+      <DetailHeader :title="vehicle.name" :subtitle="vehicle.licensePlate" icon="mdi-van-passenger">
+        <template #append><v-chip size="small" color="primary" variant="tonal">Active</v-chip></template>
+      </DetailHeader>
+    </template>
+
+    <template #aside>
+      <SectionCard title="Details" subtitle="…">
+        <!-- fields -->
+        <template #actions>
+          <v-btn color="secondary" variant="text">Cancel</v-btn>
+          <v-btn color="primary" variant="elevated" class="oc-cta">Save</v-btn>
+        </template>
+      </SectionCard>
+    </template>
+
+    <v-card><!-- v-tabs of related records --></v-card>
+  </DetailLayout>
+</PageShell>
+```
+
+Reference implementations: `views/users/ListUsers.vue` (list) and `views/users/UserDetails.vue` (detail). If a page needs a layout the shells can't express, extend the shell (and its tests in `frontend/tests/PageShells.test.js`) rather than working around it in the view.
 
 ## Form Components
 
@@ -106,4 +169,4 @@ Add breadcrumbs to the top of all nested pages so users can easily get back to t
 
 ## View States
 
-Every data-driven view handles: **loading** (`:loading` or spinner), **empty** (zero-length message), **error** (ref + alert).
+Every data-driven view handles: **loading** (`:loading` or spinner), **empty** (zero-length message), **error** (ref + alert). Use `PageShell` `loading`/`error` for whole-page loads and `ListState` for lists.

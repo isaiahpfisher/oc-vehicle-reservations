@@ -6,6 +6,7 @@ const router = Router();
 
 router.get("/", [authenticateAdmin], userController.findAll);
 router.get("/:id", [authenticate], userController.findOne);
-router.put("/:id", [authenticate], userController.update);
+router.put("/:id", [authenticateAdmin], userController.update);
+router.delete("/:id", [authenticateAdmin], userController.remove);
 
 export default router;

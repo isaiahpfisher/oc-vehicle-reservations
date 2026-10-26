@@ -11,6 +11,11 @@ const authServices = {
     return apiClient.post("login", credentials);
   },
 
+  /** Development only (Feature 3 FR-014): `{ email, password }` for an existing user. */
+  devLogin(credentials) {
+    return apiClient.post("dev-login", credentials);
+  },
+
   async logoutUser() {
     try {
       await apiClient.post("logout");

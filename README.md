@@ -44,6 +44,38 @@ cd frontend && npm run dev
 
 Works on **macOS, Windows, and Linux** — use `npm run …` for all tooling (PDF, Agility, bundles).
 
+### Make the first admin
+
+Every account comes from Google sign-in, so a fresh install has no admin. Start the app, sign in with Google once to create your account, then from `backend/`:
+
+```bash
+npm run make-admin -- you@oc.edu
+```
+
+Reload the app; you now hold the `admin` role and can grant roles to others from **Users**. The email is matched case-insensitively. The script exits `1` and changes nothing if no account has that email.
+
+### Seed test data and sign in as other users (development only)
+
+To test role-based access, seed realistic users and sign in as them without Google. From the repo root or `backend/`:
+
+```bash
+npm run seed -- --keep you@eagles.oc.edu   # replaces users, sessions, roles, and areas; --keep preserves your account
+```
+
+Re-run it any time to reset to the same data. The backend (server and scripts) reads `backend/.env`, falling back to the repo-root `.env`, from whatever directory you start it in.
+
+Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Developer sign-in** form under the Google button on the login page (it only appears in development builds). Every account's password is `password` (override with `DEV_LOGIN_PASSWORD`). Dev sign-in is refused whenever `NODE_ENV=production`, and `npm run seed` refuses to run there.
+
+| Email | Roles |
+| ----- | ----- |
+| `admin@oc.edu` | Admin |
+| `maintenance@oc.edu` | Maintenance |
+| `areaadmin@oc.edu` | Area Admin — Athletics |
+| `multirole@oc.edu` | Maintenance, Area Admin — Music, Area Admin — Theatre |
+| `requester@oc.edu` | none (requester) |
+
+The seed also adds staff and students across six areas (Admissions, Athletics, Facilities, Music, Student Life, Theatre); see `backend/scripts/seed.mjs`.
+
 ## Branching
 
 | Branch        | Purpose                                      |

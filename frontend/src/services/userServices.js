@@ -9,8 +9,13 @@ const userServices = {
     return apiClient.get(`users/${userId}`);
   },
 
-  updateUser(userId, payload) {
-    return apiClient.put(`users/${userId}`, payload);
+  /** Replace a user's roles: `roles` is `[{ role, areaId? }]`. Name and email are not editable. */
+  updateUserRoles(userId, roles) {
+    return apiClient.put(`users/${userId}`, { roles });
+  },
+
+  deleteUser(userId) {
+    return apiClient.delete(`users/${userId}`);
   },
 };
 

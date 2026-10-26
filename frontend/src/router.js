@@ -1,13 +1,16 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Utils from "./config/utils.js";
 import Login from "./views/Login.vue";
-import Faculty from "./views/Faculty.vue";
-import Courses from "./views/Courses.vue";
-import Semesters from "./views/Semesters.vue";
-import CourseListing from "./views/CourseListing.vue";
+import Home from "./views/Home.vue";
+import userServices from "./services/userServices.js";
+import { setStoredRoles, syncUser, useRoles } from "./composables/useRoles.js";
 
 const publicRouteNames = new Set(["login"]);
 
+/**
+ * `meta.roles`: the user needs any one of these (admins always pass); no `meta.roles` = any signed-in user.
+ * `meta.nav` / `meta.icon`: label and icon for the MenuBar/Sidebar link, shown only when the user may open the route.
+ */
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -19,22 +22,26 @@ const router = createRouter({
     {
       path: "/",
       name: "home",
-      component: Courses,
+      component: Home,
+      meta: { nav: "Home", icon: "mdi-home-outline" },
     },
     {
-      path: "/faculty",
-      name: "faculty",
-      component: Faculty,
+      path: "/users",
+      name: "users",
+      component: () => import("./views/users/ListUsers.vue"),
+      meta: { nav: "Users", icon: "mdi-account-multiple-outline", roles: ["admin"] },
     },
     {
-      path: "/semesters",
-      name: "semesters",
-      component: Semesters,
+      path: "/users/:id",
+      name: "userDetails",
+      component: () => import("./views/users/UserDetails.vue"),
+      props: true,
+      meta: { roles: ["admin"] },
     },
     {
-      path: "/course-listing",
-      name: "course-listing",
-      component: () => import("./views/CourseListing.vue"),
+      // Old Edit User URL
+      path: "/users/:id/edit",
+      redirect: (to) => ({ name: "userDetails", params: { id: to.params.id } }),
     },
     {
       path: "/:pathMatch(.*)*",
@@ -43,31 +50,52 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to, _from, next) => {
+const { hasAnyRole } = useRoles();
+
+/** True if the signed-in user may open `route` (FR-011). */
+export const canOpen = (route) => !route.meta?.roles || hasAnyRole(route.meta.roles);
+
+let rolesRefreshed = false;
+
+/** FR-009: the backend owns roles, so reload them once per page load before any role check. */
+const refreshRoles = async () => {
+  try {
+    const { data } = await userServices.getUser(Utils.getStore("user").userId);
+    setStoredRoles(data?.roles ?? []);
+  } catch (error) {
+    if (error.response?.status === 401) {
+      Utils.removeItem("user");
+      window.dispatchEvent(new CustomEvent("user-logged-out"));
+    }
+    // Other failures keep the stored roles; the API still enforces them.
+  }
+};
+
+router.beforeEach(async (to) => {
+  if (!rolesRefreshed) {
+    rolesRefreshed = true;
+    if (Utils.getStore("user")) {
+      await refreshRoles();
+    }
+  }
+
+  syncUser();
   const user = Utils.getStore("user");
   const isPublicRoute = publicRouteNames.has(to.name);
 
   if (!user && !isPublicRoute) {
-    next({ name: "login" });
-    return;
+    return { name: "login" };
   }
 
   if (user && isPublicRoute) {
-    next({ name: "home" });
-    return;
+    return { name: "home" };
   }
 
-  if (user && user.role !== "admin" && (to.name === "faculty" || to.name == "semesters")) {
-    next({ name: "home" });
-    return;
+  if (!canOpen(to)) {
+    return { name: "home" };
   }
 
-  if (user && user.role !== "student" && to.name === "course-listing") {
-    next({ name: "home" });
-    return;
-  }
-
-  next();
+  return true;
 });
 
 export default router;

@@ -31,24 +31,24 @@
 **Independent test:** The user's table has a working search bar and filters
 **Acceptance scenarios:** see ### US-3.2 under Acceptance Criteria
 
-### US-3.3: Edit and delete users
+### US-3.3: User row actions
 
 **As a** signed-in admin user
-**I want** each user row to have **edit** and **delete** actions
+**I want** each user row to have **view** and **delete** actions
 **So that** I can manage users from the users view
 
 **Priority:** P1
-**Independent test:** Each user row exposes edit and delete icon actions for an admin
+**Independent test:** Each user row exposes view and delete icon actions for an admin
 **Acceptance scenarios:** see ### US-3.3 under Acceptance Criteria
 
-### US-3.4: Edit user
+### US-3.4: User details
 
 **As a** signed-in admin user
-**I want to** add and remove roles from a user
-**So that** I can keep strict access rules in the system
+**I want to** open a user's details page and add and remove their roles there
+**So that** I can keep strict access rules in the system and see everything about a user in one place
 
 **Priority:** P1
-**Independent test:** Click edit on a user. It opens a new page that lets admins edit the user's information and roles.
+**Independent test:** Click view on a user. Their details page shows who they are and an Access card where admins change roles.
 **Acceptance scenarios:** see ### US-3.4 under Acceptance Criteria
 
 ### US-3.5: Delete user
@@ -90,6 +90,16 @@
 **Independent test:** Sign in with Google once, run `npm run make-admin -- <your email>` in `backend/`, reload the app, and confirm you hold the admin role.
 **Acceptance scenarios:** see ### US-3.8 under Acceptance Criteria
 
+### US-3.9: Test as other users (development only)
+
+**As a** developer
+**I want to** seed realistic users for every role and sign in as any of them without Google
+**So that** I can test role-based access locally
+
+**Priority:** P2
+**Independent test:** Run `npm run seed`, set `DEV_LOGIN=true`, open the login page in development, and sign in as `maintenance@oc.edu` with password `password`.
+**Acceptance scenarios:** see ### US-3.9 under Acceptance Criteria
+
 ---
 
 ## Requirements
@@ -104,6 +114,11 @@
 - **FR-006**: Maintenance users can access vehicles, maintenance needs, service types
 - **FR-007**: Users with no special roles can only access their own vehicle requests (and create new ones)
 - **FR-008**: `backend/scripts/make-admin.mjs` (run as `npm run make-admin -- <email>` from `backend/`) takes one email, trimmed and matched case-insensitively. If a user with that email exists, it adds the `admin` role and exits `0`. If the user is already an admin, it changes nothing and exits `0`. If no user has that email, or no email is given, it prints an error, changes nothing, and exits `1`. The logic is exported as `makeAdmin(email)` so tests can call it without spawning a process.
+- **FR-012**: `PUT /api/users/:userId` is the only way to change roles. It is admin-only and takes `{ "roles": [{ "role": "maintenance" }, { "role": "area_admin", "areaId": 2 }] }`. It replaces the user's roles in one transaction (all or nothing) and returns `200` with the user and their new roles. `areaId` is required for `area_admin` and ignored for other roles. Duplicate entries are saved once. `firstName`, `lastName`, and `email` in the body are ignored (they come from Google, see Feature 1 FR-006).
+- **FR-013**: Users are only created by Google sign-in (Feature 1 `POST /api/login`). No endpoint creates users. (The development seed script in **FR-016** inserts rows directly and is not an endpoint.)
+- **FR-014**: `POST /api/dev-login` with `{ "email", "password" }` signs in as an **existing** user and returns the same payload and session as `POST /api/login`. It is available only when `DEV_LOGIN=true` **and** `NODE_ENV` is not `production`; otherwise it returns `404`. The password must equal `DEV_LOGIN_PASSWORD` (default `password`); there is no password column. The email is trimmed and matched case-insensitively. A wrong password or unknown email returns `401` `{ "message": "Bad Credentials." }`.
+- **FR-015**: The login page shows a **Developer sign-in** form (email, password, **Sign in**) only in development builds (`import.meta.env.DEV`). Production builds never render it.
+- **FR-016**: `backend/scripts/seed.mjs` (`npm run seed`, optionally `-- --keep <email>` one or more times) replaces all users, sessions, roles, and areas with seed data, keeping any `--keep` users with their sessions and non-area roles. Seed users have `@oc.edu` emails and include one test account per role (see the README). It refuses to run when `NODE_ENV=production` and exits `1`. The logic is exported as `seed({ keep })` for tests.
 - **FR-009**: The backend is the source of truth for roles. `authenticate` loads the user's roles from the database on every request. The frontend refreshes the stored `user`'s roles from `GET /api/users/:userId` on the first navigation after each page load, before any role check runs.
 - **FR-010**: `authorizeRoles(...roles)` is a middleware factory. It authenticates like `authenticate`, then passes if the user holds **any** of the listed roles (admin always passes). Otherwise it returns `403`. `authenticateAdmin`, `authenticateMaintenance`, and `authenticateAreaAdmin` are defined as `authorizeRoles('admin')`, `authorizeRoles('maintenance')`, and `authorizeRoles('area_admin')`.
 - **FR-011**: Frontend routes declare required roles as `meta: { roles: [...] }`. The user needs **any one** of the listed roles (admin always passes). A route without `meta.roles` is open to every signed-in user. `router.beforeEach` and the navigation both read `meta.roles` through `useRoles().hasAnyRole()`, so there is one rule for both.
@@ -112,7 +127,10 @@
 
 ## Assumptions
 
-- User management does NOT use **dialog-based** workflows. Edit gets its own page. Only delete confirmation uses a dialog. Users register through Google, so no user creation.
+- User management does NOT use **dialog-based** workflows. Each user gets a **User details** page (`userDetails`) where roles are edited. Only delete confirmation uses a dialog. Users register through Google, so no user creation (**FR-013**).
+- A user's name and email come from Google and cannot be edited by anyone. The Edit User page shows them read-only.
+- There is no profile page. The Feature 1 **Edit Profile** dialog is removed; the avatar menu shows name, email, and **Sign out** only.
+- **Interim Feature 2 stand-in:** Feature 2 (Area Management) is not merged yet. This feature adds a minimal `Area` model (`id`, `name`, `logo`) and a read-only `GET /api/areas` (any signed-in user, sorted by name) so roles can reference areas. **Remove both once the full Feature 2 is merged** and use Feature 2's model and endpoint instead. Area create/edit/delete and the Areas page belong to Feature 2.
 - The first admin signs in with Google once to create their account, then someone with server access runs `make-admin` for their email (**FR-008**). After that, admins grant admin through the Edit User page. There is no API endpoint for bootstrapping admins.
 - `useRoles()` exposes:
   - `hasRole(role, areaId?)`: true only if the user holds that exact role. For `area_admin`, passing an `areaId` checks that specific area, and leaving it out matches any area. Admins are **not** treated as holding other roles here, so `hasRole` stays accurate for display (chips, labels).
@@ -121,10 +139,14 @@
 
 ## Edge Cases
 
-- Empty or whitespace-only user name or email → client block and/or `400`.
-- User name or email longer than 255 characters → `400`.
-- Missing name or email → `400`.
-- Unauthorized users screen or `GET /api/users` → redirect or `401`.
+- Unauthorized users screen → redirect. `GET /api/users` with no session → `401`; signed in without admin → `403`.
+- Non-numeric `:userId` → `400` `{ "message": "Invalid user id." }`. Unknown `:userId` → `404`.
+- `GET /api/users/:userId` for another user by a non-admin → `404` (Feature 1 cross-user rule).
+- `PUT` body without a `roles` array → `400` `{ "message": "Roles must be an array." }`.
+- `PUT` with a role other than `admin`, `area_admin`, `maintenance` → `400` `{ "message": "Invalid role." }`.
+- `PUT` with `area_admin` and a missing or unknown `areaId` → `400` `{ "message": "Area admin role requires a valid area." }`.
+- Admin `PUT` on themselves without `admin` in `roles` → `400` `{ "message": "You cannot remove your own admin role." }`.
+- Admin `DELETE` on themselves → `400` `{ "message": "You cannot delete your own account." }`.
 
 ## Success Criteria
 
@@ -136,29 +158,53 @@
 
 ## Data Ownership & Isolation
 
-Only signed-in admin users may view, edit, and delete users. A user may also edit their information (from a profile page accessible from the profile dropdown) and view their roles, but they cannot change their roles unless they're an admin. Even admins cannot remove their own admin role.
+Only signed-in admin users may view, edit, and delete users. Any signed-in user may read their own user record (with roles) so the frontend can refresh roles (**FR-009**). Name and email are never editable. Even admins cannot remove their own admin role or delete themselves.
 
-| Rule                    | Requirement                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **User Read All Scope** | `GET /api/users` require require `req.user.roles` `admin`.                                                                                                         |
-| **User Read One Scope** | `GET /api/users/:userId` require require `req.user.roles` `admin` or `:userId` = `req.user.id`                                                                     |
-| **User Write Scope**    | `PUT` and `DELETE` `/api/users/:userId` require `req.user.roles` `admin` or `:userId` = `req.user.id`, admin's cannot delete themselves or remove their admin role |
-| **Role Read Scope**     | `GET`, `PUT` - `/api/roles/:userId` require `req.user.roles` `admin`                                                                                               |
-| **Role Delete Scope**   | `GET`, `PUT` - `/api/roles/:userId` require `req.user.roles` `admin`                                                                                               |
+| Rule                    | Requirement                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **User Read All Scope** | `GET /api/users` requires the `admin` role.                                                                   |
+| **User Read One Scope** | `GET /api/users/:userId` requires the `admin` role or `:userId` = `req.user.id`. Otherwise `404`.             |
+| **Role Write Scope**    | `PUT /api/users/:userId` requires the `admin` role. An admin cannot remove their own `admin` role.            |
+| **User Delete Scope**   | `DELETE /api/users/:userId` requires the `admin` role (`area_admin` and `maintenance` do not count). An admin cannot delete themselves. |
 
 ---
 
 ## API Requirements
 
-| Method   | Endpoint                     | Auth                | Purpose                   |
-| -------- | ---------------------------- | ------------------- | ------------------------- |
-| `GET`    | `/api/users`                 | Yes - Admin         | Fetch all users           |
-| `GET`    | `/api/users/:userId`         | Yes - Self or Admin | Fetch a single user       |
-| `PUT`    | `/api/users/:userId`         | Yes - Self or Admin | Edit a user               |
-| `DELETE` | `/api/users/:userId`         | Yes - Admin         | Delete a user             |
-| `GET`    | `/api/roles/:userId`         | Yes - Admin         | Get a user's roles        |
-| `POST`   | `/api/roles/:userId`         | Yes - Admin         | Add a new role for a user |
-| `DELETE` | `/api/roles/:userId/:roleId` | Yes - Admin         | Remove a role from a user |
+| Method   | Endpoint             | Auth                | Purpose                                         |
+| -------- | -------------------- | ------------------- | ----------------------------------------------- |
+| `GET`    | `/api/users`         | Yes - Admin         | Fetch all users with their roles                |
+| `GET`    | `/api/users/:userId` | Yes - Self or Admin | Fetch a single user with their roles            |
+| `PUT`    | `/api/users/:userId` | Yes - Admin         | Replace a user's roles (**FR-012**)             |
+| `DELETE` | `/api/users/:userId` | Yes - Admin         | Delete a user (`204`)                           |
+| `GET`    | `/api/areas`         | Yes                 | Interim stand-in until Feature 2 (see Assumptions) |
+| `POST`   | `/api/dev-login`     | No (dev only)       | Sign in as an existing user without Google (**FR-014**) |
+
+**User response** (`GET` items, `GET` one, `PUT`):
+
+```json
+{
+  "id": 7,
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "email": "jane@eagles.oc.edu",
+  "createdAt": "2026-10-20T15:04:00.000Z",
+  "roles": [
+    { "id": 3, "role": "maintenance", "areaId": null, "area": null },
+    { "id": 4, "role": "area_admin", "areaId": 2, "area": { "id": 2, "name": "Athletics" } }
+  ]
+}
+```
+
+**Update roles request** (`PUT /api/users/:userId`):
+
+```json
+{ "roles": [{ "role": "maintenance" }, { "role": "area_admin", "areaId": 2 }] }
+```
+
+`POST /api/login` (Feature 1) also returns the user's `roles` array in this shape.
+
+**Role middleware errors:** `403` with the messages in US-3.7 (`"Admin role required."`, `"Maintenance role required."`, `"Area admin role required."`, `"One of these roles is required: …"`).
 
 ---
 
@@ -171,23 +217,33 @@ Only signed-in admin users may view, edit, and delete users. A user may also edi
 - Heading: **Users**
 - No primary action
 - Display users in a paginated data table with search and filters at the top
-- Admin **Edit** icon opens a `EditUser.vue` page
+- Name and email stay on one line (long emails are truncated with the full address on hover). The Roles column shows at most two chips (Admin, then Maintenance, then Area Admin by area name), then a **+N** chip whose tooltip and `aria-label` list the remaining roles.
+- The user's name and the **View** icon open the `userDetails` page
 - Admin **Delete** icon opens the reusable useConfirm dialog.
-- Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit user**, **Delete user**).
+- Icon-only row actions use `size="small"` and accessible `aria-label`s (**View user**, **Delete user**).
 - **Empty state:** **"No users yet."** when there are no users.
 - **Loading state:** skeleton or progress indicator while users are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
 
-### [View: Edit User] — route name `editUser`
+### [View: User details] — route name `userDetails` (`/users/:id`)
 
-**EditUser.vue** (`/src/views/users/EditUser.vue`)
+**UserDetails.vue** (`/src/views/users/UserDetails.vue`). `/users/:id/edit` redirects here.
 
-- Heading: **Edit User**
-- Displays a form with user's information
-- Form includes a Vuetify select multiple with chips. The options are admin, maintenance, and one area_admin entry for each area that exists in the areas table.
-- Save button
-- Breadcrumbs that link back to the Users page
-- **Loading state:** skeleton of form
+- Breadcrumbs: **Users** / *user's name*. Heading: the user's name.
+- **Header card:** initials avatar, name, email, a chip per role (same labels as the users list), and **Member since** *Month YYYY* (from `createdAt`). Name and email are read-only.
+- Two columns on desktop (stacked on small screens):
+  - **Left:** **Access**, **Driver**, and **Account** cards.
+  - **Right:** tabs for user activity.
+- **Access card:** "Every user can request vehicles. Roles grant access to manage the rest of the system."
+  - **System roles** checkboxes: **Admin**, **Maintenance**.
+  - **Area admin of** checkboxes: one per area (plus any area the user already administers). When there are none, show **"Area Admin roles appear here once areas are created."**
+  - On the admin's own page, **Admin** is checked and disabled with **"You cannot remove your own admin role."**
+  - **Save** (disabled until something changes) saves with `PUT /api/users/:id` and stays on the page, showing **"Roles saved."** **Cancel** (disabled until something changes) restores the saved roles.
+  - Role labels are capitalized everywhere they are shown (chips, filter, checkboxes).
+- **Driver card:** **"Coming soon"** (Feature 7).
+- **Account card:** **Delete user** opens the confirm dialog; after deleting, go to the users list. Disabled on the admin's own page.
+- **Tabs:** **Requests** (Feature 8), **Issue reports** (Feature 10), and **Maintenance** (Features 9, 11, 13; only shown for users with the Maintenance role). Each shows **"Coming soon"** until its feature replaces it.
+- **Loading state:** skeleton of the header and cards.
 - **Error state:** `<v-alert type="error">` for API failures.
 
 ---
@@ -207,14 +263,18 @@ Defined in a previous feature
 
 ### `roles` table
 
-| Field       | Type       | Rules                                                |
-| ----------- | ---------- | ---------------------------------------------------- |
-| `id`        | INTEGER PK | Auto-increment                                       |
-| `user_id`   | INTEGER FK | Required, constraind                                 |
-| `area_id`   | INTEGER FK | Optional, required for area_admin type               |
-| `role`      | STRING     | Required; on of `admin`, `area_admin`, `maintenance` |
-| `createdAt` | DATE       | Sequelize timestamps                                 |
-| `updatedAt` | DATE       | Sequelize timestamps                                 |
+Sequelize uses `underscored: true`, so the columns are `user_id` / `area_id` while model attributes and JSON use `userId` / `areaId` (same as `sessions`).
+
+| Field       | Type       | Rules                                                                     |
+| ----------- | ---------- | ------------------------------------------------------------------------- |
+| `id`        | INTEGER PK | Auto-increment                                                            |
+| `user_id`   | INTEGER FK | Required; references `users.id`; deleting the user deletes their roles    |
+| `area_id`   | INTEGER FK | Optional; required for `area_admin`; deleting the area deletes the role   |
+| `role`      | STRING     | Required; one of `admin`, `area_admin`, `maintenance`                     |
+| `createdAt` | DATE       | Sequelize timestamps                                                      |
+| `updatedAt` | DATE       | Sequelize timestamps                                                      |
+
+Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column from the starter kit is removed.
 
 ### Associations (in `models/index.js`)
 
@@ -234,6 +294,7 @@ Defined in a previous feature
 - **Given** I am signed in as an admin and users exist
 - **When** I open the users view
 - **Then** each row shows the user's name, email, and a chip for each role they hold (area_admin chips include the area name, e.g. `Area Admin — Athletics`)
+- **And** a user with more than two roles shows two chips and a **+N** chip listing the rest
 
 #### Scenario: Users list is paginated
 
@@ -319,19 +380,19 @@ Defined in a previous feature
 
 ---
 
-### US-3.3 — Edit and delete users
+### US-3.3 — User row actions
 
-#### Scenario: User rows have edit and delete actions for admins
+#### Scenario: User rows have view and delete actions for admins
 
 - **Given** I am signed in as an admin and users exist
 - **When** I view the users list
-- **Then** each row shows **Edit user** and **Delete user** icon buttons with matching `aria-label`s
+- **Then** each row shows **View user** and **Delete user** icon buttons with matching `aria-label`s
 
-#### Scenario: Edit action opens the edit page
+#### Scenario: View action opens the user details page
 
 - **Given** I am signed in as an admin on the users view
-- **When** I click **Edit user** on a row
-- **Then** I am taken to the `editUser` route for that user
+- **When** I click **View user** or the user's name on a row
+- **Then** I am taken to the `userDetails` route for that user
 
 #### Scenario: Delete action opens a confirmation dialog
 
@@ -347,49 +408,59 @@ Defined in a previous feature
 
 ---
 
-### US-3.4 — Edit user
+### US-3.4 — User details
 
-#### Scenario: Edit page loads the user's current data
+#### Scenario: User details page loads the user's current data
 
-- **Given** I am signed in as an admin and a user holds `maintenance` and `Area Admin — Athletics`
-- **When** I open that user's edit page
-- **Then** the form shows their information with those two roles preselected as chips
+- **Given** I am signed in as an admin and a user holds `Maintenance` and `Area Admin — Athletics`
+- **When** I open that user's details page
+- **Then** I see their name, email, member-since date, and a chip for each role
+- **And** **Maintenance** and **Athletics** are checked in the Access card
 
-#### Scenario: Role select options
+#### Scenario: Role options
 
 - **Given** I am signed in as an admin and areas `Athletics` and `Music` exist
-- **When** I open the role select on the edit page
-- **Then** the options are `admin`, `maintenance`, `Area Admin — Athletics`, and `Area Admin — Music`
+- **When** I open a user's details page
+- **Then** **System roles** lists `Admin` and `Maintenance` and **Area admin of** lists `Athletics` and `Music`
 
 #### Scenario: Admin adds a role
 
-- **Given** I am signed in as an admin editing a user without the maintenance role
-- **When** I add `maintenance` and save
+- **Given** I am signed in as an admin viewing a user without the maintenance role
+- **When** I check **Maintenance** and save
 - **Then** the API returns `200` with `maintenance` in the user's roles
+- **And** I stay on the page and see **"Roles saved."**
 
 #### Scenario: Admin removes a role
 
-- **Given** I am signed in as an admin editing a user with the admin role
-- **When** I remove `admin` and save
+- **Given** I am signed in as an admin viewing a user with the admin role
+- **When** I uncheck **Admin** and save
 - **Then** the API returns `200` without `admin` in the user's roles
 
 #### Scenario: Admin assigns area admin for multiple areas
 
-- **Given** I am signed in as an admin editing a user
-- **When** I assign `Area Admin — Athletics` and `Area Admin — Music` and save
+- **Given** I am signed in as an admin viewing a user
+- **When** I check **Athletics** and **Music** under **Area admin of** and save
 - **Then** both area admin roles are saved for that user
 
 #### Scenario: Admin removes their own admin role
 
-- **Given** I am signed in as an admin on my own edit page
-- **When** I remove `admin` and save
-- **Then** the save is blocked with an error message
+- **Given** I am signed in as an admin on my own details page
+- **When** I look at the Access card
+- **Then** **Admin** is checked and disabled with **"You cannot remove your own admin role."**
+- **And** `PUT /api/users/{my id}` without `admin` returns `400`
 
 #### Scenario: Cancel editing
 
-- **Given** I am signed in as an admin with unsaved changes on the edit page
+- **Given** I am signed in as an admin with unsaved role changes on a details page
 - **When** I click **Cancel**
-- **Then** I return to the users list without saving
+- **Then** the checkboxes return to the saved roles and no request is sent
+
+#### Scenario: Later sections show Coming soon
+
+- **Given** I am signed in as an admin viewing a user with the maintenance role
+- **When** I open each of the **Requests**, **Issue reports**, and **Maintenance** tabs and look at the **Driver** card
+- **Then** each shows **"Coming soon"**
+- **And** the **Maintenance** tab is not shown for users without the maintenance role
 
 ---
 
@@ -412,6 +483,18 @@ Defined in a previous feature
 - **Given** I am signed in as an admin with the delete confirm dialog open
 - **When** I click cancel
 - **Then** no request is sent and the user remains in the list and I return to the user list
+
+#### Scenario: Admin deletes a user from the details page
+
+- **Given** I am signed in as an admin on `Bob Jones`'s details page
+- **When** I click **Delete user** and confirm
+- **Then** `Bob Jones` is deleted and I am taken to the users list
+
+#### Scenario: Admin cannot delete themselves from the details page
+
+- **Given** I am signed in as an admin on my own details page
+- **When** I look at the Account card
+- **Then** **Delete user** is disabled
 
 ---
 
@@ -455,7 +538,7 @@ Defined in a previous feature
 
 - **Given** a valid session for a user with `maintenance` and `Area Admin — Athletics`
 - **When** a route protected with `[authenticate]` is called
-- **Then** `req.user` contains the user's `id` and a `roles` array with each role and its `area_id`
+- **Then** `req.user` contains the user's `id` and a `roles` array with each role and its `areaId`
 
 #### Scenario: `authenticate` rejects a missing token
 
@@ -637,6 +720,62 @@ Defined in a previous feature
 
 ---
 
+### US-3.9 — Test as other users (development only)
+
+#### Scenario: Developer signs in as a seeded user
+
+- **Given** development sign-in is enabled and `maintenance@oc.edu` exists
+- **When** I sign in on the Developer sign-in form with `maintenance@oc.edu` and `password`
+- **Then** `POST /api/dev-login` returns `200` with my `roles` and a session `token`
+- **And** I am sent home with the `user` stored like a Google sign-in
+
+#### Scenario: Developer sign-in with a wrong password
+
+- **Given** development sign-in is enabled and `maintenance@oc.edu` exists
+- **When** I send `POST /api/dev-login` with a different password
+- **Then** the API returns `401` with **"Bad Credentials."** and creates no session
+
+#### Scenario: Developer sign-in for an unknown email
+
+- **Given** development sign-in is enabled
+- **When** I send `POST /api/dev-login` for an email no user has
+- **Then** the API returns `401` with **"Bad Credentials."** and creates no user
+
+#### Scenario: Developer sign-in is off unless enabled
+
+- **Given** `DEV_LOGIN` is not `true`
+- **When** I send `POST /api/dev-login` with valid credentials
+- **Then** the API returns `404`
+
+#### Scenario: Developer sign-in is never available in production
+
+- **Given** `NODE_ENV=production` and `DEV_LOGIN=true`
+- **When** I send `POST /api/dev-login` with valid credentials
+- **Then** the API returns `404`
+
+#### Scenario: Developer sign-in form only appears in development builds
+
+- **Given** I am on the login page
+- **When** the app is a development build
+- **Then** I see the **Developer sign-in** form
+- **And** a production build does not render it
+
+#### Scenario: Seed replaces data and keeps listed accounts
+
+- **Given** existing users, roles, areas, and sessions, including my account
+- **When** I run the seed with `--keep` and my email
+- **Then** every other user, role, area, and session is replaced with seed data
+- **And** every seeded email ends in `@oc.edu` and there is one test account per role
+- **And** my account, its admin role, and its sessions remain
+
+#### Scenario: Seed refuses to run in production
+
+- **Given** `NODE_ENV=production`
+- **When** I run the seed
+- **Then** it changes nothing and exits `1`
+
+---
+
 ## Test Coverage Map
 
 | Story  | Scenario                                                      | Test file                              | Test name                                                     |
@@ -656,30 +795,33 @@ Defined in a previous feature
 | US-3.2 | Admin combines search and role filter                         | `frontend/tests/Users.test.js`         | `Admin combines search and role filter`                       |
 | US-3.2 | Search returns no results                                     | `frontend/tests/Users.test.js`         | `Search returns no results`                                   |
 | US-3.2 | Clearing search and filters                                   | `frontend/tests/Users.test.js`         | `Clearing search and filters`                                 |
-| US-3.3 | User rows have edit and delete actions for admins             | `frontend/tests/Users.test.js`         | `User rows have edit and delete actions for admins`           |
-| US-3.3 | Edit action opens the edit page                               | `frontend/tests/Users.test.js`         | `Edit action opens the edit page`                             |
+| US-3.3 | User rows have view and delete actions for admins             | `frontend/tests/Users.test.js`         | `User rows have view and delete actions for admins`           |
+| US-3.3 | View action opens the user details page                       | `frontend/tests/Users.test.js`         | `View action opens the user details page`                     |
 | US-3.3 | Delete action opens a confirmation dialog                     | `frontend/tests/Users.test.js`         | `Delete action opens a confirmation dialog`                   |
 | US-3.3 | Admin cannot delete themselves from the list                  | `frontend/tests/Users.test.js`         | `Admin cannot delete themselves from the list`                |
-| US-3.4 | Edit page loads the user's current data                       | `backend/tests/users.test.js`          | `Edit page loads the user's current data`                     |
-| US-3.4 | Edit page loads the user's current data                       | `frontend/tests/EditUser.test.js`      | `Edit page loads the user's current data`                     |
-| US-3.4 | Role select options                                           | `frontend/tests/EditUser.test.js`      | `Role select options`                                         |
+| US-3.4 | User details page loads the user's current data               | `backend/tests/users.test.js`          | `User details page loads the user's current data`             |
+| US-3.4 | User details page loads the user's current data               | `frontend/tests/UserDetails.test.js`   | `User details page loads the user's current data`             |
+| US-3.4 | Role options                                                  | `frontend/tests/UserDetails.test.js`   | `Role options`                                                |
 | US-3.4 | Admin adds a role                                             | `backend/tests/users.test.js`          | `Admin adds a role`                                           |
-| US-3.4 | Admin adds a role                                             | `frontend/tests/EditUser.test.js`      | `Admin adds a role`                                           |
+| US-3.4 | Admin adds a role                                             | `frontend/tests/UserDetails.test.js`   | `Admin adds a role`                                           |
 | US-3.4 | Admin removes a role                                          | `backend/tests/users.test.js`          | `Admin removes a role`                                        |
-| US-3.4 | Admin removes a role                                          | `frontend/tests/EditUser.test.js`      | `Admin removes a role`                                        |
+| US-3.4 | Admin removes a role                                          | `frontend/tests/UserDetails.test.js`   | `Admin removes a role`                                        |
 | US-3.4 | Admin assigns area admin for multiple areas                   | `backend/tests/users.test.js`          | `Admin assigns area admin for multiple areas`                 |
-| US-3.4 | Admin assigns area admin for multiple areas                   | `frontend/tests/EditUser.test.js`      | `Admin assigns area admin for multiple areas`                 |
+| US-3.4 | Admin assigns area admin for multiple areas                   | `frontend/tests/UserDetails.test.js`   | `Admin assigns area admin for multiple areas`                 |
 | US-3.4 | Admin removes their own admin role                            | `backend/tests/users.test.js`          | `Admin removes their own admin role`                          |
-| US-3.4 | Admin removes their own admin role                            | `frontend/tests/EditUser.test.js`      | `Admin removes their own admin role`                          |
-| US-3.4 | Cancel editing                                                | `frontend/tests/EditUser.test.js`      | `Cancel editing`                                              |
+| US-3.4 | Admin removes their own admin role                            | `frontend/tests/UserDetails.test.js`   | `Admin removes their own admin role`                          |
+| US-3.4 | Cancel editing                                                | `frontend/tests/UserDetails.test.js`   | `Cancel editing`                                              |
+| US-3.4 | Later sections show Coming soon                               | `frontend/tests/UserDetails.test.js`   | `Later sections show Coming soon`                             |
 | US-3.5 | Admin deletes a user                                          | `frontend/tests/Users.test.js`         | `Admin deletes a user`                                        |
 | US-3.5 | Admin deletes a user via API                                  | `backend/tests/users.test.js`          | `Admin deletes a user via API`                                |
 | US-3.5 | Admin cancels delete                                          | `frontend/tests/Users.test.js`         | `Admin cancels delete`                                        |
+| US-3.5 | Admin deletes a user from the details page                    | `frontend/tests/UserDetails.test.js`   | `Admin deletes a user from the details page`                  |
+| US-3.5 | Admin cannot delete themselves from the details page          | `frontend/tests/UserDetails.test.js`   | `Admin cannot delete themselves from the details page`        |
 | US-3.6 | Admin can access everything                                   | `backend/tests/authorization.test.js`  | `Admin can access everything`                                 |
-| US-3.6 | Admins can manage Areas                                       | `backend/tests/areas.test.js`          | `Admins can manage Areas`                                     |
-| US-3.6 | Admins can manage Areas                                       | `frontend/tests/Areas.test.js`         | `Admins can manage Areas`                                     |
-| US-3.6 | Non-admins cannot manage Areas                                | `backend/tests/areas.test.js`          | `Non-admins cannot manage Areas`                              |
-| US-3.6 | Non-admins cannot manage Areas                                | `frontend/tests/Areas.test.js`         | `Non-admins cannot manage Areas`                              |
+| US-3.6 | Admins can manage Areas                                       | `backend/tests/areas.test.js`          | `Admins can manage Areas` — **pending Feature 2** (Areas page/API)                                     |
+| US-3.6 | Admins can manage Areas                                       | `frontend/tests/Areas.test.js`         | `Admins can manage Areas` — **pending Feature 2** (Areas page/API) |
+| US-3.6 | Non-admins cannot manage Areas                                | `backend/tests/areas.test.js`          | `Non-admins cannot manage Areas` — **pending Feature 2** (Areas page/API)                              |
+| US-3.6 | Non-admins cannot manage Areas                                | `frontend/tests/Areas.test.js`         | `Non-admins cannot manage Areas` — **pending Feature 2** (Areas page/API) |
 | US-3.6 | Frontend route guard redirects                                | `frontend/tests/Authorization.test.js` | `Frontend route guard redirects`                              |
 | US-3.6 | Navigation hides unauthorized links                           | `frontend/tests/Authorization.test.js` | `Navigation hides unauthorized links`                         |
 | US-3.7 | `authenticate` attaches the user's roles                      | `backend/tests/authorization.test.js`  | `authenticate attaches the user's roles`                      |
@@ -713,6 +855,15 @@ Defined in a previous feature
 | US-3.8 | Script with an unknown email                                  | `backend/tests/makeAdmin.test.js`      | `Script with an unknown email`                                |
 | US-3.8 | Script on an existing admin                                   | `backend/tests/makeAdmin.test.js`      | `Script on an existing admin`                                 |
 | US-3.8 | Script without an email                                       | `backend/tests/makeAdmin.test.js`      | `Script without an email`                                     |
+| US-3.9 | Developer signs in as a seeded user                           | `backend/tests/devLogin.test.js`       | `Developer signs in as a seeded user`                         |
+| US-3.9 | Developer signs in as a seeded user                           | `frontend/tests/Login.test.js`         | `Developer signs in as a seeded user`                         |
+| US-3.9 | Developer sign-in with a wrong password                       | `backend/tests/devLogin.test.js`       | `Developer sign-in with a wrong password`                     |
+| US-3.9 | Developer sign-in for an unknown email                        | `backend/tests/devLogin.test.js`       | `Developer sign-in for an unknown email`                      |
+| US-3.9 | Developer sign-in is off unless enabled                       | `backend/tests/devLogin.test.js`       | `Developer sign-in is off unless enabled`                     |
+| US-3.9 | Developer sign-in is never available in production            | `backend/tests/devLogin.test.js`       | `Developer sign-in is never available in production`          |
+| US-3.9 | Developer sign-in form only appears in development builds     | `frontend/tests/Login.test.js`         | `Developer sign-in form only appears in development builds`   |
+| US-3.9 | Seed replaces data and keeps listed accounts                  | `backend/tests/seed.test.js`           | `Seed replaces data and keeps listed accounts`                |
+| US-3.9 | Seed refuses to run in production                             | `backend/tests/seed.test.js`           | `Seed refuses to run in production`                           |
 
 ## Definition of Done
 
@@ -721,6 +872,7 @@ Defined in a previous feature
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
 - [ ] `make-admin` script added to `backend/package.json` and documented in the README setup steps
+- [ ] `seed` script and `DEV_LOGIN` documented in the README with the seeded test accounts
 - [ ] `features/reference/data-model.md` updated (if schema changed)
 - [ ] `features/reference/api.md` updated (if API changed)
 - [ ] `features/reference/behavior.md` updated (if product rules changed)
@@ -730,3 +882,12 @@ Defined in a previous feature
 ## Out of Scope
 
 - User creation (Google sign in handles this)
+- Content of the User details **Driver** card and **Requests** / **Issue reports** / **Maintenance** tabs (see below)
+
+## Delivered to later features
+
+- **User details page** (`userDetails`, `/users/:id`) with placeholder sections showing **"Coming soon"**. Each feature replaces its placeholder and adds its scenarios to its own spec:
+  - **Driver** card → Feature 7 (Drivers): linked driver status, license state and expiration, phone.
+  - **Requests** tab → Feature 8 (Vehicle Requests): the user's requests (upcoming, then past) and trips they drive.
+  - **Issue reports** tab → Feature 10 (Issue Report): reports the user filed and reports assigned to them.
+  - **Maintenance** tab → Features 9, 11, 13 (Mileage Log, Maintenance Need, Service Log): needs assigned to them, services logged, odometer readings.

@@ -1,16 +1,16 @@
 # API Reference
 
-**Status:** Feature 6 enrollment routes are in force. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 3 user and role routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
-| `POST` | `/api/login` | No | `200` with `email`, `firstName`, `lastName`, `userId`, and session `token`. Body is `{ "googleCredentials": "<google id token>" }`. |
+| `POST` | `/api/login` | No | `200` with `email`, `firstName`, `lastName`, `userId`, `roles`, and session `token`. Body is `{ "googleCredentials": "<google id token>" }`. |
 | `POST` | `/api/logout` | Bearer | `200`. Deletes the session row for that token. |
-| `GET` | `/api/users/:id` | Bearer | `200` with that user. |
+| `POST` | `/api/dev-login` | No (development only) | Same `200` payload as `/api/login`. Body `{ "email", "password" }` for an existing user; the password is `DEV_LOGIN_PASSWORD` (default `password`). `404` unless `DEV_LOGIN=true` and `NODE_ENV` is not `production`; wrong password or unknown email → `401` `{ "message": "Bad Credentials." }`. |
 
-Login verifies the Google ID token and reads `email`, `given_name`, and `family_name` from it. The email domain must be `oc.edu` or a subdomain such as `eagles.oc.edu`. A new email creates a user. An existing email is reused, the stored first and last name are replaced from the token, and an unexpired session is reused. `PUT /api/users/:id` does not change `firstName`, `lastName`, or `email`.
+Login verifies the Google ID token and reads `email`, `given_name`, and `family_name` from it. The email domain must be `oc.edu` or a subdomain such as `eagles.oc.edu`. A new email creates a user (the only way users are created). An existing email is reused, the stored first and last name are replaced from the token, and an unexpired session is reused.
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -19,25 +19,51 @@ Login verifies the Google ID token and reads `email`, `given_name`, and `family_
 | No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
 | Bearer token missing from `sessions` or expired | `401` | `{ "message": "Unauthorized! Invalid or expired token." }` |
 
+## Role middleware
+
+Exported from `backend/app/authorization/authorization.js`. Admins pass every role check.
+
+| Middleware | Passes | Otherwise |
+| ---------- | ------ | --------- |
+| `authenticate` | Valid session; sets `req.user = { id, roles: [{ id, role, areaId }] }` | `401` (messages above) |
+| `authenticateAdmin` | `admin` | `403` `{ "message": "Admin role required." }` |
+| `authenticateMaintenance` | `maintenance` or `admin` | `403` `{ "message": "Maintenance role required." }` |
+| `authenticateAreaAdmin` | `area_admin` of any area, or `admin` | `403` `{ "message": "Area admin role required." }` |
+| `authorizeRoles(...roles)` | Any listed role, or `admin` | `403` `{ "message": "One of these roles is required: <roles>." }` |
+
+`canAccessArea(req.user, areaId)` is true for admins and area admins of that area; area-scoped controllers use it.
+
+## Users
+
+User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, areaId, area: { id, name } | null }] }`.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/users` | Admin | `200` array of users, sorted by last then first name. |
+| `GET` | `/api/users/:id` | Self or admin | `200` with that user. Another user (non-admin) → `404`. |
+| `PUT` | `/api/users/:id` | Admin | `200` with the user. Body `{ "roles": [{ "role": "maintenance" }, { "role": "area_admin", "areaId": 2 }] }` replaces all roles in one transaction. Name and email in the body are ignored. |
+| `DELETE` | `/api/users/:id` | Admin | `204` with no body. Deletes the user's sessions and roles. |
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| Non-numeric `:id` | `400` | `{ "message": "Invalid user id." }` |
+| Unknown `:id` | `404` | `{ "message": "User with id=<id> not found." }` |
+| `roles` not an array | `400` | `{ "message": "Roles must be an array." }` |
+| Role not `admin` / `area_admin` / `maintenance` | `400` | `{ "message": "Invalid role." }` |
+| `area_admin` without a valid `areaId` | `400` | `{ "message": "Area admin role requires a valid area." }` |
+| Admin `PUT` on self without `admin` | `400` | `{ "message": "You cannot remove your own admin role." }` |
+| Admin `DELETE` on self | `400` | `{ "message": "You cannot delete your own account." }` |
+
+## Areas (interim)
+
+Read-only stand-in until Feature 2 (Area Management) is merged.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/areas` | Bearer | `200` array of `{ id, name, logo }` sorted by name. |
+
 ## Conventions
 
 - Flat JSON responses (no `{ success, data }` envelope).
 - Errors: `{ "message": "..." }`.
 - Authenticated routes: `Authorization: Bearer <token>`.
-- `studentId` is taken from the session. The client does not send it.
-
-## Enrollments
-
-| Method | Endpoint | Auth | Success |
-| ------ | -------- | ---- | ------- |
-| `GET` | `/api/enrollments` | Student | `200` array of `{ id, studentId, sectionId, createdAt, updatedAt }` for the signed-in student. Empty list is `[]`. |
-| `POST` | `/api/enrollments` | Student | `201` with the created enrollment. Body is `{ "sectionId": 1 }`. |
-| `DELETE` | `/api/enrollments/:sectionId` | Student | `204` with no body. |
-
-`POST` removes this student's other enrollments whose sections share that course and `semesterId`, then creates the new row. Enrollments for the same course in another semester stay.
-
-| Condition | Status |
-| --------- | ------ |
-| No session | `401` |
-| Missing or invalid `sectionId` | `400` |
-| Unknown section, another student's enrollment, or role `admin` | `404` |
