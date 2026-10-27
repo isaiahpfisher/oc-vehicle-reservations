@@ -6,11 +6,9 @@ const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   host: dbConfig.HOST,
   dialect: dbConfig.dialect,
   timezone: dbConfig.timezone,
-  // Sequelize applies `timezone` itself (SET time_zone and date parsing) but also copies it into the
-  // mysql2 connection, which only accepts "local", "Z", or "+HH:MM" and warns on IANA names like
-  // America/Chicago. Give mysql2 its own default; dialectOptions override that copied value.
   dialectOptions: {
-    timezone: "local",
+    // mysql2 only accepts "local", "Z", or "±HH:MM"; Sequelize handles the named zone itself
+    timezone: "Z",
   },
   pool: {
     max: dbConfig.pool.max,
