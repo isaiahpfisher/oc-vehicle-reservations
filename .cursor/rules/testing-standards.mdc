@@ -15,7 +15,9 @@ See `features/framework.md` → **Test traceability** for the full convention.
 3. **`describe("US-N.n — Story title")`** — matches AC `###` heading in spec
 4. **`it("Scenario title")`** — exact Gherkin `#### Scenario:` name from spec
 
-Harness smoke tests (`backend/tests/app.test.js`, `frontend/tests/App.test.js`) are exempt from story nesting.
+Harness smoke tests (`backend/tests/app.test.js`, `frontend/tests/App.test.js`) are exempt from story nesting. Tests that verify a **rule** rather than a feature (app shell, page shells, auth store) use a header naming the rule and `describe("<Thing> (<rule>.mdc)")`.
+
+When a later feature changes an earlier feature's access (e.g. Feature 3 made area management admin-only), update the earlier feature's tests to sign in with the role now required and add a comment naming the later feature's story. Keep their scenario names unchanged.
 
 ## Backend (Jest + supertest)
 *   Import the Express `app` export (server does not listen in `NODE_ENV=test`).
@@ -23,13 +25,27 @@ Harness smoke tests (`backend/tests/app.test.js`, `frontend/tests/App.test.js`) 
 *   Per success case, also test:
     1.  Missing/invalid input → `400` with `{ message }`.
     2.  Missing/expired token → `401`.
-    3.  Another user's resource → `404` (scoped access).
-*   Use a dedicated test database (`todocourses-db-test`); copy `backend/.env.test.example` to `backend/.env.test`.
+    3.  Record outside the caller's scope → `404`.
+*   **Every role-guarded endpoint** also tests: each role that is not allowed → `403` (include an area admin of a *different* area for area-scoped data), and an admin succeeds.
+*   Build data with `tests/helpers.js`: `createUserWithRoles(roles, overrides)` (roles as `"admin"` or `{ role: "area_admin", areaId }`), `registerUser(overrides)` for a user with no roles, `createArea(name)`. Insert rows directly only for what the test is not about.
+
+### Test database
+*   The database is `vehicles-db-test` (copy `backend/.env.test.example` to `backend/.env.test`). Its name **must** end in `-test`; `syncTestDatabase()` refuses to touch any other database.
+*   `tests/setup.js` loads the test env with `override: true` so variables exported in your shell can never point tests at the dev database. Do not weaken this.
+*   Call `syncTestDatabase()` in `beforeEach`. The first call in a file drops and recreates every table; later calls truncate, which also resets auto-increment ids. Tests may rely on an empty database with ids starting at 1; they must not alter the schema.
+*   Never run two backend test runs at the same time: they share one database and wipe each other's rows.
+*   Flaky failures or sudden slowness: check system load (`uptime`) before changing tests or code.
 
 ## Frontend (Vitest + @vue/test-utils)
-*   Mount views/components with reactive state.
-*   Assert client-side validation blocks submit before API call.
+*   Mount views/components with reactive state; mock `*Services.js` (or `services.js`) with `vi.mock`, never the network.
+*   Assert client-side validation blocks submit before the API call.
 *   Assert loading and error UI states on promise resolve/reject.
+*   Use the helpers in `tests/testUtils.js`:
+    *   `signInAs(user)` / `signInAs(null)` to set the signed-in user through the auth store. Never write `localStorage` `user` directly — the store only reads it at startup.
+    *   `settle()` after actions, `waitFor(() => expect(…))` for async UI, `apiError(status, message)` for rejected requests, `mountWithPlugins` / `createTestRouter` for isolated components.
+*   Simulate a fresh page load with `vi.resetModules()` and dynamic `import()` of the router, `App.vue`, and stores (see `Authorization.test.js`).
+*   Vuetify keeps closed overlays in the DOM: check `.v-overlay--active` (or visible text) for open dialogs and menus.
+*   Vuetify 4 class names differ from v3 (e.g. grid `v-col--cols-md-4`); check rendered markup before asserting on classes.
 
 ## SDD link
 Each Gherkin scenario in `features/feature-*.md` maps to at least one `it` block. Traceability: **US-N.n** → scenario → test; functional rules live in **FR-00N**; measurable bars in **SC-00N**. No `expect(true).toBe(true)`.

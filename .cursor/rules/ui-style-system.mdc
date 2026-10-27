@@ -84,7 +84,7 @@ For users with additional roles, use a sidebar instead of a menu bar. The sideba
 </v-app>
 ```
 
-Hide `MenuBar` / `Sidebar` on login and register routes (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links.
+Hide `MenuBar` / `Sidebar` on the login route and until the first navigation resolves (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links.
 
 Add breadcrumbs to the top of all nested pages so users can easily get back to the previous page(s).
 
@@ -149,11 +149,29 @@ Pair them with the existing shared pieces in `components/common/`:
 
 Reference implementations: `views/users/ListUsers.vue` (list) and `views/users/UserDetails.vue` (detail). If a page needs a layout the shells can't express, extend the shell (and its tests in `frontend/tests/PageShells.test.js`) rather than working around it in the view.
 
+### List page conventions
+
+- Tabular records use `<v-data-table>` with 10 items per page. Search and filters sit above it, and changing either returns to page 1.
+- The record's name links to its detail page (`router-link`).
+- Row actions are `size="small"` icon buttons (e.g. `mdi-eye-outline` view, delete), each with an `aria-label`. Actions the user can't take on that row are **disabled**, not hidden.
+- Long text cells don't wrap: truncate (`d-block text-truncate` with a `max-width`) and put the full value in `title`.
+- Chip columns show at most **2** chips, then a `+N` chip whose tooltip and `aria-label` list the rest — so one row can't squeeze the other columns.
+
+### Detail page conventions
+
+- Each card that edits something (a `SectionCard` in `#aside`) has its own **Cancel** / **Save** in `#actions`; saving stays on the page and shows a success message. Cancel restores the loaded values.
+- Sections a later feature will fill (cards, tabs) render `<ComingSoon>` (`compact` inside a card) until that feature replaces them; list them under "Delivered to later features" in the spec.
+- Destructive actions live in their own card (e.g. **Account**) and confirm through `useConfirm()`.
+
+### Confirm dialogs
+
+- Name the record and the consequence: title "Delete user", message `Delete "Bob Jones"? This action is permanent.`, confirm button `color="error"` labelled with the action ("Delete User").
+
 ## Form Components
 
 - Reusable forms use `v-model` via `defineProps({ modelValue })` + `emit("update:modelValue")`.
 - Vuetify inline rules: `[(v) => !!v?.trim() || "Required"]`.
-- Add/Edit/View modes via props (`readOnly`, `isAddMode`) — one form component, multiple views.
+- Small records (a name and a logo) are created and edited in one dialog component that takes the record (`null` for create). Records with more to show get a detail page whose cards each edit one part (see Detail page conventions); fields that can't be edited are shown as text, not disabled inputs.
 
 ## Vuetify Defaults
 
@@ -161,7 +179,7 @@ Reference implementations: `views/users/ListUsers.vue` (list) and `views/users/U
 - Inputs: `<v-text-field density="comfortable" rounded="lg">` (8px family).
 - Buttons — primary actions: `<v-btn color="primary" variant="elevated" class="oc-cta" :loading="loading">`.
 - Buttons — secondary / cancel: `<v-btn color="secondary" variant="text">` or `variant="outlined"`.
-- Buttons — **label size:** all primary labeled actions (`+ New List`, `Add`, `Edit Profile`, dialog confirms) use class **`oc-cta`** (0.875rem / medium weight — matches Edit Profile). Defined in `App.vue`. Do **not** nest these buttons inside `<v-card-title>` — title typography inherits and makes the label look oversized. Prefer `<v-card-item>` with `#append` for title + CTA layouts. Reserve `size="small"` for icon-only row actions (rename / delete).
+- Buttons — **label size:** all primary labeled actions (`+ New Area`, `Save`, dialog confirms) use class **`oc-cta`** (0.875rem / medium weight). Defined in `App.vue`. Do **not** nest these buttons inside `<v-card-title>` — title typography inherits and makes the label look oversized. Prefer `<v-card-item>` with `#append` for title + CTA layouts. Reserve `size="small"` for icon-only row actions (view / edit / delete).
 - Cards: `<v-card rounded="lg">` on `surface`; prefer medium elevation for content cards.
 - Errors: `<v-alert type="error" density="compact">`.
 - Dialogs: `<v-dialog>` for create / rename / confirm flows; round-eight radius; primary confirm + secondary/text cancel.

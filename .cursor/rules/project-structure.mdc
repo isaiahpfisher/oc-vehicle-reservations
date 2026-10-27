@@ -8,7 +8,7 @@ Split frontend and backend in one repository. Specs in `features/` are the sourc
 
 ## Directory Layout
 ```
-todo-speckit/
+oc-vehicle-reservations/
   features/                  # SDD specs
   frontend/                  # Vue 3 + Vite + Vuetify 4
     public/                  # .htaccess for SPA deploy
@@ -18,6 +18,8 @@ todo-speckit/
         layout/              # Page shells: PageShell, SectionCard, DetailHeader, DetailLayout (see ui-style-system.mdc)
         common/              # ListState, ComingSoon, ConfirmModal/ConfirmProvider
       services/              # Axios API modules (*Services.js)
+      composables/           # useRequest, useConfirm, useRoles, …
+      models/                # Pure per-entity domain/display helpers (users.js)
       stores/                # Pinia stores (auth.js); index.js creates the Pinia instance
       config/                # utils.js (errorMessage helper)
       utils/                 # Pure helper functions
@@ -33,28 +35,32 @@ todo-speckit/
       routes/                # Express routers; index.js mounts all
       controllers/           # Request handlers
       models/                # Sequelize models; index.js wires associations
-      authorization/         # authenticate, scope helpers, role guards
-      config/                # db, auth, logger, sequelizeInstance
-      scripts/               # Incremental schema/data scripts
+      authorization/         # authenticate, role guards, area-scope helpers
+      helpers/               # fields.js (parseId, requiredText), response shapers (users.js)
+      config/                # env, db, auth, logger, sequelizeInstance
+    scripts/                 # npm-run scripts: make-admin.mjs, seed.mjs
+    tests/                   # Jest + supertest; helpers.js, setup.js
     package.json
 ```
 
 ## Naming Conventions
-*   Frontend services: `camelCase` + `Services.js` (e.g. `authServices.js`, `todoServices.js`).
+*   Frontend services: `camelCase` + `Services.js` (e.g. `authServices.js`, `areaServices.js`).
 *   Backend files: `resource.controller.js`, `resource.routes.js`, `resource.model.js`.
-*   Multi-word URL segments: kebab-case (`/todo-lists`).
+*   Multi-word URL segments: kebab-case (`/vehicle-types`).
 
 ## Environment Variables
-Backend (`backend/.env`):
-*   `DB_HOST`, `DB_USER`, `DB_PW`, `DB_NAME` — MySQL connection (default database: `todocourses-db`).
+Backend (`backend/.env`, falling back to the repo-root `.env`; see `app/config/env.js`):
+*   `DB_HOST`, `DB_USER`, `DB_PW`, `DB_NAME` — MySQL connection (default database: `vehicles-db`).
 *   `AUTH_SECRET` — JWT signing secret (required in production).
 *   `PORT` — default `3200`.
 *   `NODE_ENV` — `development` | `production` | `test`.
-*   `SEQUELIZE_SYNC_ALTER` — set `true` to run `sync({ alter: true })` in dev only.
+*   `SEQUELIZE_SYNC_ALTER` — `sync({ alter: true })` on start; on by default in development, `false` disables it.
+*   `GOOGLE_CLIENT_ID` — Google sign-in.
+*   `DEV_LOGIN` — `true` enables developer sign-in (never in production); `DEV_LOGIN_PASSWORD` sets its shared password (default `password`).
 
 Frontend: use `import.meta.env.DEV` for dev/prod API base URL; `cross-env APP_ENV=development` in npm scripts.
 
-Backend test env (`backend/.env.test`): copy from `backend/.env.test.example`; uses `NODE_ENV=test` and `DB_NAME=todocourses-db-test`.
+Backend test env (`backend/.env.test`): copy from `backend/.env.test.example`; uses `NODE_ENV=test` and `DB_NAME=vehicles-db-test` (must end in `-test`).
 
 ## Dev Ports
 *   Frontend Vite: `8082`
