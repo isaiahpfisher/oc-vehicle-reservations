@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 6 adds `enrollments`. Sequelize creates `id`, `createdAt`, and `updatedAt`.
+**Status:** Feature 2 adds `areas`. Feature 6 adds `enrollments`. Sequelize creates `id`, `createdAt`, and `updatedAt`.
 
 ## `users`
 
@@ -27,6 +27,18 @@
 | `updatedAt` | DATE | Sequelize timestamp |
 
 A user has many sessions. A session belongs to one user.
+
+## `areas`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, unique, max 255 |
+| `logo` | TEXT | Required. Trimmed. Empty string when no logo. A non-empty value is an `http` or `https` URL. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+An area has no associations in this feature.
 
 ## `enrollments`
 

@@ -2,7 +2,7 @@
 
 **Feature ID:** 2
 **Branch pattern:** `feature/2-area-management`
-**Status:** Draft
+**Status:** Ready
 **Created:** 2026-09-24
 **Input:** Signed-in users manage areas. Areas are added/edited with a dialog.
 **Depends on:** Feature 1 [User Auth]
@@ -452,30 +452,30 @@ Any signed in user may create, edit, delete, or read the list of areas.
 #### Scenario: Unauthenticated API request to areas
 - **Given** I have no valid session token
 - **When** I request `GET /api/areas`
-- **Then** the API returns `401` with `{ message: "Unauthorized." }`
+- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
 
 #### Scenario: Unauthenticated API request to a particular area
 - **Given** I have no valid session token
 - **And** An area with id `1` exists
 - **When** I request `GET /api/areas/1`
-- **Then** the API returns `401` with `{ message: "Unauthorized." }`
+- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
 
 #### Scenario: Unauthenticated API request to create an area
 - **Given** I have no valid session token
 - **When** I request `POST /api/areas` with a valid body
-- **Then** the API returns `401` with `{ message: "Unauthorized." }`
+- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
 
 #### Scenario: Unauthenticated API request to update an area
 - **Given** I have no valid session token
 - **And** An area with id `1` exists
 - **When** I request `PUT /api/areas/1` with a valid body
-- **Then** the API returns `401` with `{ message: "Unauthorized." }`
+- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
 
 #### Scenario: Unauthenticated API request to delete an area
 - **Given** I have no valid session token
 - **And** An area with id `1` exists
 - **When** I request `DELETE /api/areas/1`
-- **Then** the API returns `401` with `{ message: "Unauthorized." }`
+- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
 
 ---
 
@@ -531,15 +531,33 @@ Any signed in user may create, edit, delete, or read the list of areas.
 | US-2.5 | Unauthenticated API request to update an area | `backend/tests/areas.test.js` | `Unauthenticated API request to update an area` |
 | US-2.5 | Unauthenticated API request to delete an area | `backend/tests/areas.test.js` | `Unauthenticated API request to delete an area` |
 
+## Agent implementation request
+
+Copy when asking Cursor to implement this feature (`@` this file):
+
+```text
+Implement Feature 2 from @features/feature-2-area-management.md on branch `feature/2-area-management`.
+
+Follow layer order in @features/framework.md (models → routes → backend tests → frontend → frontend tests).
+Map every Gherkin scenario in the Test Coverage Map; run `npm test` before finishing.
+If API routes, payloads, schema, or product rules changed per this spec, update @features/reference/api.md, @features/reference/data-model.md, and/or @features/reference/behavior.md in the same PR to match shipped code.
+Complete Definition of Done and the merge checklist in @features/framework.md.
+Do not implement behavior not in this spec.
+```
+
+**Reference updates for this feature:** `features/reference/data-model.md`, `features/reference/api.md`, `features/reference/behavior.md`
+
+---
+
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-006** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-006** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

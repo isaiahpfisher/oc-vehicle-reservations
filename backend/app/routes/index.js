@@ -7,6 +7,7 @@ import sectionRoutes from "./section.routes.js";
 import semesterRoutes from "./semester.routes.js";
 import enrollmentRoutes from "./enrollment.routes.js";
 import courseListingRoutes from "./courselisting.routes.js";
+import areaRoutes from "./area.routes.js";
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use("/sections", sectionRoutes);
 router.use("/semesters", semesterRoutes);
 router.use("/enrollments", enrollmentRoutes);
 router.use("/course-listings", courseListingRoutes);
+router.use("/areas", areaRoutes);
 
 export default router;

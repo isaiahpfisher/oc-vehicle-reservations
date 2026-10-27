@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 6 enrollment routes are in force. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 2 area routes and Feature 6 enrollment routes are in force. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -41,3 +41,27 @@ Login verifies the Google ID token and reads `email`, `given_name`, and `family_
 | No session | `401` |
 | Missing or invalid `sectionId` | `400` |
 | Unknown section, another student's enrollment, or role `admin` | `404` |
+
+## Areas
+
+Any signed-in user. Routes use `authenticate`. There is no role check.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/areas` | Bearer | `200` array of areas, ordered by `name`. |
+| `GET` | `/api/areas/:areaId` | Bearer | `200` with one area. |
+| `POST` | `/api/areas` | Bearer | `201` with the created area. Body is `{ "name": "Athletics", "logo": "https://example.com/logo.png" }`. Omitted `logo` is stored as `""`. |
+| `PUT` | `/api/areas/:areaId` | Bearer | `200` with the updated area. A field omitted from the body keeps its stored value. |
+| `DELETE` | `/api/areas/:areaId` | Bearer | `200`. The area row is removed. |
+
+Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `name` matches another area | `400` | `{ "message": "Name already taken." }` |
+| Non-empty `logo` is not an `http` or `https` URL | `400` | `{ "message": "Invalid logo URL." }` |
+| `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
+| Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
