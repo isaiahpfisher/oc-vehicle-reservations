@@ -7,7 +7,6 @@ import { fileURLToPath } from "url";
 import { Op } from "sequelize";
 import db from "../app/models/index.js";
 
-// INTERIM: these are Feature 2 areas created directly until Feature 2 is merged.
 export const SEED_AREAS = ["Admissions", "Athletics", "Facilities", "Music", "Student Life", "Theatre"];
 
 const areaAdmin = (...areas) => areas.map((area) => ({ role: "area_admin", area }));

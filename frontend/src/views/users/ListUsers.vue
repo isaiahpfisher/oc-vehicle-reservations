@@ -89,8 +89,7 @@ onMounted(getUsers);
 </script>
 
 <template>
-  <PageShell title="Users">
-
+  <PageShell title="User Management">
     <v-row>
       <v-col cols="12" md="8">
         <v-text-field

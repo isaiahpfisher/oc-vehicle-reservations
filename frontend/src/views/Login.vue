@@ -3,10 +3,11 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import authServices from "../services/authServices.js";
 import { readRedirectIdToken, startGoogleSignIn } from "../services/googleAuth.js";
-import Utils from "../config/utils.js";
 import { useRequest } from "../composables/useRequest.js";
+import { useAuthStore } from "../stores/auth.js";
 
 const router = useRouter();
+const auth = useAuthStore();
 const { data, loading, error, run } = useRequest(authServices.loginUser, { fallback: "Login failed." });
 
 // Feature 3 FR-015: developer sign-in, rendered only in development builds.
@@ -21,8 +22,7 @@ const {
 } = useRequest(authServices.devLogin, { fallback: "Login failed." });
 
 const storeAndGoHome = async (user) => {
-  Utils.setStore("user", user);
-  window.dispatchEvent(new CustomEvent("user-logged-in"));
+  auth.signIn(user);
   await router.push({ name: "home" });
 };
 

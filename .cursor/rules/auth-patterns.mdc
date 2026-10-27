@@ -25,11 +25,14 @@ Return flat JSON (not wrapped):
 ```
 
 ## Frontend Auth State
-*   Store full login response in `localStorage` key `user` via `Utils.setStore("user", res.data)`.
+*   The signed-in user lives in the Pinia auth store, `useAuthStore()` (`stores/auth.js`). It is the only code that touches `localStorage`: it loads key `user` at startup and writes it back on every change, so sessions survive reloads.
+*   Change it only through its actions: `signIn(res.data)` with the full login response, `signOut()`, `setRoles(roles)`. Read `user`, `isSignedIn`, `token`, `roles`. Never read or write `localStorage` `user` directly.
+*   Role checks go through `useRoles()` (`hasRole`, `hasAnyRole`, `areaAdminAreaIds`), which reads the store.
 *   `authServices.js`: `loginUser`, `logoutUser` methods calling `apiClient.post` (see `frontend-services.mdc`).
-*   Logout clears server session, then `Utils.removeItem("user")`, then route to login.
-*   `router.beforeEach`: if no `user` in store and route is not login → redirect to login.
+*   Logout clears the server session, then `useAuthStore().signOut()`, then routes to login.
+*   `router.beforeEach`: routes with `meta.public` (login) are open without a session and send a signed-in user home; any other route without a session → login; then `meta.roles` via `canOpen()`.
 *   Axios token attachment and 401 redirect: `frontend-services.mdc`.
+*   Tests set the user with `signInAs(user)` / `signInAs(null)` from `tests/testUtils.js`, not `localStorage`.
 
 ## Registration (when spec requires)
 *   Hash password server-side before `User.create`.

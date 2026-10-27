@@ -1,6 +1,6 @@
 import apiClient from "./services.js";
-import Utils from "../config/utils.js";
 import router from "../router.js";
+import { useAuthStore } from "../stores/auth.js";
 
 const authServices = {
   registerUser(payload) {
@@ -20,8 +20,7 @@ const authServices = {
     try {
       await apiClient.post("logout");
     } finally {
-      Utils.removeItem("user");
-      window.dispatchEvent(new CustomEvent("user-logged-out"));
+      useAuthStore().signOut();
       await router.push({ name: "login" });
     }
   },

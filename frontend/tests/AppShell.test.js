@@ -7,17 +7,14 @@ import { mount } from "@vue/test-utils";
 import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
-import { settle, vuetify, waitFor } from "./testUtils.js";
+import { settle, signInAs, vuetify, waitFor } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 
 const signIn = (roles) =>
-  localStorage.setItem(
-    "user",
-    JSON.stringify({ userId: 1, email: "jane@eagles.oc.edu", firstName: "Jane", lastName: "Doe", roles, token: "t" }),
-  );
+  signInAs({ userId: 1, email: "jane@eagles.oc.edu", firstName: "Jane", lastName: "Doe", roles, token: "t" });
 
 let wrapper;
 
@@ -33,7 +30,7 @@ const drawer = () => document.body.querySelector(".v-navigation-drawer");
 const appBar = () => document.body.querySelector(".v-app-bar");
 
 beforeEach(() => {
-  localStorage.clear();
+  signInAs(null);
   vi.resetAllMocks();
   // Role refresh echoes the stored roles.
   apiClient.get.mockImplementation(async () => ({ data: { roles: JSON.parse(localStorage.getItem("user"))?.roles ?? [] } }));
@@ -71,6 +68,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
       "Home",
       "Users",
+      "Areas",
     ]);
 
     // Profile is glued to the bottom (drawer append slot).

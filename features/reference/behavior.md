@@ -1,6 +1,6 @@
 # Behavior & Rules Reference
 
-**Living snapshot** of product rules currently in force. Feature 3 role rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules and Feature 3 role rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -26,6 +26,16 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | `authenticate` sets `req.user` | Bearer token must match an unexpired session row. `req.user` is `{ id, roles }`, loaded from the database on every request. | Feature 1, FR-004; Feature 3, FR-009 |
 | No profile editing | The avatar menu shows name, email, and **Sign out** only. | Feature 3 |
 
+## Areas
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Any signed-in user can list areas; only admins manage them | `GET /api/areas` and `GET /api/areas/:areaId` use `authenticate`. `POST`, `PUT`, and `DELETE` use `authenticateAdmin` (`403` otherwise). `/areas` has `meta.roles: ["admin"]`, so non-admins don't see the **Areas** link and are redirected home. | Feature 2, FR-001; Feature 3, US-3.6 |
+| Name is trimmed, required, unique, and at most 255 characters | Empty or whitespace-only name returns `400` `{ "message": "Missing name." }`. A longer name returns `{ "message": "Name too long." }`. A name already stored on a different area returns `{ "message": "Name already taken." }`. Saving an area with its own current name is allowed. | Feature 2, FR-002, FR-004 |
+| Logo is a URL or an empty string | The value is trimmed. `""` is stored when the logo is omitted or blank. `logo.png` returns `400` `{ "message": "Invalid logo URL." }`. A non-empty logo must be an `http` or `https` URL. The areas list renders an image only when `logo` is not empty. | Feature 2, FR-005, FR-006 |
+| Delete removes the area | `DELETE` returns `200` and does not check for other rows that point at the area. The area's `area_admin` roles are deleted with it. | Feature 2, Assumptions; Feature 3 |
+| Areas are managed on one screen | `/areas` heading is **Area Management**. Create and edit use a dialog with **Name** and **Logo**. Delete uses the shared confirmation dialog. Empty list copy is **No areas yet. Create your first area.** | Feature 2, Screen Requirements |
+
 ## Roles
 
 | Rule | Enforcement | Provenance |
@@ -37,8 +47,8 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Admins cannot lock themselves out | An admin cannot remove their own `admin` role or delete themselves (`400`; the UI blocks or disables it first). | Feature 3 |
 | Roles are replaced atomically | `PUT /api/users/:id` swaps the full role set in one transaction. | Feature 3, FR-012 |
 | First admin comes from a script | `npm run make-admin -- <email>` in `backend/` grants `admin` to an existing user. No API does this. | Feature 3, FR-008 |
-| Routes declare `meta.roles` | The user needs any listed role (admin always passes); no `meta.roles` = any signed-in user. The router guard and MenuBar links use the same `canOpen()` check. | Feature 3, FR-011 |
+| Routes declare `meta.roles` | The user needs any listed role (admin always passes); no `meta.roles` = any signed-in user. The router guard and MenuBar links use the same `canOpen()` check. Routes open without a session (login) declare `meta.public`. | Feature 3, FR-011; Feature 1, FR-005 |
 | Frontend refreshes roles per page load | The first navigation after a page load calls `GET /api/users/:id` and replaces the stored roles before any role check. A `401` clears `user` and goes to login. | Feature 3, FR-009 |
 | Users list | Admin-only table at `/users`: name, email, role chips (`Admin`, `Maintenance`, `Area Admin — <area>`), 10 per page, name search (case-insensitive) and role filter; changing either returns to page 1. | Feature 3, US-3.1–3.3 |
-| User details | `/users/:id` (`/users/:id/edit` redirects): header with name, email, role chips, and member-since date; **Access** card with checkboxes (System roles; Area admin of, one per area) and its own Save/Cancel that stay on the page; **Driver** card and **Requests** / **Issue reports** / **Maintenance** (maintenance users only) tabs show "Coming soon" until Features 7–13; **Account** card deletes the user. On your own page, Admin and Delete are disabled. | Feature 3, US-3.4, US-3.5 |
+| User details | `/users/:id`: header with name, email, role chips, and member-since date; **Access** card with checkboxes (System roles; Area admin of, one per area) and its own Save/Cancel that stay on the page; **Driver** card and **Requests** / **Issue reports** / **Maintenance** (maintenance users only) tabs show "Coming soon" until Features 7–13; **Account** card deletes the user. On your own page, Admin and Delete are disabled. | Feature 3, US-3.4, US-3.5 |
 | Delete user | Confirm dialog naming the user, from the users list or the details page; disabled for the admin's own account. | Feature 3, US-3.5 |

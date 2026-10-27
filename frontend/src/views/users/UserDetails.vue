@@ -5,7 +5,7 @@ import userServices from "../../services/userServices.js";
 import areaServices from "../../services/areaServices.js";
 import { useDeleteUser } from "../../composables/useDeleteUser.js";
 import { useRequest } from "../../composables/useRequest.js";
-import { setStoredRoles, useRoles } from "../../composables/useRoles.js";
+import { useAuthStore } from "../../stores/auth.js";
 import UserAccessCard from "../../components/users/UserAccessCard.vue";
 import ComingSoon from "../../components/common/ComingSoon.vue";
 import PageShell from "../../components/layout/PageShell.vue";
@@ -19,7 +19,7 @@ const props = defineProps({
 });
 
 const router = useRouter();
-const { user: currentUser } = useRoles();
+const auth = useAuthStore();
 
 const { data: user, loading: userLoading, error: userError, run: loadUser } = useRequest(userServices.getUser, {
   fallback: "Failed to load user.",
@@ -33,7 +33,7 @@ const loadError = computed(() => userError.value || areasError.value);
 const tab = ref("requests");
 
 const userId = computed(() => Number(props.id));
-const isSelf = computed(() => userId.value === currentUser.value?.userId);
+const isSelf = computed(() => userId.value === auth.user?.userId);
 const name = computed(() => (user.value ? fullName(user.value) : "User"));
 const isMaintenance = computed(() => user.value?.roles.some((role) => role.role === "maintenance") ?? false);
 
@@ -53,7 +53,7 @@ const tabs = computed(() => [
 
 const onRolesSaved = (updated) => {
   user.value = { ...user.value, roles: updated.roles };
-  if (isSelf.value) setStoredRoles(updated.roles);
+  if (isSelf.value) auth.setRoles(updated.roles);
 };
 
 // Keep the selected tab valid when the Maintenance tab disappears.

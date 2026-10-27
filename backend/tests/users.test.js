@@ -288,18 +288,4 @@ describe("Feature 3 — User Role Management API", () => {
       expect(anonymous.status).toBe(401);
     });
   });
-
-  describe("Interim Feature 2 stand-in — GET /api/areas", () => {
-    it("lists areas by name for any signed-in user", async () => {
-      const user = await registerUser();
-      await createArea("Music");
-      await createArea("Athletics");
-
-      const response = await request(app).get("/api/areas").set(bearer(user.body.token));
-      expect(response.status).toBe(200);
-      expect(response.body.map(({ name }) => name)).toEqual(["Athletics", "Music"]);
-
-      expect((await request(app).get("/api/areas")).status).toBe(401);
-    });
-  });
 });

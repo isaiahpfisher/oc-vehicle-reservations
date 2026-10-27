@@ -8,7 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import userServices from "../src/services/userServices.js";
 import areaServices from "../src/services/areaServices.js";
-import { apiError, settle, vuetify, waitFor } from "./testUtils.js";
+import { apiError, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
 
 vi.mock("../src/services/userServices.js", () => ({
   default: { getUsers: vi.fn(), getUser: vi.fn(), updateUserRoles: vi.fn(), deleteUser: vi.fn() },
@@ -35,10 +35,7 @@ const sam = { id: 4, firstName: "Sam", lastName: "Smithers", email: "sam@eagles.
 const allUsers = [ada, bob, jane, sam];
 
 const signIn = (user, roles = user.roles) =>
-  localStorage.setItem(
-    "user",
-    JSON.stringify({ userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, roles, token: "t" }),
-  );
+  signInAs({ userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, roles, token: "t" });
 
 let wrapper;
 
@@ -73,7 +70,7 @@ const dialogButton = (text) =>
   });
 
 beforeEach(async () => {
-  localStorage.clear();
+  signInAs(null);
   vi.resetAllMocks();
   // Role refresh (FR-009) echoes whatever roles are stored.
   userServices.getUser.mockImplementation(async () => ({ data: { roles: JSON.parse(localStorage.getItem("user")).roles } }));
@@ -95,7 +92,7 @@ describe("Feature 3 — User Role Management UI", () => {
     it("Admin views users list", async () => {
       await openUsers();
 
-      expect(wrapper.find("h2").text()).toBe("Users");
+      expect(wrapper.find("h2").text()).toBe("User Management");
       expect(shownNames()).toEqual(["Ada Admin", "Bob Jones", "Jane Smith", "Sam Smithers"]);
       const janeRow = rowFor("Jane Smith");
       expect(janeRow.textContent).toContain("jane@eagles.oc.edu");

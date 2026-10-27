@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 3 adds `roles` and an interim `areas` table; the starter-kit course tables and `users.role` are removed. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -27,6 +27,16 @@ Users are only created by Google sign-in (`POST /api/login`).
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
+## `areas`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, unique, max 255 |
+| `logo` | TEXT | Required. Trimmed. Empty string when no logo. A non-empty value is an `http` or `https` URL. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
 ## `roles`
 
 | Column | Type | Rules |
@@ -39,18 +49,6 @@ Users are only created by Google sign-in (`POST /api/login`).
 | `updatedAt` | DATE | Sequelize timestamp |
 
 Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissions without a row.
-
-## `areas` (interim)
-
-Minimal stand-in until Feature 2 (Area Management) is merged; Feature 2 owns this table.
-
-| Column | Type | Rules |
-| ------ | ---- | ----- |
-| `id` | INTEGER | Primary key, auto-increment |
-| `name` | STRING | Required, unique |
-| `logo` | TEXT | Optional |
-| `createdAt` | DATE | Sequelize timestamp |
-| `updatedAt` | DATE | Sequelize timestamp |
 
 ## Associations
 

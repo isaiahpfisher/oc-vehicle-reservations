@@ -8,7 +8,8 @@ globs: "frontend/src/**/*.js, frontend/vite.config.js"
 *   `views/` — pages registered in `router.js`.
 *   `components/` — shared forms, nav, dialogs.
 *   `services/services.js` — shared axios instance; domain modules in `*Services.js`.
-*   `config/utils.js` — `setStore`, `getStore`, `removeItem` (localStorage JSON).
+*   `stores/` — Pinia stores (`defineStore` setup syntax), one per concern (`auth.js`). `stores/index.js` creates the single Pinia instance that `main.js` installs.
+*   `config/utils.js` — `errorMessage(error, fallback)`. No storage helpers; app state belongs in a store.
 *   `utils/` — pure helpers only; no HTTP calls.
 
 ## Domain Service Modules
@@ -19,8 +20,8 @@ globs: "frontend/src/**/*.js, frontend/vite.config.js"
 ## Axios Client (`services/services.js`)
 *   Dev `baseURL`: `http://localhost:3200/todo/`; prod: `/todo/`.
 *   `withCredentials: true`.
-*   `transformRequest`: attach `Authorization: Bearer <token>` from `Utils.getStore("user")`.
-*   `transformResponse`: on unauthorized message, clear user and `Router.push({ name: "login" })`.
+*   Request interceptor: attach `Authorization: Bearer <token>` from `useAuthStore().token`.
+*   Response interceptor: on `401` or an unauthorized message, `useAuthStore().signOut()` and `router.push({ name: "login" })`.
 *   FormData uploads: delete `Content-Type` header so the browser sets the boundary.
 
 ## Router Conventions (`router.js`)
@@ -29,8 +30,8 @@ globs: "frontend/src/**/*.js, frontend/vite.config.js"
 *   `props: true` on routes with `:id` params.
 *   `router.beforeEach` — auth and role guards per `auth-patterns.mdc`.
 
-## Cross-Component Events
-Dispatch `window` `CustomEvent`s (e.g. `user-logged-in`) when auth state changes so layout components can refresh without prop drilling.
+## Shared State (Pinia)
+Share state across components through a Pinia store, not `window` events or prop drilling: components re-render when the store changes. Components call `useXStore()`; code outside components (router guards, axios interceptors) may call it too, because `stores/index.js` makes the app's Pinia active on import. Persist to `localStorage` inside the store when state must survive a reload (see `stores/auth.js`).
 
 ## Production Deploy
 Copy `public/.htaccess` to `dist/` on build — SPA fallback rewrite and cache headers for hashed assets.

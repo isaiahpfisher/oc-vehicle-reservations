@@ -2,7 +2,7 @@
 
 **Feature ID:** 3
 **Branch pattern:** `feature/3-user-role-management`
-**Status:** Draft
+**Status:** Ready
 **Created:** 2026-10-18
 **Input:** Signed-in admin users manage users and their roles.
 **Depends on:** Feature 1, 2
@@ -128,10 +128,10 @@
 ## Assumptions
 
 - User management does NOT use **dialog-based** workflows. Each user gets a **User details** page (`userDetails`) where roles are edited. Only delete confirmation uses a dialog. Users register through Google, so no user creation (**FR-013**).
-- A user's name and email come from Google and cannot be edited by anyone. The Edit User page shows them read-only.
+- A user's name and email come from Google and cannot be edited by anyone. The User details page shows them read-only.
 - There is no profile page. The Feature 1 **Edit Profile** dialog is removed; the avatar menu shows name, email, and **Sign out** only.
-- **Interim Feature 2 stand-in:** Feature 2 (Area Management) is not merged yet. This feature adds a minimal `Area` model (`id`, `name`, `logo`) and a read-only `GET /api/areas` (any signed-in user, sorted by name) so roles can reference areas. **Remove both once the full Feature 2 is merged** and use Feature 2's model and endpoint instead. Area create/edit/delete and the Areas page belong to Feature 2.
-- The first admin signs in with Google once to create their account, then someone with server access runs `make-admin` for their email (**FR-008**). After that, admins grant admin through the Edit User page. There is no API endpoint for bootstrapping admins.
+- Areas come from Feature 2 (Area Management): its `Area` model, `/api/areas` endpoints, and Areas page. This feature restricts creating, editing, and deleting areas to admins and hides the Areas page from everyone else; listing areas stays open to any signed-in user so other features can show them.
+- The first admin signs in with Google once to create their account, then someone with server access runs `make-admin` for their email (**FR-008**). After that, admins grant admin from the User details page. There is no API endpoint for bootstrapping admins.
 - `useRoles()` exposes:
   - `hasRole(role, areaId?)`: true only if the user holds that exact role. For `area_admin`, passing an `areaId` checks that specific area, and leaving it out matches any area. Admins are **not** treated as holding other roles here, so `hasRole` stays accurate for display (chips, labels).
   - `hasAnyRole(roles)`: true if the user holds any listed role **or** is an admin. Use this for access checks (route guards, nav links, action buttons).
@@ -177,7 +177,8 @@ Only signed-in admin users may view, edit, and delete users. Any signed-in user 
 | `GET`    | `/api/users/:userId` | Yes - Self or Admin | Fetch a single user with their roles            |
 | `PUT`    | `/api/users/:userId` | Yes - Admin         | Replace a user's roles (**FR-012**)             |
 | `DELETE` | `/api/users/:userId` | Yes - Admin         | Delete a user (`204`)                           |
-| `GET`    | `/api/areas`         | Yes                 | Interim stand-in until Feature 2 (see Assumptions) |
+| `GET`    | `/api/areas`, `/api/areas/:areaId` | Yes       | List or fetch areas (Feature 2); any signed-in user |
+| `POST`, `PUT`, `DELETE` | `/api/areas[/:areaId]` | Yes - Admin | Manage areas (Feature 2); `403` for non-admins (US-3.6) |
 | `POST`   | `/api/dev-login`     | No (dev only)       | Sign in as an existing user without Google (**FR-014**) |
 
 **User response** (`GET` items, `GET` one, `PUT`):
@@ -214,7 +215,7 @@ Only signed-in admin users may view, edit, and delete users. Any signed-in user 
 
 **ListUsers.vue** (`/src/views/users/ListUsers.vue`)
 
-- Heading: **Users**
+- Heading: **User Management**
 - No primary action
 - Display users in a paginated data table with search and filters at the top
 - Name and email stay on one line (long emails are truncated with the full address on hover). The Roles column shows at most two chips (Admin, then Maintenance, then Area Admin by area name), then a **+N** chip whose tooltip and `aria-label` list the remaining roles.
@@ -227,7 +228,7 @@ Only signed-in admin users may view, edit, and delete users. Any signed-in user 
 
 ### [View: User details] — route name `userDetails` (`/users/:id`)
 
-**UserDetails.vue** (`/src/views/users/UserDetails.vue`). `/users/:id/edit` redirects here.
+**UserDetails.vue** (`/src/views/users/UserDetails.vue`).
 
 - Breadcrumbs: **Users** / *user's name*. Heading: the user's name.
 - **Header card:** initials avatar, name, email, a chip per role (same labels as the users list), and **Member since** *Month YYYY* (from `createdAt`). Name and email are read-only.
@@ -517,6 +518,12 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 - **Given** I am signed in as a non-admin
 - **When** I open the app
 - **Then** I cannot see or open the Areas page or create/edit/delete areas
+
+#### Scenario: Deleting an area removes its area admin roles
+
+- **Given** a user is Area Admin of Athletics and also holds `maintenance`
+- **When** an admin deletes the Athletics area
+- **Then** the user's `Area Admin — Athletics` role is removed and `maintenance` stays
 
 #### Scenario: Frontend route guard redirects
 
@@ -818,10 +825,11 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 | US-3.5 | Admin deletes a user from the details page                    | `frontend/tests/UserDetails.test.js`   | `Admin deletes a user from the details page`                  |
 | US-3.5 | Admin cannot delete themselves from the details page          | `frontend/tests/UserDetails.test.js`   | `Admin cannot delete themselves from the details page`        |
 | US-3.6 | Admin can access everything                                   | `backend/tests/authorization.test.js`  | `Admin can access everything`                                 |
-| US-3.6 | Admins can manage Areas                                       | `backend/tests/areas.test.js`          | `Admins can manage Areas` — **pending Feature 2** (Areas page/API)                                     |
-| US-3.6 | Admins can manage Areas                                       | `frontend/tests/Areas.test.js`         | `Admins can manage Areas` — **pending Feature 2** (Areas page/API) |
-| US-3.6 | Non-admins cannot manage Areas                                | `backend/tests/areas.test.js`          | `Non-admins cannot manage Areas` — **pending Feature 2** (Areas page/API)                              |
-| US-3.6 | Non-admins cannot manage Areas                                | `frontend/tests/Areas.test.js`         | `Non-admins cannot manage Areas` — **pending Feature 2** (Areas page/API) |
+| US-3.6 | Admins can manage Areas                                       | `backend/tests/areas.test.js`          | `Admins can manage Areas`                                     |
+| US-3.6 | Admins can manage Areas                                       | `frontend/tests/Areas.test.js`         | `Admins can manage Areas`                                     |
+| US-3.6 | Non-admins cannot manage Areas                                | `backend/tests/areas.test.js`          | `Non-admins cannot manage Areas`                              |
+| US-3.6 | Non-admins cannot manage Areas                                | `frontend/tests/Areas.test.js`         | `Non-admins cannot manage Areas`                              |
+| US-3.6 | Deleting an area removes its area admin roles                 | `backend/tests/areas.test.js`          | `Deleting an area removes its area admin roles`               |
 | US-3.6 | Frontend route guard redirects                                | `frontend/tests/Authorization.test.js` | `Frontend route guard redirects`                              |
 | US-3.6 | Navigation hides unauthorized links                           | `frontend/tests/Authorization.test.js` | `Navigation hides unauthorized links`                         |
 | US-3.7 | `authenticate` attaches the user's roles                      | `backend/tests/authorization.test.js`  | `authenticate attaches the user's roles`                      |
@@ -867,15 +875,15 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (all function requirements satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `make-admin` script added to `backend/package.json` and documented in the README setup steps
-- [ ] `seed` script and `DEV_LOGIN` documented in the README with the seeded test accounts
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (all function requirements satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `make-admin` script added to `backend/package.json` and documented in the README setup steps
+- [x] `seed` script and `DEV_LOGIN` documented in the README with the seeded test accounts
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

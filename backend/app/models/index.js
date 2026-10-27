@@ -3,7 +3,6 @@ import sequelize from "../config/sequelizeInstance.js";
 import userModel from "./user.model.js";
 import sessionModel from "./session.model.js";
 import roleModel from "./role.model.js";
-// INTERIM: remove once the full Feature 2 (Area Management) is merged; use its area model instead.
 import areaModel from "./area.model.js";
 
 const db = {};

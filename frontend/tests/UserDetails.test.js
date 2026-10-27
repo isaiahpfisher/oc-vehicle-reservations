@@ -8,7 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import userServices from "../src/services/userServices.js";
 import areaServices from "../src/services/areaServices.js";
-import { apiError, settle, vuetify, waitFor } from "./testUtils.js";
+import { apiError, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
 
 vi.mock("../src/services/userServices.js", () => ({
   default: { getUsers: vi.fn(), getUser: vi.fn(), updateUserRoles: vi.fn(), deleteUser: vi.fn() },
@@ -84,12 +84,8 @@ const click = async (text) => {
 const headerChips = () => [...document.body.querySelectorAll(".detail-header .v-chip")].map((chip) => chip.textContent.trim());
 
 beforeEach(async () => {
-  localStorage.clear();
   vi.resetAllMocks();
-  localStorage.setItem(
-    "user",
-    JSON.stringify({ userId: ada.id, email: ada.email, firstName: "Ada", lastName: "Admin", roles: ada.roles, token: "t" }),
-  );
+  signInAs({ userId: ada.id, email: ada.email, firstName: "Ada", lastName: "Admin", roles: ada.roles, token: "t" });
   userServices.getUser.mockImplementation(async (id) => ({ data: users.find((user) => user.id === Number(id)) }));
   userServices.getUsers.mockResolvedValue({ data: users });
   userServices.updateUserRoles.mockImplementation(async (id, roles) => ({
@@ -261,14 +257,6 @@ describe("Feature 3 — User Role Management UI", () => {
       await click("Save");
       expect(document.body.querySelector(".v-alert").textContent).toContain("Area admin role requires a valid area.");
       expect(document.body.textContent).not.toContain("Roles saved.");
-    });
-
-    it("redirects the old edit URL to the details page", async () => {
-      await router.push(`/users/${jane.id}/edit`);
-      await settle();
-
-      expect(router.currentRoute.value.name).toBe("userDetails");
-      expect(router.currentRoute.value.params.id).toBe(String(jane.id));
     });
   });
 

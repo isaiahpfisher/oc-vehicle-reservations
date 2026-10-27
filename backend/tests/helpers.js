@@ -71,5 +71,5 @@ export const createUserWithRoles = async (roles, overrides = {}) => {
   return response;
 };
 
-/** INTERIM: areas come from Feature 2's API once it is merged; until then tests create rows directly. */
+/** Create an area row directly (Feature 2's API needs an admin session; see areas.test.js for that path). */
 export const createArea = (name) => db.area.create({ name });

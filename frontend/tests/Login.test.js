@@ -9,7 +9,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import { startGoogleSignIn } from "../src/services/googleAuth.js";
-import { vuetify } from "./testUtils.js";
+import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -67,7 +67,7 @@ const button = (text) => wrapper.findAll("button, a").find((b) => b.text().trim(
 const readStoredUser = () => JSON.parse(localStorage.getItem("user"));
 
 beforeEach(() => {
-  localStorage.clear();
+  signInAs(null);
   vi.resetAllMocks();
   // The first navigation refreshes roles from GET users/:id (Feature 3 FR-009)
   apiClient.get.mockResolvedValue({ data: { roles: [] } });
@@ -109,7 +109,7 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
     });
 
     it("User cannot change name or email", async () => {
-      localStorage.setItem("user", JSON.stringify(storedUser));
+      signInAs(storedUser);
       await mountAppAt("/");
 
       await wrapper.find('[aria-label="Open profile menu"]').trigger("click");
@@ -128,7 +128,7 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
 
   describe("US-1.3 — Stay signed in across page loads", () => {
     it("Signed-in user refreshes the home page", async () => {
-      localStorage.setItem("user", JSON.stringify(storedUser));
+      signInAs(storedUser);
 
       await mountAppAt("/");
 
@@ -139,7 +139,7 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
 
     it("API request includes session token", async () => {
       const { default: realClient } = await vi.importActual("../src/services/services.js");
-      localStorage.setItem("user", JSON.stringify(storedUser));
+      signInAs(storedUser);
       let sentHeaders;
 
       await realClient.get("users/1", {
@@ -153,7 +153,7 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
     });
 
     it("Signed-in user visits the login page", async () => {
-      localStorage.setItem("user", JSON.stringify(storedUser));
+      signInAs(storedUser);
 
       await mountAppAt("/login");
 
@@ -164,7 +164,7 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
 
   describe("US-1.4 — Sign out", () => {
     it("User logs out", async () => {
-      localStorage.setItem("user", JSON.stringify(storedUser));
+      signInAs(storedUser);
       apiClient.post.mockResolvedValueOnce({ data: { message: "Signed out successfully." } });
       await mountAppAt("/");
 
@@ -205,7 +205,7 @@ describe("Feature 1 — User Authentication and Session Management UI", () => {
     it("Signed-in user changes pages", async () => {
       // Home is the only signed-in view today, so register a stand-in protected page to navigate to.
       router.addRoute({ path: "/other-page", name: "other-page", component: { template: "<div>Other page</div>" } });
-      localStorage.setItem("user", JSON.stringify(storedUser));
+      signInAs(storedUser);
       await mountAppAt("/");
       expect(router.currentRoute.value.name).toBe("home");
 

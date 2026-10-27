@@ -18,7 +18,8 @@ todo-speckit/
         layout/              # Page shells: PageShell, SectionCard, DetailHeader, DetailLayout (see ui-style-system.mdc)
         common/              # ListState, ComingSoon, ConfirmModal/ConfirmProvider
       services/              # Axios API modules (*Services.js)
-      config/                # utils.js (localStorage, helpers)
+      stores/                # Pinia stores (auth.js); index.js creates the Pinia instance
+      config/                # utils.js (errorMessage helper)
       utils/                 # Pure helper functions
       plugins/               # vuetify.js, webfontloader.js
       router.js

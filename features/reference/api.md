@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 3 user and role routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, and Feature 3 user and role routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -54,13 +54,30 @@ User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, 
 | Admin `PUT` on self without `admin` | `400` | `{ "message": "You cannot remove your own admin role." }` |
 | Admin `DELETE` on self | `400` | `{ "message": "You cannot delete your own account." }` |
 
-## Areas (interim)
+## Areas
 
-Read-only stand-in until Feature 2 (Area Management) is merged.
+`GET` routes accept any signed-in user (other features list areas); creating, editing, and deleting areas is admin-only (Feature 3 US-3.6).
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
-| `GET` | `/api/areas` | Bearer | `200` array of `{ id, name, logo }` sorted by name. |
+| `GET` | `/api/areas` | Bearer | `200` array of areas, ordered by `name`. |
+| `GET` | `/api/areas/:areaId` | Bearer | `200` with one area. |
+| `POST` | `/api/areas` | Admin | `201` with the created area. Body is `{ "name": "Athletics", "logo": "https://example.com/logo.png" }`. Omitted `logo` is stored as `""`. |
+| `PUT` | `/api/areas/:areaId` | Admin | `200` with the updated area. A field omitted from the body keeps its stored value. |
+| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it. |
+
+Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Non-admin `POST`, `PUT`, or `DELETE` | `403` | `{ "message": "Admin role required." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `name` matches another area | `400` | `{ "message": "Name already taken." }` |
+| Non-empty `logo` is not an `http` or `https` URL | `400` | `{ "message": "Invalid logo URL." }` |
+| `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
+| Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
 
 ## Conventions
 
