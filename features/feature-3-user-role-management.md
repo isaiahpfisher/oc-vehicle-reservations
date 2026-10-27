@@ -80,26 +80,6 @@
 **Priority:** P1
 **Acceptance scenarios:** see ### US-3.7 under Acceptance Criteria
 
-### US-3.8: Bootstrap the first admin
-
-**As a** system administrator deploying the app
-**I want to** run a script that makes an existing account an admin by email
-**So that** someone can manage roles in a fresh install where every account comes from Google sign-in
-
-**Priority:** P1
-**Independent test:** Sign in with Google once, run `npm run make-admin -- <your email>` in `backend/`, reload the app, and confirm you hold the admin role.
-**Acceptance scenarios:** see ### US-3.8 under Acceptance Criteria
-
-### US-3.9: Test as other users (development only)
-
-**As a** developer
-**I want to** seed realistic users for every role and sign in as any of them without Google
-**So that** I can test role-based access locally
-
-**Priority:** P2
-**Independent test:** Run `npm run seed`, set `DEV_LOGIN=true`, open the login page in development, and sign in as `maintenance@oc.edu` with password `password`.
-**Acceptance scenarios:** see ### US-3.9 under Acceptance Criteria
-
 ---
 
 ## Requirements
@@ -160,26 +140,26 @@
 
 Only signed-in admin users may view, edit, and delete users. Any signed-in user may read their own user record (with roles) so the frontend can refresh roles (**FR-009**). Name and email are never editable. Even admins cannot remove their own admin role or delete themselves.
 
-| Rule                    | Requirement                                                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **User Read All Scope** | `GET /api/users` requires the `admin` role.                                                                   |
-| **User Read One Scope** | `GET /api/users/:userId` requires the `admin` role or `:userId` = `req.user.id`. Otherwise `404`.             |
-| **Role Write Scope**    | `PUT /api/users/:userId` requires the `admin` role. An admin cannot remove their own `admin` role.            |
+| Rule                    | Requirement                                                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **User Read All Scope** | `GET /api/users` requires the `admin` role.                                                                                             |
+| **User Read One Scope** | `GET /api/users/:userId` requires the `admin` role or `:userId` = `req.user.id`. Otherwise `404`.                                       |
+| **Role Write Scope**    | `PUT /api/users/:userId` requires the `admin` role. An admin cannot remove their own `admin` role.                                      |
 | **User Delete Scope**   | `DELETE /api/users/:userId` requires the `admin` role (`area_admin` and `maintenance` do not count). An admin cannot delete themselves. |
 
 ---
 
 ## API Requirements
 
-| Method   | Endpoint             | Auth                | Purpose                                         |
-| -------- | -------------------- | ------------------- | ----------------------------------------------- |
-| `GET`    | `/api/users`         | Yes - Admin         | Fetch all users with their roles                |
-| `GET`    | `/api/users/:userId` | Yes - Self or Admin | Fetch a single user with their roles            |
-| `PUT`    | `/api/users/:userId` | Yes - Admin         | Replace a user's roles (**FR-012**)             |
-| `DELETE` | `/api/users/:userId` | Yes - Admin         | Delete a user (`204`)                           |
-| `GET`    | `/api/areas`, `/api/areas/:areaId` | Yes       | List or fetch areas (Feature 2); any signed-in user |
-| `POST`, `PUT`, `DELETE` | `/api/areas[/:areaId]` | Yes - Admin | Manage areas (Feature 2); `403` for non-admins (US-3.6) |
-| `POST`   | `/api/dev-login`     | No (dev only)       | Sign in as an existing user without Google (**FR-014**) |
+| Method                  | Endpoint                           | Auth                | Purpose                                                 |
+| ----------------------- | ---------------------------------- | ------------------- | ------------------------------------------------------- |
+| `GET`                   | `/api/users`                       | Yes - Admin         | Fetch all users with their roles                        |
+| `GET`                   | `/api/users/:userId`               | Yes - Self or Admin | Fetch a single user with their roles                    |
+| `PUT`                   | `/api/users/:userId`               | Yes - Admin         | Replace a user's roles (**FR-012**)                     |
+| `DELETE`                | `/api/users/:userId`               | Yes - Admin         | Delete a user (`204`)                                   |
+| `GET`                   | `/api/areas`, `/api/areas/:areaId` | Yes                 | List or fetch areas (Feature 2); any signed-in user     |
+| `POST`, `PUT`, `DELETE` | `/api/areas[/:areaId]`             | Yes - Admin         | Manage areas (Feature 2); `403` for non-admins (US-3.6) |
+| `POST`                  | `/api/dev-login`                   | No (dev only)       | Sign in as an existing user without Google (**FR-014**) |
 
 **User response** (`GET` items, `GET` one, `PUT`):
 
@@ -230,8 +210,8 @@ Only signed-in admin users may view, edit, and delete users. Any signed-in user 
 
 **UserDetails.vue** (`/src/views/users/UserDetails.vue`).
 
-- Breadcrumbs: **Users** / *user's name*. Heading: the user's name.
-- **Header card:** initials avatar, name, email, a chip per role (same labels as the users list), and **Member since** *Month YYYY* (from `createdAt`). Name and email are read-only.
+- Breadcrumbs: **Users** / _user's name_. Heading: the user's name.
+- **Header card:** initials avatar, name, email, a chip per role (same labels as the users list), and **Member since** _Month YYYY_ (from `createdAt`). Name and email are read-only.
 - Two columns on desktop (stacked on small screens):
   - **Left:** **Access**, **Driver**, and **Account** cards.
   - **Right:** tabs for user activity.
@@ -266,14 +246,14 @@ Defined in a previous feature
 
 Sequelize uses `underscored: true`, so the columns are `user_id` / `area_id` while model attributes and JSON use `userId` / `areaId` (same as `sessions`).
 
-| Field       | Type       | Rules                                                                     |
-| ----------- | ---------- | ------------------------------------------------------------------------- |
-| `id`        | INTEGER PK | Auto-increment                                                            |
-| `user_id`   | INTEGER FK | Required; references `users.id`; deleting the user deletes their roles    |
-| `area_id`   | INTEGER FK | Optional; required for `area_admin`; deleting the area deletes the role   |
-| `role`      | STRING     | Required; one of `admin`, `area_admin`, `maintenance`                     |
-| `createdAt` | DATE       | Sequelize timestamps                                                      |
-| `updatedAt` | DATE       | Sequelize timestamps                                                      |
+| Field       | Type       | Rules                                                                   |
+| ----------- | ---------- | ----------------------------------------------------------------------- |
+| `id`        | INTEGER PK | Auto-increment                                                          |
+| `user_id`   | INTEGER FK | Required; references `users.id`; deleting the user deletes their roles  |
+| `area_id`   | INTEGER FK | Optional; required for `area_admin`; deleting the area deletes the role |
+| `role`      | STRING     | Required; one of `admin`, `area_admin`, `maintenance`                   |
+| `createdAt` | DATE       | Sequelize timestamps                                                    |
+| `updatedAt` | DATE       | Sequelize timestamps                                                    |
 
 Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column from the starter kit is removed.
 
@@ -690,96 +670,6 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 - **Given** my stored `user` has an expired or deleted session
 - **When** I reload the app and the role refresh returns `401`
 - **Then** the stored `user` is cleared and I am redirected to `login`
-
----
-
-### US-3.8 — Bootstrap the first admin
-
-#### Scenario: Script makes an existing user an admin
-
-- **Given** a user `jane@example.com` exists without the admin role
-- **When** I run `make-admin` with `jane@example.com`
-- **Then** that user holds the `admin` role and the script exits `0`
-
-#### Scenario: Script matching ignores case and spaces
-
-- **Given** a user `jane@example.com` exists without the admin role
-- **When** I run `make-admin` with `" Jane@Example.com "`
-- **Then** that user holds the `admin` role
-
-#### Scenario: Script with an unknown email
-
-- **Given** no user has the email `sam@example.com`
-- **When** I run `make-admin` with `sam@example.com`
-- **Then** it prints **"No account found for sam@example.com. Sign in with Google first."**, creates no user or role, and exits `1`
-
-#### Scenario: Script on an existing admin
-
-- **Given** a user `jane@example.com` already holds the admin role
-- **When** I run `make-admin` with `jane@example.com`
-- **Then** no duplicate role is created and the script exits `0`
-
-#### Scenario: Script without an email
-
-- **Given** the script is run
-- **When** no email argument is given
-- **Then** it prints **"Usage: npm run make-admin -- <email>"** and exits `1`
-
----
-
-### US-3.9 — Test as other users (development only)
-
-#### Scenario: Developer signs in as a seeded user
-
-- **Given** development sign-in is enabled and `maintenance@oc.edu` exists
-- **When** I sign in on the Developer sign-in form with `maintenance@oc.edu` and `password`
-- **Then** `POST /api/dev-login` returns `200` with my `roles` and a session `token`
-- **And** I am sent home with the `user` stored like a Google sign-in
-
-#### Scenario: Developer sign-in with a wrong password
-
-- **Given** development sign-in is enabled and `maintenance@oc.edu` exists
-- **When** I send `POST /api/dev-login` with a different password
-- **Then** the API returns `401` with **"Bad Credentials."** and creates no session
-
-#### Scenario: Developer sign-in for an unknown email
-
-- **Given** development sign-in is enabled
-- **When** I send `POST /api/dev-login` for an email no user has
-- **Then** the API returns `401` with **"Bad Credentials."** and creates no user
-
-#### Scenario: Developer sign-in is off unless enabled
-
-- **Given** `DEV_LOGIN` is not `true`
-- **When** I send `POST /api/dev-login` with valid credentials
-- **Then** the API returns `404`
-
-#### Scenario: Developer sign-in is never available in production
-
-- **Given** `NODE_ENV=production` and `DEV_LOGIN=true`
-- **When** I send `POST /api/dev-login` with valid credentials
-- **Then** the API returns `404`
-
-#### Scenario: Developer sign-in form only appears in development builds
-
-- **Given** I am on the login page
-- **When** the app is a development build
-- **Then** I see the **Developer sign-in** form
-- **And** a production build does not render it
-
-#### Scenario: Seed replaces data and keeps listed accounts
-
-- **Given** existing users, roles, areas, and sessions, including my account
-- **When** I run the seed with `--keep` and my email
-- **Then** every other user, role, area, and session is replaced with seed data
-- **And** every seeded email ends in `@oc.edu` and there is one test account per role
-- **And** my account, its admin role, and its sessions remain
-
-#### Scenario: Seed refuses to run in production
-
-- **Given** `NODE_ENV=production`
-- **When** I run the seed
-- **Then** it changes nothing and exits `1`
 
 ---
 
