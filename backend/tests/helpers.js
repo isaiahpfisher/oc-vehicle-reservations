@@ -4,19 +4,39 @@ import authConfig from "../app/config/auth.config.js";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
+let schemaReady = false;
+
 /**
- * Drop and recreate all tables so each test starts from an empty database.
- * Drops every table (not just current models) so stale tables from removed features can't block FK drops.
+ * Start each test from an empty database.
+ * The first call in a test file drops every table (not just current models, so stale tables from removed
+ * features can't block FK drops) and recreates the schema. Later calls only truncate, which is several
+ * times faster and still resets auto-increment ids.
  */
 export const syncTestDatabase = async () => {
-  // Last line of defense: this drops every table, so only ever run it against a *-test database.
+  // Last line of defense: this wipes every table, so only ever run it against a *-test database.
   const name = db.sequelize.config.database;
   if (!name.endsWith("-test")) {
     throw new Error(`Refusing to reset "${name}": test databases must be named *-test.`);
   }
 
-  await db.sequelize.getQueryInterface().dropAllTables();
-  await db.sequelize.sync({ force: true });
+  if (!schemaReady) {
+    await db.sequelize.getQueryInterface().dropAllTables();
+    await db.sequelize.sync({ force: true });
+    schemaReady = true;
+    return;
+  }
+
+  // FOREIGN_KEY_CHECKS is per connection, so the transaction keeps every statement on one pooled connection.
+  await db.sequelize.transaction(async (transaction) => {
+    await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 0", { transaction });
+    try {
+      for (const model of Object.values(db.sequelize.models)) {
+        await model.truncate({ transaction });
+      }
+    } finally {
+      await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 1", { transaction });
+    }
+  });
 };
 
 export const validRegistration = (overrides = {}) => ({
