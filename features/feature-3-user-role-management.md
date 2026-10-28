@@ -100,7 +100,7 @@
 - **FR-015**: The login page shows a **Developer sign-in** form (email, password, **Sign in**) only in development builds (`import.meta.env.DEV`). Production builds never render it.
 - **FR-016**: `backend/scripts/seed.mjs` (`npm run seed`, optionally `-- --keep <email>` one or more times) replaces all users, sessions, roles, and areas with seed data, keeping any `--keep` users with their sessions and non-area roles. Seed users have `@oc.edu` emails and include one test account per role (see the README). It refuses to run when `NODE_ENV=production` and exits `1`. The logic is exported as `seed({ keep })` for tests.
 - **FR-009**: The backend is the source of truth for roles. `authenticate` loads the user's roles from the database on every request. The frontend refreshes the stored `user`'s roles from `GET /api/users/:userId` on the first navigation after each page load, before any role check runs.
-- **FR-010**: `authorizeRoles(...roles)` is a middleware factory. It authenticates like `authenticate`, then passes if the user holds **any** of the listed roles (admin always passes). Otherwise it returns `403`. `authenticateAdmin`, `authenticateMaintenance`, and `authenticateAreaAdmin` are defined as `authorizeRoles('admin')`, `authorizeRoles('maintenance')`, and `authorizeRoles('area_admin')`.
+- **FR-010**: `authorizeRoles(...roles)` is a middleware factory. It authenticates like `authenticate`, then passes if the user holds **any** of the listed roles (admin always passes). Otherwise it returns `401`. `authenticateAdmin`, `authenticateMaintenance`, and `authenticateAreaAdmin` are defined as `authorizeRoles('admin')`, `authorizeRoles('maintenance')`, and `authorizeRoles('area_admin')`.
 - **FR-011**: Frontend routes declare required roles as `meta: { roles: [...] }`. The user needs **any one** of the listed roles (admin always passes). A route without `meta.roles` is open to every signed-in user. `router.beforeEach` and the navigation both read `meta.roles` through `useRoles().hasAnyRole()`, so there is one rule for both.
 
 ---
@@ -311,7 +311,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** I am signed in without the admin role
 - **When** I send `GET /api/users`
-- **Then** the API returns `403`
+- **Then** the API returns `401`
 
 ---
 
@@ -434,14 +434,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** I am signed in as an admin with unsaved role changes on a details page
 - **When** I click **Cancel**
-- **Then** the checkboxes return to the saved roles and no request is sent
-
-#### Scenario: Later sections show Coming soon
-
-- **Given** I am signed in as an admin viewing a user with the maintenance role
-- **When** I open each of the **Requests**, **Issue reports**, and **Maintenance** tabs and look at the **Driver** card
-- **Then** each shows **"Coming soon"**
-- **And** the **Maintenance** tab is not shown for users without the maintenance role
+- **Then** The unsaved form gets reset
 
 ---
 
@@ -485,7 +478,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** I am signed in as an admin
 - **When** I request any protected endpoint
-- **Then** the API does not return `403`
+- **Then** the API does not return `401`
 
 #### Scenario: Admins can manage Areas
 
@@ -549,7 +542,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** a route protected with `[authenticateAdmin]`
 - **When** a user without the admin role calls it
-- **Then** the API returns `403` with **"Admin role required."**
+- **Then** the API returns `401` with **"Admin role required."**
 
 #### Scenario: `authenticateMaintenance` allows maintenance users
 
@@ -561,7 +554,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** a route protected with `[authenticateMaintenance]`
 - **When** a user without the maintenance or admin role calls it
-- **Then** the API returns `403` with **"Maintenance role required."**
+- **Then** the API returns `401` with **"Maintenance role required."**
 
 #### Scenario: `authenticateAreaAdmin` allows area admins of any area
 
@@ -573,7 +566,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** a route protected with `[authenticateAreaAdmin]`
 - **When** a user without the area_admin or admin role calls it
-- **Then** the API returns `403` with **"Area admin role required."**
+- **Then** the API returns `401` with **"Area admin role required."**
 
 #### Scenario: `authorizeRoles` allows any listed role
 
@@ -585,7 +578,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** a route protected with `[authorizeRoles('area_admin', 'maintenance')]`
 - **When** a user with no roles calls it
-- **Then** the API returns `403` with **"One of these roles is required: area_admin, maintenance."**
+- **Then** the API returns `401` with **"One of these roles is required: area_admin, maintenance."**
 
 #### Scenario: Admin passes every role middleware
 
@@ -597,7 +590,7 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 
 - **Given** a route protected with `[authenticateAreaAdmin]`
 - **When** the area admin of Athletics requests a resource in Music
-- **Then** the API returns `403`
+- **Then** the API returns `401`
 
 #### Scenario: Stored user includes roles
 
