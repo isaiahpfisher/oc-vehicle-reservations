@@ -108,9 +108,9 @@ erDiagram
       string make
       string model
       int year
-      string vin "unique"
+      string identifier "unique"
       date purchased_at
-      enum color
+      string color
       int passenger_capacity
       string license_plate "unique"
       date license_plate_expiration_date
