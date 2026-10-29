@@ -72,6 +72,6 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Editing trip fields on an approved request resets it to `pending` | Area, purpose, dates, all-day, people, drivers, or destinations. Approval is cleared. The UI warns before saving. | Feature 8, US-8.7 |
 | Short capacity is flagged, not blocked | Request page and assign dialog show a warning when seats < people | Feature 8, FR-004 |
 | Estimated miles use Google Routes | Round trip campus → stops → campus when `GOOGLE_MAPS_API_KEY` is set; otherwise saved `milesFromCampus` distances | Feature 8, FR-007 |
-| Requests are never deleted | Status changes to `cancelled`. Only `npm run seed` clears them (it replaces the users and areas they belong to). | Feature 8, Delete scope |
+| Requests are never deleted | Status changes to `cancelled`. Only `npm run seed` removes them, replacing them with sample requests along with the users and areas they belong to. | Feature 8, Delete scope |
 | Home is My Requests | `/` (route `home`) lists the signed-in user's requests and replaces Feature 3's welcome page. Nav: **My Requests** for everyone, **Requests** (`/requests`) for admins and area admins. | Feature 8, Screen Requirements |
 | Request page edits one card at a time | Trip details, Destinations, and Drivers each have their own Cancel / Save. A new request is one form with one **Submit request**. Read-only requests show text, not disabled inputs. | Feature 8, Screen Requirements; `ui-style-system.mdc` |

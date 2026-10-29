@@ -16,7 +16,7 @@ afterAll(async () => {
 });
 
 describe("Feature 8 — Vehicle Request Management seed data (INTERIM)", () => {
-  it("Seed adds sample vehicles, drivers, and destinations and clears old requests", async () => {
+  it("Seed adds sample vehicles, drivers, and destinations and replaces old requests", async () => {
     const result = await seed();
     expect(result.exitCode).toBe(0);
     expect(result.message).toContain(`Added interim sample data: ${INTERIM_VEHICLES.length} vehicles`);
@@ -48,7 +48,7 @@ describe("Feature 8 — Vehicle Request Management seed data (INTERIM)", () => {
     });
 
     expect((await seed({ keep: ["me@eagles.oc.edu"] })).exitCode).toBe(0);
-    expect(await db.vehicleRequest.count()).toBe(0);
+    expect(await db.vehicleRequest.findOne({ where: { purpose: "Old trip" } })).toBeNull();
     expect(await db.vehicle.count()).toBe(INTERIM_VEHICLES.length);
     expect(await db.driver.count()).toBe(INTERIM_DRIVERS.length);
   });

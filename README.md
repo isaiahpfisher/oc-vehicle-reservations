@@ -74,7 +74,7 @@ Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Dev
 
 The seed also adds staff and students across six areas (Admissions, Athletics, Facilities, Music, Student Life, Theatre); see `backend/scripts/seed.mjs`.
 
-Until Features 4–7 merge, the seed also adds interim sample vehicle types, vehicles, drivers, and destinations so vehicle requests (Feature 8) can be tried, and it clears existing vehicle requests (they belong to the users and areas it replaces).
+It also replaces all vehicle requests with about 16 samples across every area and status, dated around the day you seed (`requester@oc.edu` owns several). Until Features 4–7 merge, it adds the interim vehicle types, vehicles, drivers, and destinations those requests use.
 
 ## Branching
 

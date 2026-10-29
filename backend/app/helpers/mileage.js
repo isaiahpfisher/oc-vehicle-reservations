@@ -43,7 +43,7 @@ const googleMiles = async (stops) => {
  * Fallback from each stop's saved `milesFromCampus`: out to the first stop, between stops, and back.
  * Exact when stops lie on one road out of town, otherwise an underestimate. Stops with no saved distance count as 0.
  */
-const savedMiles = (stops) => {
+export const savedMiles = (stops) => {
   const miles = stops.map((stop) => stop.milesFromCampus ?? 0);
   const between = miles.slice(1).reduce((sum, value, i) => sum + Math.abs(value - miles[i]), 0);
   return miles[0] + between + miles[miles.length - 1];

@@ -1,12 +1,13 @@
 /**
  * Feature 3 — FR-016: replace users, sessions, roles, and areas with development seed data.
- * Feature 8 adds INTERIM sample vehicles, drivers, and destinations (and clears vehicle requests) until Features 4–7 merge.
+ * Feature 8 adds sample vehicle requests, plus INTERIM vehicles, drivers, and destinations until Features 4–7 merge.
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...]
  */
 import path from "path";
 import { fileURLToPath } from "url";
 import { Op } from "sequelize";
 import db from "../app/models/index.js";
+import { savedMiles } from "../app/helpers/mileage.js";
 
 export const SEED_AREAS = ["Admissions", "Athletics", "Facilities", "Music", "Student Life", "Theatre"];
 
@@ -175,6 +176,157 @@ const seedInterimTables = async ({ areaIds, transaction }) => {
   await db.destination.bulkCreate(INTERIM_DESTINATIONS, { transaction });
 };
 
+/*
+ * Feature 8: sample vehicle requests across every area and status. Days are offsets from the day you seed, so there is
+ * always recent, current, and upcoming activity. `time` is [startHour, endHour] for a timed trip; omit it for all-day.
+ * Drivers, destinations, and vehicles come from the INTERIM lists above (and must follow the API's rules: approved drivers
+ * licensed through the trip, vehicles from the request's area, no vehicle on two overlapping active trips).
+ */
+export const SEED_REQUESTS = [
+  // Athletics — area admins Taylor Athletics and Marcus Bell
+  {
+    area: "Athletics", requester: "laura.simmons@oc.edu", purpose: "Basketball away game at Oral Roberts",
+    start: 6, end: 6, people: 14, drivers: ["Tom Garrison", "Noah Patel"], destinations: ["BOK Center"], status: "pending",
+  },
+  {
+    area: "Athletics", requester: "tom.garrison@oc.edu", purpose: "Track meet at Oklahoma State",
+    start: 3, end: 3, people: 12, drivers: ["Riley Requester"], destinations: ["Oklahoma State University"],
+    status: "reserved", approver: "marcus.bell@oc.edu", vehicles: ["ATH-V01"],
+  },
+  {
+    area: "Athletics", requester: "tom.garrison@oc.edu", purpose: "Baseball tournament in Dallas",
+    start: 12, end: 14, people: 40, drivers: ["Frank Delgado"], destinations: ["Dallas Love Field"],
+    status: "awaiting_vehicle", approver: "areaadmin@oc.edu",
+  },
+  {
+    area: "Athletics", requester: "marcus.bell@oc.edu", purpose: "Soccer match at Southern Nazarene",
+    start: 10, end: 10, time: [13, 20], people: 18, drivers: ["Taylor Athletics"], destinations: ["Southern Nazarene University"],
+    status: "reserved", approver: "areaadmin@oc.edu", vehicles: ["ATH-M01"],
+  },
+  {
+    area: "Athletics", requester: "grace.kim@oc.edu", purpose: "Volleyball at the University of Oklahoma",
+    start: -10, end: -10, time: [14, 21], people: 10, drivers: ["Noah Patel"], destinations: ["University of Oklahoma"],
+    status: "returned", approver: "marcus.bell@oc.edu", vehicles: ["ATH-V02"],
+  },
+  {
+    area: "Athletics", requester: "requester@oc.edu", purpose: "Golf invitational",
+    start: -3, end: -2, people: 6, drivers: ["Riley Requester"], destinations: ["Lake Murray State Park"], status: "cancelled",
+  },
+
+  // Music — area admins Elena Ruiz and Casey Multirole
+  {
+    area: "Music", requester: "laura.simmons@oc.edu", purpose: "Choir tour: Abilene and Lubbock",
+    start: 20, end: 23, people: 48, drivers: ["Frank Delgado", "Marcus Bell"],
+    destinations: ["Abilene Christian University", "Lubbock Christian University"],
+    status: "reserved", approver: "elena.ruiz@oc.edu", vehicles: ["MUS-B01"],
+  },
+  {
+    area: "Music", requester: "isaiah.thompson@oc.edu", purpose: "Jazz band performance at Paycom Center",
+    start: 9, end: 9, time: [17, 23], people: 10, drivers: ["Grace Kim"], destinations: ["Paycom Center"], status: "pending",
+  },
+
+  // Theatre — area admins Grant Holloway and Casey Multirole
+  {
+    area: "Theatre", requester: "abigail.reed@oc.edu", purpose: "Theatre festival in Norman",
+    start: 16, end: 17, people: 9, drivers: ["Noah Patel"], destinations: ["University of Oklahoma"],
+    status: "awaiting_vehicle", approver: "grant.holloway@oc.edu",
+  },
+  {
+    area: "Theatre", requester: "levi.johnson@oc.edu", purpose: "Pick up set pieces from the Capitol",
+    start: 4, end: 4, time: [9, 12], people: 2, drivers: ["Tom Garrison"], destinations: ["Oklahoma State Capitol"], status: "denied",
+  },
+
+  // Admissions — area admin Priya Natarajan
+  {
+    area: "Admissions", requester: "requester@oc.edu", purpose: "Pick up visiting families at the airport",
+    start: 1, end: 1, time: [10, 13], people: 5, drivers: ["Riley Requester"], destinations: ["Will Rogers World Airport"],
+    status: "reserved", approver: "priya.natarajan@oc.edu", vehicles: ["ADM-C01"],
+  },
+  {
+    area: "Admissions", requester: "priya.natarajan@oc.edu", purpose: "College fair at Tulsa",
+    start: 8, end: 8, time: [7, 18], people: 4, drivers: ["Grace Kim"],
+    destinations: ["Tulsa International Airport", "BOK Center"], status: "pending",
+  },
+
+  // Student Life — area admin Caleb Turner
+  {
+    area: "Student Life", requester: "requester@oc.edu", purpose: "Fall retreat at Falls Creek",
+    start: 27, end: 29, people: 38, drivers: ["Frank Delgado", "Grace Kim"], destinations: ["Falls Creek Camp"], status: "pending",
+  },
+  {
+    area: "Student Life", requester: "requester@oc.edu", purpose: "Service project in Guthrie",
+    start: -17, end: -17, time: [8, 15], people: 13, drivers: ["Riley Requester"], destinations: ["First Baptist Church Guthrie"],
+    status: "returned", approver: "caleb.turner@oc.edu", vehicles: ["STU-V01"],
+  },
+  {
+    area: "Student Life", requester: "hannah.lee@oc.edu", purpose: "International student airport run",
+    start: 7, end: 7, time: [6, 14], people: 14, drivers: ["Noah Patel"], destinations: ["DFW International Airport"],
+    status: "reserved", approver: "caleb.turner@oc.edu", vehicles: ["STU-V01"],
+  },
+
+  // Facilities — area admin Wendy Okafor
+  {
+    area: "Facilities", requester: "brian.kessler@oc.edu", purpose: "Equipment pickup in Oklahoma City",
+    start: 2, end: 2, time: [8, 12], people: 2, drivers: ["Tom Garrison"], destinations: ["Paycom Center"], status: "pending",
+  },
+];
+
+const APPROVED_SEED_STATUSES = ["awaiting_vehicle", "reserved", "returned"];
+
+/** Midnight local time `offset` days from today, or `hour` o'clock that day. All-day dates are stored at UTC midnight. */
+const tripDate = (offset, hour) => {
+  const day = new Date();
+  day.setDate(day.getDate() + offset);
+  if (hour !== undefined) {
+    day.setHours(hour, 0, 0, 0);
+    return day;
+  }
+  const pad = (value) => String(value).padStart(2, "0");
+  return new Date(`${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}T00:00:00.000Z`);
+};
+
+/** Feature 8: create SEED_REQUESTS with their drivers, ordered stops, and vehicles. */
+const seedRequests = async ({ areaIds, transaction }) => {
+  const byKey = (rows, key) => Object.fromEntries(rows.map((row) => [key(row), row]));
+  const users = byKey(await db.user.findAll({ transaction }), (user) => user.email);
+  const drivers = byKey(await db.driver.findAll({ transaction }), (driver) => `${driver.firstName} ${driver.lastName}`);
+  const destinations = byKey(await db.destination.findAll({ transaction }), (destination) => destination.name);
+  const vehicles = byKey(await db.vehicle.findAll({ transaction }), (vehicle) => vehicle.universityId);
+
+  for (const { area, requester, purpose, start, end, time, people, status, approver, ...links } of SEED_REQUESTS) {
+    const stops = links.destinations.map((name) => destinations[name]);
+    const request = await db.vehicleRequest.create(
+      {
+        userId: users[requester].id,
+        areaId: areaIds[area],
+        purpose,
+        startAt: tripDate(start, time?.[0]),
+        endAt: tripDate(end, time?.[1]),
+        allDay: !time,
+        numberOfPeople: people,
+        estimatedMiles: savedMiles(stops),
+        status,
+        approverId: APPROVED_SEED_STATUSES.includes(status) ? users[approver].id : null,
+        approvedAt: APPROVED_SEED_STATUSES.includes(status) ? new Date() : null,
+      },
+      { transaction },
+    );
+
+    await db.vehicleRequestDriver.bulkCreate(
+      links.drivers.map((name) => ({ vehicleRequestId: request.id, driverId: drivers[name].id })),
+      { transaction },
+    );
+    await db.vehicleRequestDestination.bulkCreate(
+      stops.map((stop, i) => ({ vehicleRequestId: request.id, destinationId: stop.id, stopOrder: i + 1 })),
+      { transaction },
+    );
+    await db.vehicleRequestVehicle.bulkCreate(
+      (links.vehicles ?? []).map((universityId) => ({ vehicleRequestId: request.id, vehicleId: vehicles[universityId].id })),
+      { transaction },
+    );
+  }
+};
+
 /**
  * Replace users, sessions, roles, and areas with seed data in one transaction.
  * `keep` users survive with their sessions and non-area roles (areas are recreated, so area roles can't survive).
@@ -215,6 +367,7 @@ export const seed = async ({ keep = [] } = {}) => {
     }
 
     await seedInterimTables({ areaIds, transaction });
+    await seedRequests({ areaIds, transaction });
 
     return keptUsers.map((user) => user.email);
   });
@@ -226,6 +379,7 @@ export const seed = async ({ keep = [] } = {}) => {
       `Seeded ${SEED_AREAS.length} areas and ${SEED_USERS.length} users.`,
       // INTERIM(features 4–7)
       `Added interim sample data: ${INTERIM_VEHICLES.length} vehicles, ${INTERIM_DRIVERS.length} drivers, ${INTERIM_DESTINATIONS.length} destinations.`,
+      `Added ${SEED_REQUESTS.length} vehicle requests.`,
       kept.length ? `Kept: ${kept.join(", ")}.` : "",
       missing.length ? `Not found (nothing kept): ${missing.join(", ")}.` : "",
     ]
