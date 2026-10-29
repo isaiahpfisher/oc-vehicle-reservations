@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -49,6 +49,16 @@ Users are only created by Google sign-in (`POST /api/login`).
 | `updatedAt` | DATE | Sequelize timestamp |
 
 Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissions without a row.
+
+## `vehicleTypes`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, unique without regard to case, max 255 |
+| `identifier` | ENUM | Required. Exactly `VIN` or `Serial` |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
 
 ## Associations
 

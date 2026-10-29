@@ -69,6 +69,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Home",
       "Users",
       "Areas",
+      "Vehicle Types",
     ]);
 
     // Profile is glued to the bottom (drawer append slot).
