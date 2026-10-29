@@ -5,6 +5,7 @@ import sessionModel from "./session.model.js";
 import roleModel from "./role.model.js";
 import areaModel from "./area.model.js";
 import vehicleTypeModel from "./vehicleType.model.js";
+import serviceTypeModel from "./serviceType.model.js";
 
 const db = {};
 db.Sequelize = Sequelize;
@@ -16,6 +17,7 @@ db.session = sessionModel(sequelize, Sequelize);
 db.area = areaModel(sequelize, Sequelize);
 db.vehicleType = vehicleTypeModel(sequelize, Sequelize);
 db.role = roleModel(sequelize, Sequelize);
+db.serviceType = serviceTypeModel(sequelize, Sequelize);
 
 db.user.hasMany(db.session, {
   foreignKey: "userId",

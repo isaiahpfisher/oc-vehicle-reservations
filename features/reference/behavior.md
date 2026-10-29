@@ -1,6 +1,7 @@
 # Behavior & Rules Reference
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, and Feature 4 vehicle type rules are recorded here.
+
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, and Feature 12 service type rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -63,3 +64,13 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Users list | Admin-only table at `/users`: name, email, role chips (`Admin`, `Maintenance`, `Area Admin — <area>`), 10 per page, name search (case-insensitive) and role filter; changing either returns to page 1. | Feature 3, US-3.1–3.3 |
 | User details | `/users/:id`: header with name, email, role chips, and member-since date; **Access** card with checkboxes (System roles; Area admin of, one per area) and its own Save/Cancel that stay on the page; **Driver** card and **Requests** / **Issue reports** / **Maintenance** (maintenance users only) tabs show "Coming soon" until Features 7–13; **Account** card deletes the user. On your own page, Admin and Delete are disabled. | Feature 3, US-3.4, US-3.5 |
 | Delete user | Confirm dialog naming the user, from the users list or the details page; disabled for the admin's own account. | Feature 3, US-3.5 |
+
+## Service types
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Only admins, area admins, and maintenance users manage service types | Every `/api/service-types` route uses `authorizeRoles("admin", "area_admin", "maintenance")`. A missing token is `401`. A signed-in user without one of those roles is `403` `{ "message": "One of these roles is required: admin, area_admin, maintenance." }`. `/service-types` has `meta.roles: ["admin", "area_admin", "maintenance"]`, so other signed-in users are redirected home and do not see the **Service Types** link. | Feature 12, FR-001, US-12.5 |
+| Name is trimmed, required, unique ignoring case, and at most 255 characters | Empty or whitespace-only name returns `400` `{ "message": "Missing name." }`. A longer name returns `{ "message": "Name too long." }`. A name that matches another service type when compared case-insensitively returns `{ "message": "Name already taken." }`. Saving a service type with its own current name is allowed. | Feature 12, FR-002, FR-004 |
+| At least one frequency is required | Days, miles, or both may be set. The empty one is stored as `null`. Omitting both returns `400` `{ "message": "Missing service_frequency_days or service_frequency_miles." }`. Zero, a negative, or a non-integer returns `{ "message": "Invalid service_frequency_days." }` or `{ "message": "Invalid service_frequency_miles." }`. | Feature 12, FR-003 |
+| Delete removes the service type | `DELETE` returns `200` and does not check for other rows that point at the service type. | Feature 12, Assumptions |
+| Service types are managed on one screen | `/service-types` heading is **Service Type Management**. Service types are a table (name, frequency days, frequency miles). Create uses a dialog with those fields. Edit replaces that row with the same fields and **Save** / **Cancel**. Delete uses the shared confirmation dialog. Empty list copy is **No service types yet. Create your first service type.** | Feature 12, Screen Requirements |

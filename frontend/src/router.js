@@ -52,6 +52,16 @@ const router = createRouter({
       meta: { nav: "Vehicle Types", icon: "mdi-car-outline", roles: ["admin"] },
     },
     {
+      path: "/service-types",
+      name: "service-types",
+      component: () => import("./views/ServiceTypes.vue"),
+      meta: {
+        nav: "Service Types",
+        icon: "mdi-wrench-outline",
+        roles: ["admin", "area_admin", "maintenance"],
+      },
+    },
+    {
       path: "/:pathMatch(.*)*",
       redirect: { name: "home" },
     },
