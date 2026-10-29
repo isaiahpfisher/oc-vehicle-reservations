@@ -131,13 +131,14 @@ const breadcrumbs = computed(() => [
   canManage.value && !isOwner.value
     ? { title: "Requests", to: { name: "adminRequests" } }
     : { title: "My Requests", to: { name: "home" } },
-  { title: isCreate.value ? "New Request" : `Request #${props.requestId}`, disabled: true },
+  // Request numbers stay out of the UI (the URL still has one); the header names the trip.
+  { title: isCreate.value ? "New Request" : "Request", disabled: true },
 ]);
 
 const formatDay = (value) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 const headerMeta = computed(() => {
-  const parts = [`Request #${request.value.id}`, `Submitted by ${personName(request.value.user)} on ${formatDay(request.value.createdAt)}`];
+  const parts = [`Submitted by ${personName(request.value.user)} on ${formatDay(request.value.createdAt)}`];
   if (request.value.approver) {
     parts.push(`Approved by ${personName(request.value.approver)}`);
   }
@@ -506,10 +507,13 @@ const saveVehicles = async (vehicleIds) => {
         <SectionCard title="Destinations" :subtitle="canEdit ? 'In the order you\'ll visit them. Every trip starts and ends on campus.' : ''">
           <template #append>
             <div class="text-right">
+              <!-- Null when the server couldn't estimate the route (FR-007). -->
               <div class="text-title-large font-weight-bold text-primary text-no-wrap" data-test="estimated-miles">
-                {{ request.estimatedMiles.toLocaleString() }} mi
+                {{ request.estimatedMiles === null ? "Unknown" : `${request.estimatedMiles.toLocaleString()} mi` }}
               </div>
-              <div class="text-body-small text-medium-emphasis text-no-wrap">estimated round trip</div>
+              <div class="text-body-small text-medium-emphasis text-no-wrap">
+                {{ request.estimatedMiles === null ? "mileage couldn't be estimated" : "estimated round trip" }}
+              </div>
             </div>
           </template>
           <DestinationStops v-model="stops" :saved="savedDestinations" :readonly="!canEdit" :error="destinationsError" />

@@ -8,6 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import areaServices from "../src/services/areaServices.js";
 import requestServices from "../src/services/requestServices.js";
+import placeServices from "../src/services/placeServices.js";
 import { toDateInput } from "../src/models/requests.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
@@ -30,6 +31,10 @@ vi.mock("../src/services/requestServices.js", () => ({
     getDrivers: vi.fn(),
     getDestinations: vi.fn(),
   },
+}));
+
+vi.mock("../src/services/placeServices.js", () => ({
+  default: { searchAddresses: vi.fn(), getAddress: vi.fn() },
 }));
 
 const requester = { userId: 2, email: "jane@oc.edu", firstName: "Jane", lastName: "Doe", roles: [], token: "t" };
@@ -255,6 +260,66 @@ describe("Feature 8 — Vehicle Request Management", () => {
       ]);
     });
 
+    it("User searches for a custom address", async () => {
+      requestServices.createRequest.mockResolvedValue({ status: 201, data: tripRequest() });
+      requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
+      const suggestion = { placeId: "place-1", name: "202 E Oklahoma Ave", description: "Guthrie, OK, USA" };
+      placeServices.searchAddresses.mockResolvedValue({ data: [suggestion] });
+      placeServices.getAddress.mockResolvedValue({
+        data: { addressLine1: "202 East Oklahoma Avenue", addressLine2: "", city: "Guthrie", state: "OK", zipCode: "73044" },
+      });
+      await mountAppAt("/requests/new");
+      await fillBasics();
+      await selectDrivers([dana.id]);
+      await click("Custom address");
+      const search = await waitFor(() => {
+        const match = field("Search for an address", "VAutocomplete");
+        expect(match).toBeDefined();
+        return match;
+      });
+
+      // Too short to search; then one search after typing pauses, not one per keystroke.
+      search.vm.$emit("update:search", "20");
+      search.vm.$emit("update:search", "202 E");
+      search.vm.$emit("update:search", "202 E Okla");
+      await waitFor(() => expect(placeServices.searchAddresses).toHaveBeenCalledTimes(1));
+      const [input, sessionToken] = placeServices.searchAddresses.mock.calls[0];
+      expect(input).toBe("202 E Okla");
+
+      search.vm.$emit("update:modelValue", suggestion);
+      await waitFor(() => expect(field("City").props("modelValue")).toBe("Guthrie"));
+      // Same session token for the lookup, so Google bills one session.
+      expect(placeServices.getAddress).toHaveBeenCalledWith("place-1", sessionToken);
+      expect(field("Place name").props("modelValue")).toBe("202 E Oklahoma Ave");
+      expect(field("Street address").props("modelValue")).toBe("202 East Oklahoma Avenue");
+
+      // The filled fields stay editable.
+      await field("Place name").setValue("First Baptist Church");
+      byTest("add-custom-destination").click();
+      await settle();
+      await click("Submit request");
+      await waitFor(() => expect(requestServices.createRequest).toHaveBeenCalledTimes(1));
+      expect(requestServices.createRequest.mock.calls[0][0].destinations).toEqual([
+        { name: "First Baptist Church", addressLine1: "202 East Oklahoma Avenue", addressLine2: "", city: "Guthrie", state: "OK", zipCode: "73044" },
+      ]);
+    });
+
+    it("User adds more than ten destinations", async () => {
+      await mountAppAt("/requests/new");
+
+      for (let i = 0; i < 10; i += 1) {
+        await addSavedDestination(i % 2 ? okc : tulsa);
+      }
+
+      expect(stopNames()).toHaveLength(10);
+      expect(byTest("stops-full").textContent).toContain("up to 10 stops");
+      expect(named("Custom address").disabled).toBe(true);
+      const picker = wrapper
+        .findAllComponents({ name: "VAutocomplete" })
+        .find((component) => component.props("placeholder") === "Add a saved destination");
+      expect(picker.props("disabled")).toBe(true);
+    });
+
     it("User reorders destinations on a new request", async () => {
       requestServices.createRequest.mockResolvedValue({ status: 201, data: tripRequest() });
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
@@ -411,7 +476,9 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(requestServices.getRequest).toHaveBeenCalledWith("1");
       await waitFor(() => expect(stopNames()).toEqual(["BOK Center"]));
       expect(document.body.querySelector('[data-test="purpose"] textarea').value).toBe("Away game");
-      expect(document.body.textContent).toContain("Request #1");
+      // The request number stays in the URL only.
+      expect(document.body.textContent).not.toContain("#1");
+      expect(document.body.textContent).toContain("Submitted by");
       expect(byTest("drivers").textContent).toContain("Dana Reyes");
       expect(byTest("review")).toBeNull();
     });
@@ -436,7 +503,10 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(rowTexts().join()).toContain("Athletics");
       expect(rowTexts().join()).toContain("Music");
       expect(rowTexts().join()).toContain("Jane Doe");
-      const navLabels = [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
+      // My Requests is pinned above the Sidebar profile.
+      const navLabels = [
+        ...document.body.querySelectorAll('[aria-label="Main navigation"] a, [aria-label="Pinned navigation"] a'),
+      ].map((link) => link.textContent.trim());
       expect(navLabels).toEqual(expect.arrayContaining(["My Requests", "Requests"]));
       for (const view of ["Table", "Week", "Month"]) {
         expect(named(view)).toBeDefined();
@@ -598,7 +668,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
       await click("Available on these dates");
       await click("Drivable by these drivers");
       await waitFor(() => expect(document.body.querySelectorAll('[data-test="vehicle-option"]')).toHaveLength(2));
-      expect(document.body.textContent).toContain("Reserved · #4");
+      expect(document.body.textContent).toContain("Reserved");
+      expect(document.body.textContent).not.toContain("#4");
       expect(document.body.textContent).toContain("Needs CDL driver");
     });
   });
@@ -623,6 +694,14 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect(requestServices.updateRequest.mock.calls[0][1].destinations).toEqual([{ id: tulsa.id }, { id: okc.id }]);
       await waitFor(() => expect(byTest("estimated-miles").textContent).toContain("230 mi"));
+    });
+
+    it("shows unknown mileage when the trip couldn't be estimated", async () => {
+      requestServices.getRequest.mockResolvedValue({ data: tripRequest({ estimatedMiles: null }) });
+      await mountAppAt("/requests/1");
+
+      await waitFor(() => expect(byTest("estimated-miles")?.textContent).toContain("Unknown"));
+      expect(document.body.textContent).toContain("mileage couldn't be estimated");
     });
   });
 });

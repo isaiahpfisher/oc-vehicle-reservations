@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, ref } from "vue";
 import CustomDestinationDialog from "./CustomDestinationDialog.vue";
-import { CAMPUS_NAME, destinationAddress, destinationPlace, repeatsInARow } from "../../models/requests.js";
+import { CAMPUS_NAME, MAX_STOPS, destinationAddress, destinationPlace, repeatsInARow } from "../../models/requests.js";
 
 /** Ordered stops: saved destinations (with `id`) or new ones (address fields only). Each carries a list `key`. */
 const stops = defineModel({ type: Array, default: () => [] });
@@ -17,6 +17,7 @@ const picked = ref(null);
 const customOpen = ref(false);
 
 const repeated = computed(() => repeatsInARow(stops.value));
+const full = computed(() => stops.value.length >= MAX_STOPS);
 
 const add = async (destination) => {
   if (!destination) {
@@ -118,6 +119,7 @@ const remove = (index) => {
         return-object
         placeholder="Add a saved destination"
         aria-label="Add a saved destination"
+        :disabled="full"
         prepend-inner-icon="mdi-map-marker-plus-outline"
         variant="outlined"
         density="compact"
@@ -129,9 +131,20 @@ const remove = (index) => {
           <v-list-item v-bind="itemProps" :subtitle="destinationPlace(item)" />
         </template>
       </v-autocomplete>
-      <v-btn variant="outlined" color="primary" prepend-icon="mdi-plus" height="40" class="oc-cta" @click="customOpen = true">
+      <v-btn
+        variant="outlined"
+        color="primary"
+        prepend-icon="mdi-plus"
+        height="40"
+        class="oc-cta"
+        :disabled="full"
+        @click="customOpen = true"
+      >
         Custom address
       </v-btn>
+    </div>
+    <div v-if="!readonly && full" class="text-body-small text-medium-emphasis mt-2" data-test="stops-full">
+      Trips can have up to {{ MAX_STOPS }} stops. Remove one to add another.
     </div>
 
     <CustomDestinationDialog v-model="customOpen" @add="add" />

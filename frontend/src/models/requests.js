@@ -17,6 +17,9 @@ export const OPEN_STATUSES = ["pending", "awaiting_vehicle", "reserved"];
 
 export const CAMPUS_NAME = "Oklahoma Christian University";
 
+/** FR-009: most destinations on one trip (the API rejects more). */
+export const MAX_STOPS = 10;
+
 export const statusMeta = (status) =>
   STATUSES[status] ?? { label: status, color: "secondary", icon: "mdi-help-circle-outline" };
 
@@ -74,7 +77,6 @@ export const formatTripDates = (request) => {
 /** Lowercased text a search box matches against. */
 export const searchText = (request) =>
   [
-    `#${request.id}`,
     request.purpose,
     request.area?.name,
     personName(request.user),

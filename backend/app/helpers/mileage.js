@@ -4,6 +4,12 @@ const CAMPUS_ADDRESS =
   process.env.CAMPUS_ADDRESS || "Oklahoma Christian University, 2501 E Memorial Rd, Edmond, OK 73013";
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 const METERS_PER_MILE = 1609.344;
+/** FR-009: Routes bills more than 10 intermediate stops at a higher tier, so trips stop at 10. */
+export const MAX_STOPS = 10;
+
+if (!process.env.GOOGLE_MAPS_API_KEY && process.env.NODE_ENV !== "test") {
+  logger.warn("GOOGLE_MAPS_API_KEY is not set: only single saved-destination trips get a mileage estimate.");
+}
 
 export const formatAddress = (destination) =>
   [destination.addressLine1 || destination.name, destination.addressLine2, destination.city, destination.state, destination.zipCode]
@@ -28,7 +34,9 @@ const googleMiles = async (stops) => {
   });
 
   if (!response.ok) {
-    throw new Error(`Routes API responded ${response.status}.`);
+    // Google explains key / API-enablement problems in the body; surface it in the log.
+    const detail = (await response.json().catch(() => null))?.error?.message;
+    throw new Error(`Routes API responded ${response.status}${detail ? `: ${detail}` : "."}`);
   }
 
   const meters = (await response.json()).routes?.[0]?.distanceMeters;
@@ -40,19 +48,19 @@ const googleMiles = async (stops) => {
 };
 
 /**
- * Fallback from each stop's saved `milesFromCampus`: out to the first stop, between stops, and back.
- * Exact when stops lie on one road out of town, otherwise an underestimate. Stops with no saved distance count as 0.
+ * Fallback from a saved `milesFromCampus`: out and back to a single saved stop.
+ * Distances from campus can't give the legs between stops, and custom stops have none, so anything else is unknown (null)
+ * rather than a guess that understates the trip.
  */
 export const savedMiles = (stops) => {
-  const miles = stops.map((stop) => stop.milesFromCampus ?? 0);
-  const between = miles.slice(1).reduce((sum, value, i) => sum + Math.abs(value - miles[i]), 0);
-  return miles[0] + between + miles[miles.length - 1];
+  const miles = stops.length === 1 ? stops[0].milesFromCampus : null;
+  return miles == null ? null : miles * 2;
 };
 
-/** Estimated round-trip miles for a request's ordered stops (FR-007). */
+/** Estimated round-trip miles for a request's ordered stops (FR-007), or null when it can't be estimated. */
 export const estimateMiles = async (stops) => {
   if (!stops.length) {
-    return 0;
+    return null;
   }
 
   if (process.env.GOOGLE_MAPS_API_KEY) {

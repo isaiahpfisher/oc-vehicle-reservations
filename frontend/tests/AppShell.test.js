@@ -70,15 +70,18 @@ describe("App shell (ui-style-system.mdc)", () => {
     expect(content.textContent).toContain("OC");
     // Feature 8 (US-8.2) made home the My Requests page and added Requests for area admins.
     expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
-      "My Requests",
       "Requests",
       "Users",
       "Areas",
     ]);
 
-    // Profile is glued to the bottom (drawer append slot).
+    // My Requests (`meta.pinned`) and the profile are glued to the bottom (drawer append slot), My Requests first.
     const bottom = sidebar.querySelector(".v-navigation-drawer__append");
-    expect(bottom.querySelector('[aria-label="Open profile menu"]').textContent).toContain("Jane Doe");
+    const pinned = bottom.querySelector('[aria-label="Pinned navigation"]');
+    expect([...pinned.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual(["My Requests"]);
+    const profile = bottom.querySelector('[aria-label="Open profile menu"]');
+    expect(profile.textContent).toContain("Jane Doe");
+    expect(pinned.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("collapses and expands the Sidebar", async () => {

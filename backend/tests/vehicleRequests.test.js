@@ -2,13 +2,30 @@
  * Feature 8 — Vehicle Request Management
  * Spec: features/feature-8-vehicle-requests.md
  */
+import { jest } from "@jest/globals";
 import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
 import { syncTestDatabase, registerUser, createUserWithRoles } from "./helpers.js";
 
-// Mileage falls back to saved distances so estimates are deterministic.
-delete process.env.GOOGLE_MAPS_API_KEY;
+// Mileage falls back to saved distances unless a test stubs the Google Routes API (tests/setup.js clears the real key).
+
+/** Stub the Routes API with `distanceMeters`, keeping the request bodies sent to it. */
+const stubRoutes = (distanceMeters) => {
+  const sent = [];
+  process.env.GOOGLE_MAPS_API_KEY = "test-key";
+  global.fetch = jest.fn(async (_url, { body }) => {
+    sent.push(JSON.parse(body));
+    return { ok: true, json: async () => ({ routes: [{ distanceMeters }] }) };
+  });
+  return sent;
+};
+
+const realFetch = global.fetch;
+afterEach(() => {
+  delete process.env.GOOGLE_MAPS_API_KEY;
+  global.fetch = realFetch;
+});
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 
@@ -186,6 +203,17 @@ describe("Feature 8 — Vehicle Request Management", () => {
       }
 
       expect((await create(headers, { numberOfPeople: 0 })).status).toBe(201);
+    });
+
+    it("User adds more than ten destinations", async () => {
+      const { headers } = await signIn();
+      const stops = (count) => Array.from({ length: count }, (_, i) => ({ id: (i % 2 ? fx.okc : fx.tulsa).id }));
+
+      expect((await create(headers, { destinations: stops(10) })).status).toBe(201);
+
+      const response = await create(headers, { destinations: stops(11) });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "A trip can have at most 10 destinations." });
     });
 
     it("rejects an end date before the start date", async () => {
@@ -510,23 +538,80 @@ describe("Feature 8 — Vehicle Request Management", () => {
   describe("US-8.9 — View estimated mileage of trip", () => {
     it("Estimated mileage is added when a request is created", async () => {
       const { headers } = await signIn();
+      const custom = { name: "Grandma's House", addressLine1: "1 Main St", city: "Guthrie", state: "OK", zipCode: "73044" };
+      const sent = stubRoutes(321869); // 200 miles
 
-      const response = await create(headers, { destinations: [{ id: fx.okc.id }, { id: fx.tulsa.id }] });
+      const response = await create(headers, { destinations: [{ id: fx.okc.id }, custom, { id: fx.tulsa.id }] });
 
       expect(response.status).toBe(201);
-      // campus → OKC (15) → Tulsa (85) → campus (100)
       expect(response.body.estimatedMiles).toBe(200);
+      // Round trip from campus through every stop in order, custom addresses included.
+      expect(sent).toHaveLength(1);
+      expect(sent[0].origin).toEqual(sent[0].destination);
+      expect(sent[0].intermediates).toEqual([
+        { address: "OKC Arena, Oklahoma City, OK" },
+        { address: "1 Main St, Guthrie, OK, 73044" },
+        { address: "Tulsa Center, Tulsa, OK" },
+      ]);
     });
 
     it("Estimated mileage updates when destinations change", async () => {
       const { headers } = await signIn();
       const created = await create(headers);
+      const sent = stubRoutes(48280); // 30 miles
 
       const response = await update(headers, created.body.id, { destinations: [{ id: fx.okc.id }] });
 
       expect(response.status).toBe(200);
       expect(response.body.estimatedMiles).toBe(30);
       expect(response.body.destinations.map(({ id }) => id)).toEqual([fx.okc.id]);
+      expect(sent[0].intermediates).toEqual([{ address: "OKC Arena, Oklahoma City, OK" }]);
+    });
+
+    it("falls back to the saved distance for a single saved stop without Google", async () => {
+      const { headers } = await signIn();
+
+      const response = await create(headers, { destinations: [{ id: fx.tulsa.id }] });
+
+      expect(response.body.estimatedMiles).toBe(200);
+    });
+
+    it("leaves mileage unknown without Google when saved distances can't give the route", async () => {
+      const { headers } = await signIn();
+      const custom = { name: "Grandma's House", city: "Guthrie", state: "OK" };
+
+      // Custom stops have no saved distance, and distances from campus don't give the legs between stops.
+      for (const destinations of [[custom], [{ id: fx.okc.id }, { id: fx.tulsa.id }]]) {
+        const response = await create(headers, { destinations });
+        expect(response.status).toBe(201);
+        expect(response.body.estimatedMiles).toBeNull();
+      }
+    });
+
+    it("leaves mileage unknown when the Google request fails", async () => {
+      const { headers } = await signIn();
+      process.env.GOOGLE_MAPS_API_KEY = "test-key";
+      global.fetch = jest.fn(async () => ({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { message: "Routes API has not been used in project" } }),
+      }));
+
+      const response = await create(headers, { destinations: [{ id: fx.okc.id }, { id: fx.tulsa.id }] });
+
+      expect(response.status).toBe(201);
+      expect(response.body.estimatedMiles).toBeNull();
+    });
+
+    it("retries an unknown estimate when the request is next edited", async () => {
+      const { headers } = await signIn();
+      const created = await create(headers, { destinations: [{ id: fx.okc.id }, { id: fx.tulsa.id }] });
+      expect(created.body.estimatedMiles).toBeNull();
+      stubRoutes(321869);
+
+      const response = await update(headers, created.body.id, { purpose: "Away game (rescheduled)" });
+
+      expect(response.body.estimatedMiles).toBe(200);
     });
   });
 });

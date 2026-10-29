@@ -81,9 +81,11 @@ const openApp = async (path) => {
   return wrapper;
 };
 
-/** Page links in the app shell's main navigation (MenuBar or Sidebar). */
+/** Page links in the app shell's navigation (MenuBar, or the Sidebar's main and pinned lists). */
 const navLabels = () =>
-  [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
+  [...document.body.querySelectorAll('[aria-label="Main navigation"] a, [aria-label="Pinned navigation"] a')].map(
+    (link) => link.textContent.trim(),
+  );
 
 beforeEach(() => {
   localStorage.clear();

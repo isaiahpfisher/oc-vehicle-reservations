@@ -10,6 +10,7 @@ import { useAuthStore } from "./stores/auth.js";
  * `meta.public`: open without a session; a signed-in user is sent home instead (Feature 1, FR-005).
  * `meta.roles`: the user needs any one of these (admins always pass); no `meta.roles` = any signed-in user.
  * `meta.nav` / `meta.icon`: label and icon for the MenuBar/Sidebar link, shown only when the user may open the route.
+ * `meta.pinned`: the Sidebar shows the link just above the profile instead of with the other pages.
  */
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,7 +26,7 @@ const router = createRouter({
       path: "/",
       name: "home",
       component: MyRequests,
-      meta: { nav: "My Requests", icon: "mdi-car-outline" },
+      meta: { nav: "My Requests", icon: "mdi-car-outline", pinned: true },
     },
     {
       path: "/requests/new",

@@ -35,7 +35,9 @@ watch(open, (isOpen) => {
 });
 
 const serviceDue = (option) =>
-  option.milesUntilService !== null && option.milesUntilService < props.request.estimatedMiles;
+  option.milesUntilService !== null &&
+  props.request.estimatedMiles !== null &&
+  option.milesUntilService < props.request.estimatedMiles;
 
 const isHidden = (option) =>
   (onlyShow.value.includes("available") && (option.conflictingRequestIds.length > 0 || option.outOfService)) ||
@@ -78,7 +80,9 @@ const submit = async () => {
       <v-card-item class="px-6 pt-5">
         <v-card-title class="font-weight-bold">Assign vehicles</v-card-title>
         <v-card-subtitle>
-          {{ request.numberOfPeople }} people · about {{ request.estimatedMiles }} miles · {{ request.area?.name }}
+          {{ request.numberOfPeople }} people ·
+          {{ request.estimatedMiles === null ? "mileage unknown" : `about ${request.estimatedMiles} miles` }} ·
+          {{ request.area?.name }}
         </v-card-subtitle>
       </v-card-item>
 
@@ -131,7 +135,7 @@ const submit = async () => {
             <template #append>
               <div class="d-flex flex-wrap justify-end ga-1">
                 <v-chip v-if="option.conflictingRequestIds.length" size="small" color="error" variant="tonal" label>
-                  Reserved · #{{ option.conflictingRequestIds.join(", #") }}
+                  Reserved
                 </v-chip>
                 <v-chip v-if="option.outOfService" size="small" color="error" variant="tonal" label>Out of service</v-chip>
                 <v-chip v-if="!option.cdlOk" size="small" color="warning" variant="tonal" label>Needs CDL driver</v-chip>

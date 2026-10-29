@@ -84,7 +84,7 @@ For users with additional roles, use a sidebar instead of a menu bar. The sideba
 </v-app>
 ```
 
-Hide `MenuBar` / `Sidebar` on the login route and until the first navigation resolves (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links.
+Hide `MenuBar` / `Sidebar` on the login route and until the first navigation resolves (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links. `meta.pinned` moves a link in the Sidebar from the page list to just above the profile; the MenuBar ignores it.
 
 Add breadcrumbs to the top of all nested pages so users can easily get back to the previous page(s).
 

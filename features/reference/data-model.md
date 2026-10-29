@@ -71,7 +71,7 @@ Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissi
 | `startAt` / `endAt` (`start_at` / `end_at`) | DATE | Required. `endAt >= startAt`. All-day trips are stored at UTC midnight. |
 | `allDay` (`all_day`) | BOOLEAN | Default `false` |
 | `numberOfPeople` (`number_of_people`) | INTEGER | Required, non-negative |
-| `estimatedMiles` (`estimated_miles`) | INTEGER | Default `0`. Recalculated when destinations change. |
+| `estimatedMiles` (`estimated_miles`) | INTEGER | Nullable: `null` when the trip couldn't be estimated (FR-007). Recalculated when destinations change, or on any edit while `null`. |
 | `approverId` (`approver_id`) | INTEGER | Optional. References `users.id`. |
 | `approvedAt` (`approved_at`) | DATE | Optional |
 | `status` | ENUM | `pending`, `awaiting_vehicle`, `reserved`, `returned`, `cancelled`, `denied`. Default `pending`. |

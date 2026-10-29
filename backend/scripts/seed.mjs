@@ -7,7 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { Op } from "sequelize";
 import db from "../app/models/index.js";
-import { savedMiles } from "../app/helpers/mileage.js";
+import { estimateMiles } from "../app/helpers/mileage.js";
 
 export const SEED_AREAS = ["Admissions", "Athletics", "Facilities", "Music", "Student Life", "Theatre"];
 
@@ -304,7 +304,7 @@ const seedRequests = async ({ areaIds, transaction }) => {
         endAt: tripDate(end, time?.[1]),
         allDay: !time,
         numberOfPeople: people,
-        estimatedMiles: savedMiles(stops),
+        estimatedMiles: await estimateMiles(stops),
         status,
         approverId: APPROVED_SEED_STATUSES.includes(status) ? users[approver].id : null,
         approvedAt: APPROVED_SEED_STATUSES.includes(status) ? new Date() : null,

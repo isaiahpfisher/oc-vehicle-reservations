@@ -85,15 +85,15 @@ const visible = computed(() => {
   );
 });
 
-// Admins see who asked (with the area underneath); requesters see the area. Vehicles sit under the head count.
+// Status leads. Admins see who asked (with the area underneath); requesters see the area. Vehicles sit under the head count.
 const headers = computed(() => [
+  { title: "Status", key: "status" },
   { title: "Trip", key: "purpose", minWidth: "220px" },
   { title: "Dates", key: "dates", value: (request) => tripBounds(request)[0].getTime() },
   props.admin
     ? { title: "Requester", key: "requester", value: (request) => personName(request.user) }
     : { title: "Area", key: "area", value: (request) => request.area?.name ?? "" },
   { title: "People", key: "numberOfPeople" },
-  { title: "Status", key: "status" },
 ]);
 
 const sortBy = ref([{ key: "dates", order: "desc" }]);

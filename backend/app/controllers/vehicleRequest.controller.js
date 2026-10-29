@@ -2,7 +2,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { parseId, requiredInt, requiredText } from "../helpers/fields.js";
-import { estimateMiles, formatAddress } from "../helpers/mileage.js";
+import { MAX_STOPS, estimateMiles, formatAddress } from "../helpers/mileage.js";
 import { getServiceStatuses } from "../helpers/vehicleService.js";
 import { requestInclude, toRequestResponse } from "../helpers/vehicleRequests.js";
 import { REQUEST_STATUSES } from "../models/vehicleRequest.model.js";
@@ -130,6 +130,10 @@ const resolveStops = async (value) => {
 
   if (value.some((stop) => stop === null || typeof stop !== "object")) {
     throw httpError(400, "Invalid destinations.");
+  }
+
+  if (value.length > MAX_STOPS) {
+    throw httpError(400, `A trip can have at most ${MAX_STOPS} destinations.`);
   }
 
   const ids = value.filter((stop) => stop.id !== undefined).map((stop) => requiredInt(stop.id));
@@ -400,8 +404,11 @@ exports.update = async (req, res) => {
       approval = { approverId: req.user.id, approvedAt: new Date() };
     }
 
+    // Also retry an estimate that failed before (e.g. the Google key was added since).
     const estimatedMiles =
-      next && !sameStops(current.destinations, next.stops) ? await estimateMiles(next.stops) : request.estimatedMiles;
+      next && (!sameStops(current.destinations, next.stops) || request.estimatedMiles === null)
+        ? await estimateMiles(next.stops)
+        : request.estimatedMiles;
 
     await db.sequelize.transaction(async (transaction) => {
       await request.update({ ...next?.fields, estimatedMiles: estimatedMiles, status, ...approval }, { transaction });

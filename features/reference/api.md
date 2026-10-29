@@ -106,11 +106,28 @@ Responses include `area`, `user`, `approver`, and flattened `drivers`, ordered `
 | `numberOfPeople` not a non-negative integer | `400` | `numberOfPeople must be a non-negative integer.` |
 | End before start | `400` | `endAt cannot be before startAt.` |
 | Same destination twice in a row | `400` | `A destination is listed twice in a row.` |
+| More than 10 destinations | `400` | `A trip can have at most 10 destinations.` |
 | Driver not approved / license expired / expires before trip ends | `400` | `<Name> is not an approved driver.` / `<Name>'s license has expired.` / `<Name>'s license expires before the trip ends.` |
 | Vehicle outside the request's area | `400` | `Vehicles must belong to the request's area.` |
 | Requester assigns vehicles, sets a status other than `cancelled`, or edits a non-pending request | `403` | |
 | Requester calls `GET /api/requests` or `vehicle-options` | `403` | `{ "message": "Area admin role required." }` |
 | Request not found or not visible to the user | `404` | `Vehicle request with id=… not found.` |
+
+### Address search (Feature 8, FR-008)
+
+Proxies Google Places so the key stays on the server. Any signed-in user. Pass the same `sessionToken` (a client-generated UUID) to every call for one address so Google bills them as one session.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/places/autocomplete?input=…&sessionToken=…` | Bearer | `200` array of `{ placeId, name, description }`, biased toward campus, US only |
+| `GET` | `/api/places/:placeId?sessionToken=…` | Bearer | `200` `{ addressLine1, addressLine2, city, state, zipCode }` |
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| `input` shorter than 3 or longer than 200 characters | `400` | `Enter 3 to 200 characters to search.` |
+| Bad `sessionToken` / `placeId` | `400` | `Invalid session token.` / `Invalid place id.` |
+| `GOOGLE_MAPS_API_KEY` not set | `503` | `Address search isn't available.` |
+| Google request failed | `502` | `Address search failed.` |
 
 ### Interim endpoints (Features 6 and 7)
 

@@ -113,7 +113,9 @@
 - **FR-004**: The system must flag if the total capacity of the assigned vehicles does not meet the number of people on the request. It can still be saved like this though.
 - **FR-005**: Approving a request should change its status to awaiting vehicle.
 - **FR-006**: Assigning a vehicle to a request should change the request's status to reserved, regardless of it was approved already. Removing all vehicles should set it back to awaiting vehicle.
-- **FR-007**: Estimated mileage will be calculated using Google APIs.
+- **FR-007**: Estimated mileage will be calculated using Google APIs. Without them (no `GOOGLE_MAPS_API_KEY`, or the request fails), only a trip to a single saved destination is estimated (twice its saved distance from campus); any other trip's mileage is unknown (`null`, shown as "Unknown") rather than an understated guess. An unknown estimate is retried the next time the request is edited.
+- **FR-008**: The custom address dialog offers address search (Google Places Autocomplete), proxied through the backend so the key stays server-side. Searches wait for 3+ characters and a pause in typing, share one session token per address, and end with a Place Details lookup of address fields only (Essentials tier). Picking a result fills the address fields, which stay editable. Without a key, or when Google fails, the fields are filled in by hand as before.
+- **FR-009**: A trip has at most 10 destinations (Google Routes bills more than 10 intermediate stops at a higher tier). The form stops offering more, and the API rejects more with a 400.
 
 ---
 
@@ -133,6 +135,7 @@
 - Number of people is not a non-negative integer -> 400 bad request
 - End date before start data -> 400 bad request
 - Destination is listed twice in a row on a trip -> 400 bad request
+- More than 10 destinations on a trip -> 400 bad request (FR-009)
 - A driver is not approved or has an expired license -> 400 bad request
 - A driver's license expires during a trip -> 400 bad request
 
@@ -171,6 +174,8 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 | `GET`  | `/api/requests/:requestId` | Yes         | Fetch a single request                  |
 | `POST` | `/api/requests`            | Yes - Admin | Create a request for the current user   |
 | `PUT`  | `/api/requests/:requestId` | Yes         | Update a request                        |
+| `GET`  | `/api/places/autocomplete` | Yes         | Address suggestions (FR-008)            |
+| `GET`  | `/api/places/:placeId`     | Yes         | Address fields for a suggestion (FR-008) |
 
 **Create request body:**
 
@@ -295,7 +300,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 | `end_at`           | timestamp |                                                                                             |
 | `all_day`          | boolean   | Used to account for time being optional on start/end dates                                  |
 | `number_of_people` | int       |                                                                                             |
-| `estimated_miles`  | int       | Recalculated when destinations change, using Google APIs or saved distances on destinations |
+| `estimated_miles`  | int       | Recalculated when destinations change, using Google APIs or saved distances on destinations. Null when unknown (FR-007) |
 | `approver_id`      | int FK    | Optional                                                                                    |
 | `approved_at`      | timestamp | Optional                                                                                    |
 | `status`           | enum      | `pending`, `awaiting_vehicle`, `reserved`, `returned`, `cancelled`, `denied`                |
@@ -393,6 +398,19 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **When** I move a destination to a different position
 - **Then** the destinations display in the new order
 - **And** they are saved with the request in that order
+
+#### Scenario: User searches for a custom address
+
+- **Given** I am signed in and adding a custom address to a request
+- **When** I type at least 3 characters of an address and pick a suggestion
+- **Then** the street, city, state, and ZIP fields are filled in from it
+- **And** I can still edit them before adding the stop
+
+#### Scenario: User adds more than ten destinations
+
+- **Given** I am signed in and my request already has 10 destinations
+- **Then** I can't add another destination
+- **And** the API rejects a request with more than 10 destinations
 
 #### Scenario: Vehicle assignment is hidden during creation
 
@@ -568,6 +586,8 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 | US-8.1 | User adds drivers to a new request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds drivers to a new request |
 | US-8.1 | User adds destinations to a new request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds destinations to a new request |
 | US-8.1 | User reorders destinations on a new request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User reorders destinations on a new request |
+| US-8.1 | User searches for a custom address | `backend/tests/places.test.js`, `frontend/tests/VehicleRequests.test.js` | User searches for a custom address |
+| US-8.1 | User adds more than ten destinations | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds more than ten destinations |
 | US-8.1 | Vehicle assignment is hidden during creation | `frontend/tests/VehicleRequests.test.js` | Vehicle assignment is hidden during creation |
 | US-8.1 | User submits a request with missing required fields | `backend/tests/vehicleRequests.test.js` | User submits a request with missing required fields |
 | US-8.2 | Unauthenticated user cannot view requests | `backend/tests/vehicleRequests.test.js` | Unauthenticated user cannot view requests |

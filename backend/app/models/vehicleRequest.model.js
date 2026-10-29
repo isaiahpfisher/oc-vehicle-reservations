@@ -36,10 +36,10 @@ export default (sequelize, Sequelize) => {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
+    // Null when the trip couldn't be estimated (FR-007).
     estimatedMiles: {
       type: Sequelize.INTEGER,
-      allowNull: false,
-      defaultValue: 0,
+      allowNull: true,
     },
     approverId: {
       type: Sequelize.INTEGER,

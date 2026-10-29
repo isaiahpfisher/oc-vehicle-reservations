@@ -3,6 +3,7 @@ import authRoutes from "./auth.routes.js";
 import userRoutes from "./user.routes.js";
 import areaRoutes from "./area.routes.js";
 import vehicleRequestRoutes from "./vehicleRequest.routes.js";
+import placeRoutes from "./place.routes.js";
 import interimRoutes from "./interim.routes.js"; // INTERIM(features 6, 7)
 
 const router = Router();
@@ -16,6 +17,7 @@ router.use("/", authRoutes);
 router.use("/users", userRoutes);
 router.use("/areas", areaRoutes);
 router.use("/", vehicleRequestRoutes);
+router.use("/places", placeRoutes);
 router.use("/", interimRoutes); // INTERIM(features 6, 7)
 
 export default router;
