@@ -4,7 +4,7 @@
 **Branch pattern:** `feature/4-vehicle-types`
 **Status:** Ready
 **Created:** 2026-10-19
-**Input:** Signed-in admin users manage vehicle types. Vehicle types are added/edited with a dialog.
+**Input:** Signed-in admin users manage vehicle types. Vehicle types are added with a dialog and edited in the table row.
 **Depends on:** Feature 3 [Roles]
 
 ---
@@ -77,7 +77,7 @@
 
 ## Assumptions
 
-- Vehicle types use **dialog-based** workflows (no split sidebar / main panel).
+- Creating a vehicle type uses a dialog. Editing a vehicle type happens in the table row. There is no split sidebar / main panel.
 - Delete removes the vehicle type row. No other table references `vehicleTypes` yet, so this feature does not block a delete.
 
 ## Edge Cases
@@ -155,8 +155,8 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - Heading: **Vehicle Type Management**
 - Primary action: **+ New Vehicle Type** opens a `<v-dialog>` with **Name** and **Identifier**, plus **Create** / **Cancel**.
     - Identifier is a <v-select>.
-- Display vehicle types as rows. Each row shows the **name**.
-- **Edit** icon opens a `<v-dialog>` pre-filled with the current name and identifier; **Save** / **Cancel**.
+- Display vehicle types in a `<v-data-table>` (10 per page). Columns are **Name** and **Identifier**. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
+- **Edit** icon turns that row into inline fields pre-filled with the current name and identifier; **Save** / **Cancel**. Cancel restores the row without saving.
     - Identifier is a <v-select>.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit vehicle type**, **Delete vehicle type**).
@@ -165,7 +165,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - **Error state:** `<v-alert type="error">` for API failures.
 - **App chrome:** the route has `meta.nav: "Vehicle Types"` and `meta.roles: ["admin"]`, so the Vehicle Types link shows for admins and is hidden for everyone else
 
-**Implementation note:** one route/view for vehicle types; delete dialog is a reusable component in `components/common` folder; create and edit dialogs should be components stored in a dedicated components/vehicleTypes folder and modeled after existing create and edit dialogs in `components/` folders.
+**Implementation note:** one route/view for vehicle types; delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/vehicleTypes`, modeled after existing create dialogs. Edit stays in the table row.
 
 ---
 
@@ -300,7 +300,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin and vehicle types exist 
 - **When** I open the vehicle types view
-- **Then** each row shows the vehicle type name 
+- **Then** each row shows the vehicle type name and identifier 
 
 #### Scenario: Vehicle types empty state
 
@@ -325,14 +325,14 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 #### Scenario: Admin user edits a vehicle type name
 
 - **Given** I am signed in as admin and a vehicle type named `Bus` exists
-- **When** I change the name to `Golf Cart` and submit
+- **When** I change the name in that row to `Golf Cart` and click **Save**
 - **Then** the API returns `200` with the updated vehicle type
 - **And** the list shows `Golf Cart`
 
 #### Scenario: Admin user edits a vehicle type identifier
 
 - **Given** I am signed in as admin and a vehicle type named `Bus` with identifier `VIN` exists
-- **When** I change the identifier to `Serial` and submit
+- **When** I change the identifier in that row to `Serial` and click **Save**
 - **Then** the API returns `200` with the updated vehicle type
 - **And** `Serial` is in the response
 
@@ -340,14 +340,14 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog without a name
+- **When** I clear the name in that row and click **Save**
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle type to have a missing identifier
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog without an identifier
+- **When** I clear the identifier in that row and click **Save**
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a missing name
@@ -368,7 +368,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog with name ` `
+- **When** I change the name in that row to ` ` and click **Save**
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a whitespace-only name
@@ -389,7 +389,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog with a vehicle type name longer than 255 characters
+- **When** I change the name in that row to longer than 255 characters and click **Save**
 - **Then** validation blocks the request and I see a `Name too long.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a name longer than 255 characters
@@ -403,8 +403,8 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** Vehicle types with names `Bus` and `Golf Cart` exist
-- **And** I edit `Golf Cart` to have name `Bus`
-- **When** I submit the edit dialog
+- **And** I change the name in the `Golf Cart` row to `Bus`
+- **When** I click **Save**
 - **Then** validation blocks the request and I see a `Name already taken.` message
 
 #### Scenario: Admin user requests to update a vehicle type to have a non-unique name 
@@ -420,7 +420,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - **Given** I am signed in as admin on the vehicle types view
 - **And** A vehicle type with name `Bus` exists
 - **And** Another vehicle type exists with name `Golf Cart`
-- **When** I submit the edit dialog for `Golf Cart` with name `bus`
+- **When** I change the name in the `Golf Cart` row to `bus` and click **Save**
 - **Then** validation blocks the request and I see a `Name already taken.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a non-unique name that is not case-sensitive

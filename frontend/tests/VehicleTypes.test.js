@@ -108,18 +108,16 @@ const clickNamed = async (text) => {
   await settle();
 };
 
-const editButton = (name) => {
-  const card = [...document.body.querySelectorAll(".v-card")].find((el) => el.textContent.includes(name));
-  return card?.querySelector('[aria-label="Edit vehicle type"]');
-};
+const rows = () => [...document.body.querySelectorAll(".v-data-table tbody tr")];
+const rowFor = (name) => rows().find((row) => row.textContent.includes(name));
+
+const editButton = (name) => rowFor(name)?.querySelector('[aria-label="Edit vehicle type"]');
 
 const openEdit = async (name) => {
   await waitFor(() => expect(editButton(name)).toBeTruthy());
   editButton(name).click();
   await settle();
-  await waitFor(() => {
-    expect(document.body.textContent).toContain("Edit vehicle type");
-  });
+  await waitFor(() => expect(namedButton("Save")).toBeTruthy());
 };
 
 beforeEach(async () => {
@@ -265,8 +263,8 @@ describe("Feature 4 — Vehicle Type Management", () => {
       await mountAppAt("/vehicle-types");
 
       await waitFor(() => {
-        expect(wrapper.text()).toContain("Bus");
-        expect(wrapper.text()).toContain("Golf Cart");
+        expect(rowFor("Bus")?.textContent).toContain("VIN");
+        expect(rowFor("Golf Cart")?.textContent).toContain("Serial");
       });
     });
 

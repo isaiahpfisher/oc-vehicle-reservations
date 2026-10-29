@@ -45,7 +45,7 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Identifier is `VIN` or `Serial` | Any other value returns `400` `{ "message": "Unknown identifier." }`. An empty identifier returns `{ "message": "Missing identifier." }`. | Feature 4, FR-005 |
 | A field left out of an update keeps its stored value | `PUT` with only `name` does not clear `identifier`, and the reverse. | Feature 4, US-4.4 |
 | Delete removes the vehicle type | `DELETE` returns `200` and does not check for other rows that point at the vehicle type. | Feature 4, Assumptions |
-| Vehicle types are managed on one screen | `/vehicle-types` heading is **Vehicle Type Management**. Create and edit use a dialog with **Name** and an **Identifier** select (`VIN`, `Serial`). Each row shows the name. Delete uses the shared confirmation dialog. Empty list copy is **No vehicle types yet. Create your first vehicle type.** | Feature 4, Screen Requirements |
+| Vehicle types are managed on one screen | `/vehicle-types` heading is **Vehicle Type Management**. The list is a table of 10 rows per page with **Name** and **Identifier**. Create uses a dialog with **Name** and an **Identifier** select (`VIN`, `Serial`). Edit replaces that row with the same fields and **Save** / **Cancel**; Cancel leaves the stored row unchanged. Row icon buttons use `size="small"` and `variant="text"`. Delete uses the shared confirmation dialog. Empty list copy is **No vehicle types yet. Create your first vehicle type.** | Feature 4, Screen Requirements |
 
 ## Roles
 
