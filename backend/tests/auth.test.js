@@ -45,6 +45,7 @@ describe("Feature 1 — User Authentication and Session Management API", () => {
         email: "jane@eagles.oc.edu",
         firstName: "Jane",
         lastName: "Doe",
+        roles: [],
         token: expect.any(String),
       });
       expect(response.body).not.toHaveProperty("password");
@@ -71,6 +72,7 @@ describe("Feature 1 — User Authentication and Session Management API", () => {
         email: "jane@eagles.oc.edu",
         firstName: "Janet",
         lastName: "Smith",
+        roles: [],
         token: first.body.token,
       });
       const stored = await db.user.findByPk(first.body.userId);

@@ -65,3 +65,33 @@ Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 | Non-empty `logo` is not an `http` or `https` URL | `400` | `{ "message": "Invalid logo URL." }` |
 | `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
 | Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
+
+## Vehicle Requests (Feature 8)
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/me/requests` | Bearer | `200` array of the signed-in user's requests |
+| `GET` | `/api/requests` | `admin` or `area_admin` | `200` all requests (admin) or those in managed areas (area admin) |
+| `POST` | `/api/requests` | Bearer | `201` with the created request, owned by the signed-in user |
+| `GET` | `/api/requests/:requestId` | Bearer | `200` if the user owns it or manages its area |
+| `PUT` | `/api/requests/:requestId` | Bearer | `200` with the updated request. Omitted fields keep their stored values. |
+| `GET` | `/api/requests/:requestId/vehicle-options` | `admin` or `area_admin` | `200` array of `{ vehicle, cdl_ok, conflicting_request_ids, out_of_service, miles_until_service }` for the request's area |
+
+Body fields: `area_id`, `purpose`, `start_at`, `end_at`, `all_day`, `number_of_people`, `drivers` (array of driver ids), `destinations` (ordered array of `{ id }` for saved destinations or `{ name, addressLine1, addressLine2, city, state, zipCode }` for new ones). `PUT` also takes `status` and `vehicles` (array of vehicle ids, managers only).
+
+Responses include `area`, `user`, `approver`, and flattened `drivers`, ordered `destinations`, and `vehicles`. All-day `start_at`/`end_at` are returned as `YYYY-MM-DD`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| Missing `area_id`, `purpose`, `start_at`, `end_at`, `number_of_people`, `drivers`, or `destinations` | `400` | `{ "message": "Missing <field>." }` |
+| `number_of_people` not a non-negative integer | `400` | `number_of_people must be a non-negative integer.` |
+| End before start | `400` | `end_at cannot be before start_at.` |
+| Same destination twice in a row | `400` | `A destination is listed twice in a row.` |
+| Driver not approved / license expired / expires before trip ends | `400` | `<Name> is not an approved driver.` / `<Name>'s license has expired.` / `<Name>'s license expires before the trip ends.` |
+| Vehicle outside the request's area | `400` | `Vehicles must belong to the request's area.` |
+| Requester assigns vehicles, sets a status other than `cancelled`, or edits a non-pending request | `403` | |
+| Request not found or not visible to the user | `404` | `Vehicle request with id=… not found.` |
+
+### Stub endpoints (Features 6 and 7)
+
+`GET /api/drivers` (approved, unexpired) and `GET /api/destinations` (saved) feed the request form until Drivers and Destinations merge. See `backend/app/routes/featureStubs.routes.js`.

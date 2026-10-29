@@ -42,3 +42,18 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Students enroll from the course card | One `oc-cta` button per section: **Enroll** or **Unenroll**. The list reloads after success. A failed call shows `<v-alert type="error">`. | Feature 6, FR-002–FR-005 |
 | Admins do not enroll | No enroll/unenroll button. `GET`, `POST`, and `DELETE /api/enrollments` return `404`. | Feature 6, FR-007, FR-008 |
 | Deleting a section removes its enrollments | `Section` has many enrollments with `onDelete: CASCADE` | Feature 6, FR-009 |
+
+## Vehicle Requests
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Requesters see only their own requests | `GET /me/requests` filters by `user_id`. Another user's request returns `404`. | Feature 8, FR-002 |
+| Admins see all requests; area admins see their areas | `managedRequestsWhere()` in `authorization/vehicleRequestScope.js` | Feature 8, US-8.4 |
+| Only managers assign vehicles or change status | Requesters get `403`, except cancelling their own open request | Feature 8, FR-003, Delete scope |
+| Requesters edit only while pending | `403` once status leaves `pending`. The form becomes read-only. | Feature 8, Screen Requirements |
+| Approving sets `awaiting_vehicle` | Approve button. `approver_id` and `approved_at` are set when a request first reaches an approved status. | Feature 8, FR-005 |
+| Assigning vehicles sets `reserved`; removing all sets `awaiting_vehicle` | Applied when `vehicles` changes and no explicit `status` is sent | Feature 8, FR-006 |
+| Editing trip fields on an approved request resets it to `pending` | Area, purpose, dates, all-day, people, drivers, or destinations. Approval is cleared. The UI warns before saving. | Feature 8, US-8.7 |
+| Short capacity is flagged, not blocked | Request page and assign dialog show a warning when seats < people | Feature 8, FR-004 |
+| Estimated miles use Google Routes | Round trip campus → stops → campus when `GOOGLE_MAPS_API_KEY` is set; otherwise saved `milesFromCampus` distances | Feature 8, FR-007 |
+| Requests are never deleted | Status changes to `cancelled` | Feature 8, Delete scope |

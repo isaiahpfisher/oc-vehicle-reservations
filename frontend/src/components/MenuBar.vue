@@ -14,6 +14,10 @@ const profileError = ref("");
 
 const role = ref("student");
 
+const managesRequests = computed(() =>
+  (user.value?.roles ?? []).some(({ role: held }) => held === "admin" || held === "area_admin"),
+);
+
 const displayName = computed(() => {
   if (!user.value) {
     return "";
@@ -117,10 +121,12 @@ const handleLogout = async () => {
 
 <template>
   <v-app-bar color="primary" density="comfortable">
-    <v-app-bar-title>Vehicle Registration System</v-app-bar-title>
+    <v-app-bar-title class="flex-0-0 mr-6 d-none d-sm-flex">Vehicle Registration System</v-app-bar-title>
 
     <v-btn v-if="user?.role === 'admin'" variant="text" color="white" to="/faculty"> Faculty </v-btn>
-    <v-btn v-if="user" variant="text" color="white" to="/">Courses</v-btn>
+    <v-btn v-if="user" variant="text" color="white" :to="{ name: 'home' }" exact>My Requests</v-btn>
+    <!-- STUB(feature-3): Feature 3 moves role-based links into Sidebar.vue. -->
+    <v-btn v-if="managesRequests" variant="text" color="white" :to="{ name: 'adminRequests' }">Requests</v-btn>
    <v-btn v-if="user?.role == 'admin'" variant="text" color="white" to="/semesters">Semesters</v-btn>
     <v-btn v-if="user?.role == 'student'" variant="text" color="white" to="/course-listing">Course Listing</v-btn>
 

@@ -558,6 +558,32 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 | Story | Scenario | Test file | Test name |
 | ----- | -------- | --------- | --------- |
+| US-8.1 | Unauthenticated user cannot create a request | `backend/tests/vehicleRequests.test.js` | Unauthenticated user cannot create a request |
+| US-8.1 | Authenticated user creates a request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Authenticated user creates a request |
+| US-8.1 | User adds drivers to a new request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds drivers to a new request |
+| US-8.1 | User adds destinations to a new request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds destinations to a new request |
+| US-8.1 | User reorders destinations on a new request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User reorders destinations on a new request |
+| US-8.1 | Vehicle assignment is hidden during creation | `frontend/tests/VehicleRequests.test.js` | Vehicle assignment is hidden during creation |
+| US-8.1 | User submits a request with missing required fields | `backend/tests/vehicleRequests.test.js` | User submits a request with missing required fields |
+| US-8.2 | Unauthenticated user cannot view requests | `backend/tests/vehicleRequests.test.js` | Unauthenticated user cannot view requests |
+| US-8.2 | User views requests as a table | `frontend/tests/VehicleRequests.test.js` | User views requests as a table |
+| US-8.2 | User views requests as a weekly calendar | `frontend/tests/VehicleRequests.test.js` | User views requests as a weekly calendar |
+| US-8.2 | User views requests as a monthly calendar | `frontend/tests/VehicleRequests.test.js` | User views requests as a monthly calendar |
+| US-8.2 | User searches and filters requests | `frontend/tests/VehicleRequests.test.js` | User searches and filters requests |
+| US-8.2 | Regular user only sees their own requests | `backend/tests/vehicleRequests.test.js` | Regular user only sees their own requests |
+| US-8.3 | User views the details of their own request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User views the details of their own request |
+| US-8.3 | User cannot view another user's request | `backend/tests/vehicleRequests.test.js` | User cannot view another user's request |
+| US-8.4 | Admin sees all requests | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin sees all requests |
+| US-8.4 | Area admin sees requests from the areas they manage | `backend/tests/vehicleRequests.test.js` | Area admin sees requests from the areas they manage |
+| US-8.5 | Admin searches and filters requests | `frontend/tests/VehicleRequests.test.js` | Admin searches and filters requests |
+| US-8.5 | Admin filters to requests awaiting their action | `frontend/tests/VehicleRequests.test.js` | Admin filters to requests awaiting their action |
+| US-8.6 | Admin views the details of a request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin views the details of a request |
+| US-8.7 | Admin changes a request's status | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin changes a request's status |
+| US-8.7 | Changing an approval-affecting field resets status | `backend/tests/vehicleRequests.test.js` | Changing an approval-affecting field resets status |
+| US-8.7 | Updating a request with missing required fields | `backend/tests/vehicleRequests.test.js` | Updating a request with missing required fields |
+| US-8.8 | Admin assigns vehicles to a request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin assigns vehicles to a request |
+| US-8.9 | Estimated mileage is added when a request is created | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Estimated mileage is added when a request is created |
+| US-8.9 | Estimated mileage updates when destinations change | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Estimated mileage updates when destinations change |
 
 ## Definition of Done
 

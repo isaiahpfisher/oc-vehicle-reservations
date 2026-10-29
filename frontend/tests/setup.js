@@ -4,6 +4,9 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// jsdom has no layout, so it doesn't implement scrolling.
+Element.prototype.scrollIntoView = () => {};
+
 Object.defineProperty(global, "visualViewport", {
   value: {
     width: 1024,

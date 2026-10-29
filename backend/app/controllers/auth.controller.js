@@ -20,6 +20,8 @@ const buildAuthResponse = (user, token) => ({
   email: user.email,
   firstName: user.firstName,
   lastName: user.lastName,
+  // STUB(feature-3): Feature 3 returns roles via helpers/users.js toRolesResponse(); remove when it merges.
+  roles: (user.roles ?? []).map(({ id, role, areaId }) => ({ id, role, areaId })),
   token,
 });
 
@@ -82,6 +84,8 @@ exports.login = async (req, res) => {
     }
 
     const token = await createOrReuseSession(user);
+    // STUB(feature-3): Feature 3 loads roles with the user; remove when it merges.
+    user.roles = await db.role.findAll({ where: { userId: user.id } });
     return res.status(200).send(buildAuthResponse(user, token));
   } catch (err) {
     logger.error(`Login failed: ${err.message}`);

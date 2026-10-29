@@ -31,6 +31,11 @@ const showMenu = computed(() => route.name !== "login");
   color: rgb(var(--v-theme-primary));
 }
 
+/* Content width for data-heavy pages (tables, two-column detail views) */
+.oc-page {
+  max-width: 1200px;
+}
+
 /* Primary labeled CTAs — shared size for peer buttons */
 .v-btn.oc-cta {
   font-size: 0.875rem !important;

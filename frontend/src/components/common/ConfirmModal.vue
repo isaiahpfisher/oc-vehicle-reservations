@@ -22,12 +22,12 @@ const cancel = () => {
 <template>
   <v-dialog v-model="open" :max-width="maxWidth" :persistent="loading">
     <v-card rounded="lg">
-      <v-card-title>{{ title }}</v-card-title>
-      <v-card-text>
+      <v-card-title class="px-6 pt-5 font-weight-bold">{{ title }}</v-card-title>
+      <v-card-text class="px-6">
         <slot>{{ message }}</slot>
         <v-alert v-if="error" type="error" density="compact" class="mt-2">{{ error }}</v-alert>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="px-6 pb-4">
         <v-spacer />
         <v-btn variant="text" :disabled="loading" @click="cancel">{{ cancelText }}</v-btn>
         <v-btn :color="confirmColor" variant="elevated" class="oc-cta" :loading="loading" @click="emit('confirm')">
