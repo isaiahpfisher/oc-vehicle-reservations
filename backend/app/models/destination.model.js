@@ -1,4 +1,4 @@
-// STUB(feature-6): destination fields from ERD.md so Feature 8 can save trip stops. Replace with Feature 6's model when it merges.
+// INTERIM(feature-6): destination fields from ERD.md so Feature 8 can save trip stops. Replace with Feature 6's model when it merges.
 export default (sequelize, Sequelize) => {
   const Destination = sequelize.define("destination", {
     name: {

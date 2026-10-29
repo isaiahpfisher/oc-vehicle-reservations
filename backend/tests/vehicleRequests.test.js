@@ -53,12 +53,12 @@ const seed = async () => {
 };
 
 const body = (overrides = {}) => ({
-  area_id: fx.athletics.id,
+  areaId: fx.athletics.id,
   purpose: "Away game",
-  start_at: "2030-12-18",
-  end_at: "2030-12-21",
-  all_day: true,
-  number_of_people: 9,
+  startAt: "2030-12-18",
+  endAt: "2030-12-21",
+  allDay: true,
+  numberOfPeople: 9,
   drivers: [fx.dana.id],
   destinations: [{ id: fx.tulsa.id }],
   ...overrides,
@@ -104,16 +104,16 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(response.status).toBe(201);
       expect(response.body).toMatchObject({
         id: expect.any(Number),
-        user_id: userId,
-        area_id: fx.athletics.id,
+        userId: userId,
+        areaId: fx.athletics.id,
         purpose: "Away game",
-        start_at: "2030-12-18",
-        end_at: "2030-12-21",
-        all_day: true,
-        number_of_people: 9,
-        estimated_miles: 200,
+        startAt: "2030-12-18",
+        endAt: "2030-12-21",
+        allDay: true,
+        numberOfPeople: 9,
+        estimatedMiles: 200,
         status: "pending",
-        approver_id: null,
+        approverId: null,
         vehicles: [],
       });
       expect(response.body.drivers.map(({ id }) => id)).toEqual([fx.dana.id]);
@@ -132,7 +132,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect(response.status).toBe(201);
       expect(response.body.drivers.map(({ id }) => id).sort()).toEqual([fx.dana.id, fx.sam.id].sort());
-      expect(await db.vehicleRequestDriver.count({ where: { vehicle_request_id: response.body.id } })).toBe(2);
+      expect(await db.vehicleRequestDriver.count({ where: { vehicleRequestId: response.body.id } })).toBe(2);
     });
 
     it("User adds destinations to a new request", async () => {
@@ -155,16 +155,16 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(response.status).toBe(201);
       expect(response.body.destinations.map(({ id }) => id)).toEqual([fx.tulsa.id, fx.okc.id]);
       const stops = await db.vehicleRequestDestination.findAll({
-        where: { vehicle_request_id: response.body.id },
-        order: [["stop_order", "ASC"]],
+        where: { vehicleRequestId: response.body.id },
+        order: [["stopOrder", "ASC"]],
       });
-      expect(stops.map(({ destination_id }) => destination_id)).toEqual([fx.tulsa.id, fx.okc.id]);
+      expect(stops.map(({ destinationId }) => destinationId)).toEqual([fx.tulsa.id, fx.okc.id]);
     });
 
     it("User submits a request with missing required fields", async () => {
       const { headers } = await signIn();
 
-      for (const field of ["area_id", "purpose", "start_at", "end_at", "number_of_people"]) {
+      for (const field of ["areaId", "purpose", "startAt", "endAt", "numberOfPeople"]) {
         const response = await create(headers, { [field]: undefined });
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ message: `Missing ${field}.` });
@@ -180,29 +180,29 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const { headers } = await signIn();
 
       for (const value of [-1, 2.5, "nine"]) {
-        const response = await create(headers, { number_of_people: value });
+        const response = await create(headers, { numberOfPeople: value });
         expect(response.status).toBe(400);
-        expect(response.body).toEqual({ message: "number_of_people must be a non-negative integer." });
+        expect(response.body).toEqual({ message: "numberOfPeople must be a non-negative integer." });
       }
 
-      expect((await create(headers, { number_of_people: 0 })).status).toBe(201);
+      expect((await create(headers, { numberOfPeople: 0 })).status).toBe(201);
     });
 
     it("rejects an end date before the start date", async () => {
       const { headers } = await signIn();
 
-      const response = await create(headers, { start_at: "2030-12-21", end_at: "2030-12-18" });
+      const response = await create(headers, { startAt: "2030-12-21", endAt: "2030-12-18" });
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "end_at cannot be before start_at." });
+      expect(response.body).toEqual({ message: "endAt cannot be before startAt." });
     });
 
     it("rejects invalid dates and unknown areas", async () => {
       const { headers } = await signIn();
 
-      expect((await create(headers, { start_at: "not a date" })).body).toEqual({ message: "Invalid start_at." });
-      expect((await create(headers, { area_id: 999 })).body).toEqual({ message: "Invalid area_id." });
-      expect((await create(headers, { all_day: "yes" })).body).toEqual({ message: "Invalid all_day." });
+      expect((await create(headers, { startAt: "not a date" })).body).toEqual({ message: "Invalid startAt." });
+      expect((await create(headers, { areaId: 999 })).body).toEqual({ message: "Invalid areaId." });
+      expect((await create(headers, { allDay: "yes" })).body).toEqual({ message: "Invalid allDay." });
     });
 
     it("rejects a destination listed twice in a row but allows it later in the trip", async () => {
@@ -247,13 +247,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const { headers } = await signIn();
 
       const response = await create(headers, {
-        all_day: false,
-        start_at: "2030-12-18T14:00:00.000Z",
-        end_at: "2030-12-18T22:30:00.000Z",
+        allDay: false,
+        startAt: "2030-12-18T14:00:00.000Z",
+        endAt: "2030-12-18T22:30:00.000Z",
       });
 
       expect(response.status).toBe(201);
-      expect(response.body).toMatchObject({ start_at: "2030-12-18T14:00:00.000Z", end_at: "2030-12-18T22:30:00.000Z" });
+      expect(response.body).toMatchObject({ startAt: "2030-12-18T14:00:00.000Z", endAt: "2030-12-18T22:30:00.000Z" });
     });
   });
 
@@ -319,7 +319,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const requester = await signIn();
       const admin = await signInWithRoles(["admin"], "admin@example.com");
       await create(requester.headers);
-      await create(requester.headers, { area_id: fx.music.id });
+      await create(requester.headers, { areaId: fx.music.id });
 
       const response = await request(app).get("/api/requests").set(admin.headers);
 
@@ -331,7 +331,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const requester = await signIn();
       const areaAdmin = await signInWithRoles([{ role: "area_admin", areaId: fx.athletics.id }], "aa@example.com");
       const athletics = await create(requester.headers);
-      const music = await create(requester.headers, { area_id: fx.music.id });
+      const music = await create(requester.headers, { areaId: fx.music.id });
 
       const response = await request(app).get("/api/requests").set(areaAdmin.headers);
 
@@ -363,8 +363,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const response = await update(admin.headers, created.body.id, { status: "awaiting_vehicle" });
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({ status: "awaiting_vehicle", approver_id: admin.userId });
-      expect(response.body.approved_at).toEqual(expect.any(String));
+      expect(response.body).toMatchObject({ status: "awaiting_vehicle", approverId: admin.userId });
+      expect(response.body.approvedAt).toEqual(expect.any(String));
 
       const denied = await update(admin.headers, created.body.id, { status: "denied" });
       expect(denied.body.status).toBe("denied");
@@ -376,10 +376,10 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const created = await create(requester.headers);
       await update(admin.headers, created.body.id, { status: "awaiting_vehicle" });
 
-      const response = await update(admin.headers, created.body.id, { number_of_people: 14 });
+      const response = await update(admin.headers, created.body.id, { numberOfPeople: 14 });
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({ status: "pending", number_of_people: 14, approver_id: null, approved_at: null });
+      expect(response.body).toMatchObject({ status: "pending", numberOfPeople: 14, approverId: null, approvedAt: null });
     });
 
     it("Updating a request with missing required fields", async () => {
@@ -442,7 +442,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.vehicles.map(({ universityId }) => universityId).sort()).toEqual(["V-1", "V-2"]);
-      expect(response.body).toMatchObject({ status: "reserved", approver_id: areaAdmin.userId });
+      expect(response.body).toMatchObject({ status: "reserved", approverId: areaAdmin.userId });
 
       const fetched = await request(app).get(`/api/requests/${created.body.id}`).set(requester.headers);
       expect(fetched.body.vehicles).toHaveLength(2);
@@ -486,8 +486,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const requester = await signIn();
       const admin = await signInWithRoles(["admin"], "admin@example.com");
       const first = await create(requester.headers);
-      const overlapping = await create(requester.headers, { start_at: "2030-12-21", end_at: "2030-12-22" });
-      const later = await create(requester.headers, { start_at: "2030-12-22", end_at: "2030-12-23" });
+      const overlapping = await create(requester.headers, { startAt: "2030-12-21", endAt: "2030-12-22" });
+      const later = await create(requester.headers, { startAt: "2030-12-22", endAt: "2030-12-23" });
       await update(admin.headers, first.body.id, { vehicles: [fx.van1.id] });
 
       const options = async (id) => (await request(app).get(`/api/requests/${id}/vehicle-options`).set(admin.headers)).body;
@@ -495,15 +495,15 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       const forOverlapping = byId(await options(overlapping.body.id));
       expect(Object.keys(forOverlapping).sort()).toEqual(["B-1", "V-1", "V-2"]);
-      expect(forOverlapping["V-1"].conflicting_request_ids).toEqual([first.body.id]);
-      expect(forOverlapping["V-2"].conflicting_request_ids).toEqual([]);
-      expect(forOverlapping["B-1"]).toMatchObject({ cdl_ok: false, out_of_service: false, miles_until_service: null });
+      expect(forOverlapping["V-1"].conflictingRequestIds).toEqual([first.body.id]);
+      expect(forOverlapping["V-2"].conflictingRequestIds).toEqual([]);
+      expect(forOverlapping["B-1"]).toMatchObject({ cdlOk: false, outOfService: false, milesUntilService: null });
       expect(forOverlapping["V-1"].vehicle.passengerCapacity).toBe(12);
 
-      expect(byId(await options(later.body.id))["V-1"].conflicting_request_ids).toEqual([]);
+      expect(byId(await options(later.body.id))["V-1"].conflictingRequestIds).toEqual([]);
 
       await update(requester.headers, later.body.id, { drivers: [fx.sam.id] });
-      expect(byId(await options(later.body.id))["B-1"].cdl_ok).toBe(true);
+      expect(byId(await options(later.body.id))["B-1"].cdlOk).toBe(true);
     });
   });
 
@@ -515,7 +515,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect(response.status).toBe(201);
       // campus → OKC (15) → Tulsa (85) → campus (100)
-      expect(response.body.estimated_miles).toBe(200);
+      expect(response.body.estimatedMiles).toBe(200);
     });
 
     it("Estimated mileage updates when destinations change", async () => {
@@ -525,7 +525,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const response = await update(headers, created.body.id, { destinations: [{ id: fx.okc.id }] });
 
       expect(response.status).toBe(200);
-      expect(response.body.estimated_miles).toBe(30);
+      expect(response.body.estimatedMiles).toBe(30);
       expect(response.body.destinations.map(({ id }) => id)).toEqual([fx.okc.id]);
     });
   });

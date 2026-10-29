@@ -41,7 +41,7 @@ You are on <current-branch>.
 Create or check out that branch from dev first, then ask me to continue.
 ```
 
-Use the exact short-name from the feature spec (e.g. `feature/3-todo-list-item-management`). Optional helper they can run themselves:
+Use the exact short-name from the feature spec (e.g. `feature/3-user-role-management`). Optional helper they can run themselves:
 
 ```bash
 git checkout dev

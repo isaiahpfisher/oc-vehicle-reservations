@@ -4,6 +4,7 @@ import logger from "../config/logger.js";
 import { parseId, requiredInt, requiredText } from "../helpers/fields.js";
 import { estimateMiles, formatAddress } from "../helpers/mileage.js";
 import { getServiceStatuses } from "../helpers/vehicleService.js";
+import { requestInclude, toRequestResponse } from "../helpers/vehicleRequests.js";
 import { REQUEST_STATUSES } from "../models/vehicleRequest.model.js";
 import { canManageRequest, canViewRequest, managedRequestsWhere } from "../authorization/vehicleRequestScope.js";
 
@@ -16,7 +17,7 @@ const OPEN_STATUSES = ["pending", "awaiting_vehicle", "reserved"];
 /** Requests in these statuses don't hold their vehicles. */
 const RELEASED_STATUSES = ["cancelled", "denied"];
 /** Fields a requester fills in. Changing any of them on an approved request resets it to pending. */
-const EDITABLE_FIELDS = ["area_id", "purpose", "start_at", "end_at", "all_day", "number_of_people", "drivers", "destinations"];
+const EDITABLE_FIELDS = ["areaId", "purpose", "startAt", "endAt", "allDay", "numberOfPeople", "drivers", "destinations"];
 const NEW_DESTINATION_FIELDS = ["name", "addressLine1", "addressLine2", "city", "state", "zipCode"];
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -35,7 +36,7 @@ const notFound = (res, requestId) => res.status(404).send({ message: `Vehicle re
 const dateOnly = (value) => new Date(value).toISOString().slice(0, 10);
 
 /** All-day trips run through the end of their last day. */
-const tripEnd = ({ end_at, all_day }) => new Date(new Date(end_at).getTime() + (all_day ? DAY_MS : 0));
+const tripEnd = ({ endAt, allDay }) => new Date(new Date(endAt).getTime() + (allDay ? DAY_MS : 0));
 
 const isBlank = (value) => value === undefined || value === null || (typeof value === "string" && !value.trim());
 
@@ -49,53 +50,25 @@ const parseDate = (value, allDay) => {
   return allDay ? new Date(`${dateOnly(date)}T00:00:00.000Z`) : date;
 };
 
-const requestInclude = () => [
-  { model: db.area, as: "area", attributes: ["id", "name"] },
-  { model: db.user, as: "user", attributes: ["id", "firstName", "lastName", "email"] },
-  { model: db.user, as: "approver", attributes: ["id", "firstName", "lastName"] },
-  { model: db.vehicleRequestDriver, as: "requestDrivers", include: [{ model: db.driver, as: "driver" }] },
-  { model: db.vehicleRequestDestination, as: "stops", include: [{ model: db.destination, as: "destination" }] },
-  {
-    model: db.vehicleRequestVehicle,
-    as: "requestVehicles",
-    include: [{ model: db.vehicle, as: "vehicle", include: [{ model: db.vehicleType, as: "vehicleType" }] }],
-  },
-];
-
 const listOrder = [
-  ["start_at", "DESC"],
+  ["startAt", "DESC"],
   ["id", "DESC"],
 ];
 
 const loadRequest = (id) => db.vehicleRequest.findByPk(id, { include: requestInclude() });
 
-const sortedStops = (request) => [...request.stops].sort((a, b) => a.stop_order - b.stop_order);
-
-/** Flatten the pivot rows into `drivers`, ordered `destinations`, and `vehicles`. */
-const toResponse = (request) => {
-  const { requestDrivers, stops, requestVehicles, ...fields } = request.toJSON();
-  const shown = (value) => (fields.all_day ? dateOnly(value) : value);
-
-  return {
-    ...fields,
-    start_at: shown(fields.start_at),
-    end_at: shown(fields.end_at),
-    drivers: requestDrivers.map(({ driver }) => driver),
-    destinations: [...stops].sort((a, b) => a.stop_order - b.stop_order).map(({ destination }) => destination),
-    vehicles: requestVehicles.map(({ vehicle }) => vehicle),
-  };
-};
+const sortedStops = (request) => [...request.stops].sort((a, b) => a.stopOrder - b.stopOrder);
 
 /** Request values in body shape, so a PUT can merge the body over them. */
 const currentValues = (request) => ({
-  area_id: request.area_id,
+  areaId: request.areaId,
   purpose: request.purpose,
-  start_at: request.start_at,
-  end_at: request.end_at,
-  all_day: request.all_day,
-  number_of_people: request.number_of_people,
-  drivers: request.requestDrivers.map(({ driver_id }) => driver_id),
-  destinations: sortedStops(request).map(({ destination_id }) => ({ id: destination_id })),
+  startAt: request.startAt,
+  endAt: request.endAt,
+  allDay: request.allDay,
+  numberOfPeople: request.numberOfPeople,
+  drivers: request.requestDrivers.map(({ driverId }) => driverId),
+  destinations: sortedStops(request).map(({ destinationId }) => ({ id: destinationId })),
 });
 
 const uniqueIds = (value, label) => {
@@ -197,49 +170,49 @@ const resolveStops = async (value) => {
 const resolveFields = async (body, current = {}) => {
   const value = (key) => (Object.hasOwn(body, key) ? body[key] : current[key]);
 
-  for (const key of ["area_id", "purpose", "start_at", "end_at", "number_of_people"]) {
+  for (const key of ["areaId", "purpose", "startAt", "endAt", "numberOfPeople"]) {
     if (isBlank(value(key))) {
       throw httpError(400, `Missing ${key}.`);
     }
   }
 
-  const areaId = requiredInt(value("area_id"));
+  const areaId = requiredInt(value("areaId"));
   if (areaId === null || !(await db.area.findByPk(areaId))) {
-    throw httpError(400, "Invalid area_id.");
+    throw httpError(400, "Invalid areaId.");
   }
 
-  const allDay = value("all_day") ?? false;
+  const allDay = value("allDay") ?? false;
   if (typeof allDay !== "boolean") {
-    throw httpError(400, "Invalid all_day.");
+    throw httpError(400, "Invalid allDay.");
   }
 
-  const startAt = parseDate(value("start_at"), allDay);
+  const startAt = parseDate(value("startAt"), allDay);
   if (!startAt) {
-    throw httpError(400, "Invalid start_at.");
+    throw httpError(400, "Invalid startAt.");
   }
 
-  const endAt = parseDate(value("end_at"), allDay);
+  const endAt = parseDate(value("endAt"), allDay);
   if (!endAt) {
-    throw httpError(400, "Invalid end_at.");
+    throw httpError(400, "Invalid endAt.");
   }
 
   if (endAt < startAt) {
-    throw httpError(400, "end_at cannot be before start_at.");
+    throw httpError(400, "endAt cannot be before startAt.");
   }
 
-  const numberOfPeople = requiredInt(value("number_of_people"));
+  const numberOfPeople = requiredInt(value("numberOfPeople"));
   if (numberOfPeople === null) {
-    throw httpError(400, "number_of_people must be a non-negative integer.");
+    throw httpError(400, "numberOfPeople must be a non-negative integer.");
   }
 
   return {
     fields: {
-      area_id: areaId,
+      areaId: areaId,
       purpose: requiredText(value("purpose")),
-      start_at: startAt,
-      end_at: endAt,
-      all_day: allDay,
-      number_of_people: numberOfPeople,
+      startAt: startAt,
+      endAt: endAt,
+      allDay: allDay,
+      numberOfPeople: numberOfPeople,
     },
     driverIds: await resolveDrivers(value("drivers"), endAt),
     stops: await resolveStops(value("destinations")),
@@ -264,15 +237,15 @@ const sameStops = (current, stops) =>
   current.length === stops.length && current.every(({ id }, i) => stops[i].id === id);
 
 const approvalFieldsChanged = (current, next) =>
-  ["area_id", "purpose", "all_day", "number_of_people"].some((key) => current[key] !== next.fields[key]) ||
-  ["start_at", "end_at"].some((key) => new Date(current[key]).getTime() !== next.fields[key].getTime()) ||
+  ["areaId", "purpose", "allDay", "numberOfPeople"].some((key) => current[key] !== next.fields[key]) ||
+  ["startAt", "endAt"].some((key) => new Date(current[key]).getTime() !== next.fields[key].getTime()) ||
   !sameIds(current.drivers, next.driverIds) ||
   !sameStops(current.destinations, next.stops);
 
 const saveDrivers = async (requestId, driverIds, transaction) => {
-  await db.vehicleRequestDriver.destroy({ where: { vehicle_request_id: requestId }, transaction });
+  await db.vehicleRequestDriver.destroy({ where: { vehicleRequestId: requestId }, transaction });
   await db.vehicleRequestDriver.bulkCreate(
-    driverIds.map((driver_id) => ({ driver_id, vehicle_request_id: requestId })),
+    driverIds.map((driverId) => ({ driverId, vehicleRequestId: requestId })),
     { transaction },
   );
 };
@@ -282,17 +255,17 @@ const saveStops = async (requestId, stops, transaction) => {
     await stop.save({ transaction });
   }
 
-  await db.vehicleRequestDestination.destroy({ where: { vehicle_request_id: requestId }, transaction });
+  await db.vehicleRequestDestination.destroy({ where: { vehicleRequestId: requestId }, transaction });
   await db.vehicleRequestDestination.bulkCreate(
-    stops.map((stop, i) => ({ destination_id: stop.id, vehicle_request_id: requestId, stop_order: i + 1 })),
+    stops.map((stop, i) => ({ destinationId: stop.id, vehicleRequestId: requestId, stopOrder: i + 1 })),
     { transaction },
   );
 };
 
 const saveVehicles = async (requestId, vehicleIds, transaction) => {
-  await db.vehicleRequestVehicle.destroy({ where: { vehicle_request_id: requestId }, transaction });
+  await db.vehicleRequestVehicle.destroy({ where: { vehicleRequestId: requestId }, transaction });
   await db.vehicleRequestVehicle.bulkCreate(
-    vehicleIds.map((vehicle_id) => ({ vehicle_id, vehicle_request_id: requestId })),
+    vehicleIds.map((vehicleId) => ({ vehicleId, vehicleRequestId: requestId })),
     { transaction },
   );
 };
@@ -305,7 +278,7 @@ exports.findAll = async (req, res) => {
       order: listOrder,
     });
 
-    return res.send(requests.map(toResponse));
+    return res.send(requests.map(toRequestResponse));
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle requests.");
   }
@@ -314,12 +287,12 @@ exports.findAll = async (req, res) => {
 exports.findMine = async (req, res) => {
   try {
     const requests = await db.vehicleRequest.findAll({
-      where: { user_id: req.user.id },
+      where: { userId: req.user.id },
       include: requestInclude(),
       order: listOrder,
     });
 
-    return res.send(requests.map(toResponse));
+    return res.send(requests.map(toRequestResponse));
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle requests.");
   }
@@ -337,7 +310,7 @@ exports.findOne = async (req, res) => {
       return notFound(res, requestId);
     }
 
-    return res.send(toResponse(request));
+    return res.send(toRequestResponse(request));
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle request.");
   }
@@ -350,7 +323,7 @@ exports.create = async (req, res) => {
 
     const requestId = await db.sequelize.transaction(async (transaction) => {
       const request = await db.vehicleRequest.create(
-        { ...fields, user_id: req.user.id, estimated_miles: estimatedMiles, status: "pending" },
+        { ...fields, userId: req.user.id, estimatedMiles: estimatedMiles, status: "pending" },
         { transaction },
       );
       await saveDrivers(request.id, driverIds, transaction);
@@ -358,7 +331,7 @@ exports.create = async (req, res) => {
       return request.id;
     });
 
-    return res.status(201).send(toResponse(await loadRequest(requestId)));
+    return res.status(201).send(toRequestResponse(await loadRequest(requestId)));
   } catch (err) {
     return sendError(res, err, "Failed to create vehicle request.");
   }
@@ -401,11 +374,11 @@ exports.update = async (req, res) => {
 
     const current = currentValues(request);
     const next = editing ? await resolveFields(body, current) : null;
-    const areaId = next?.fields.area_id ?? request.area_id;
-    const currentVehicleIds = request.requestVehicles.map(({ vehicle_id }) => vehicle_id);
+    const areaId = next?.fields.areaId ?? request.areaId;
+    const currentVehicleIds = request.requestVehicles.map(({ vehicleId }) => vehicleId);
 
     // Vehicles belong to an area, so moving the request to another area unassigns them.
-    let vehicleIds = areaId === request.area_id ? currentVehicleIds : [];
+    let vehicleIds = areaId === request.areaId ? currentVehicleIds : [];
     if (assigning) {
       vehicleIds = await resolveVehicles(body.vehicles, areaId);
     }
@@ -416,22 +389,22 @@ exports.update = async (req, res) => {
     } else if (assigning && !sameIds(vehicleIds, currentVehicleIds)) {
       // FR-006
       status = vehicleIds.length ? "reserved" : request.status === "reserved" ? "awaiting_vehicle" : request.status;
-    } else if (next && request.approved_at && approvalFieldsChanged(current, next)) {
+    } else if (next && request.approvedAt && approvalFieldsChanged(current, next)) {
       status = "pending";
     }
 
     let approval = {};
     if (status === "pending") {
-      approval = { approver_id: null, approved_at: null };
-    } else if (APPROVED_STATUSES.includes(status) && !request.approved_at) {
-      approval = { approver_id: req.user.id, approved_at: new Date() };
+      approval = { approverId: null, approvedAt: null };
+    } else if (APPROVED_STATUSES.includes(status) && !request.approvedAt) {
+      approval = { approverId: req.user.id, approvedAt: new Date() };
     }
 
     const estimatedMiles =
-      next && !sameStops(current.destinations, next.stops) ? await estimateMiles(next.stops) : request.estimated_miles;
+      next && !sameStops(current.destinations, next.stops) ? await estimateMiles(next.stops) : request.estimatedMiles;
 
     await db.sequelize.transaction(async (transaction) => {
-      await request.update({ ...next?.fields, estimated_miles: estimatedMiles, status, ...approval }, { transaction });
+      await request.update({ ...next?.fields, estimatedMiles: estimatedMiles, status, ...approval }, { transaction });
 
       if (next) {
         await saveDrivers(request.id, next.driverIds, transaction);
@@ -443,7 +416,7 @@ exports.update = async (req, res) => {
       }
     });
 
-    return res.send(toResponse(await loadRequest(request.id)));
+    return res.send(toRequestResponse(await loadRequest(request.id)));
   } catch (err) {
     return sendError(res, err, "Failed to update vehicle request.");
   }
@@ -462,28 +435,28 @@ exports.vehicleOptions = async (req, res) => {
       return notFound(res, requestId);
     }
 
-    const assignedIds = request.requestVehicles.map(({ vehicle_id }) => vehicle_id);
+    const assignedIds = request.requestVehicles.map(({ vehicleId }) => vehicleId);
     const vehicles = await db.vehicle.findAll({
-      where: { areaId: request.area_id, [Op.or]: [{ status: "active" }, { id: assignedIds }] },
+      where: { areaId: request.areaId, [Op.or]: [{ status: "active" }, { id: assignedIds }] },
       include: [{ model: db.vehicleType, as: "vehicleType" }],
       order: [["universityId", "ASC"]],
     });
 
-    const start = new Date(request.start_at);
+    const start = new Date(request.startAt);
     const end = tripEnd(request);
     const overlapping = (
       await db.vehicleRequest.findAll({
         where: {
           id: { [Op.ne]: request.id },
           status: { [Op.notIn]: RELEASED_STATUSES },
-          start_at: { [Op.lt]: end },
-          end_at: { [Op.gte]: new Date(start.getTime() - DAY_MS) },
+          startAt: { [Op.lt]: end },
+          endAt: { [Op.gte]: new Date(start.getTime() - DAY_MS) },
         },
         include: [
           {
             model: db.vehicleRequestVehicle,
             as: "requestVehicles",
-            where: { vehicle_id: vehicles.map(({ id }) => id) },
+            where: { vehicleId: vehicles.map(({ id }) => id) },
           },
         ],
       })
@@ -495,9 +468,9 @@ exports.vehicleOptions = async (req, res) => {
     return res.send(
       vehicles.map((vehicle) => ({
         vehicle,
-        cdl_ok: !vehicle.vehicleType.requiresCdl || hasCdlDriver,
-        conflicting_request_ids: overlapping
-          .filter((other) => other.requestVehicles.some(({ vehicle_id }) => vehicle_id === vehicle.id))
+        cdlOk: !vehicle.vehicleType.requiresCdl || hasCdlDriver,
+        conflictingRequestIds: overlapping
+          .filter((other) => other.requestVehicles.some(({ vehicleId }) => vehicleId === vehicle.id))
           .map(({ id }) => id),
         ...service.get(vehicle.id),
       })),

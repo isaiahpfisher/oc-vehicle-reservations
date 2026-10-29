@@ -7,11 +7,11 @@ export default (sequelize, Sequelize) => {
         primaryKey: true,
         autoIncrement: true,
       },
-      vehicle_request_id: {
+      vehicleRequestId: {
         type: Sequelize.INTEGER,
         allowNull: false,
       },
-      vehicle_id: {
+      vehicleId: {
         type: Sequelize.INTEGER,
         allowNull: false,
       },

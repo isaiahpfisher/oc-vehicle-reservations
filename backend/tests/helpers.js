@@ -7,7 +7,6 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 let schemaReady = false;
 
 /**
- * STUB(feature-3): copied from feature/3-user-role-management. Remove this line when Feature 3 merges.
  * Start each test from an empty database.
  * The first call in a test file drops every table (not just current models, so stale tables from removed
  * features can't block FK drops) and recreates the schema. Later calls only truncate, which is several
@@ -57,7 +56,6 @@ export const registerUser = async (overrides = {}) => {
     firstName: data.firstName,
     lastName: data.lastName,
     email: data.email,
-    role: data.role || "student",
   });
 
   const token = jwt.sign({ userId: user.id, email: user.email }, authConfig.secret, { expiresIn: 86400 });
@@ -75,22 +73,13 @@ export const registerUser = async (overrides = {}) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: user.role,
+      roles: [],
       token,
     },
   };
 };
 
-/** Create a user, then set their stored role directly (there is no API to create an admin). */
-export const createUserWithRole = async (role, overrides = {}) => {
-  const response = await registerUser(overrides);
-  await db.user.update({ role }, { where: { id: response.body.userId } });
-  response.body.role = role;
-  return response;
-};
-
 /**
- * STUB(feature-3): copied from feature/3-user-role-management. Remove when Feature 3 merges.
  * Create a user holding `roles` (there is no API that grants the first admin).
  * Each role is a name (`"admin"`) or a row (`{ role: "area_admin", areaId }`).
  */
@@ -101,3 +90,6 @@ export const createUserWithRoles = async (roles, overrides = {}) => {
   response.body.roles = rows;
   return response;
 };
+
+/** Create an area row directly (Feature 2's API needs an admin session; see areas.test.js for that path). */
+export const createArea = (name) => db.area.create({ name });

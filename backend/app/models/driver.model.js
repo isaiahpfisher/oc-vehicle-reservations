@@ -1,4 +1,4 @@
-// STUB(feature-7): driver fields from ERD.md so Feature 8 can validate drivers. Replace with Feature 7's model when it merges.
+// INTERIM(feature-7): driver fields from ERD.md so Feature 8 can validate drivers. Replace with Feature 7's model when it merges.
 // `hasCdl` comes from Feature 8's US-8.8. It is not in ERD.md yet, so carry it over.
 export default (sequelize, Sequelize) => {
   const Driver = sequelize.define("driver", {

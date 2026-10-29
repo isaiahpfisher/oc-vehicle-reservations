@@ -1,4 +1,3 @@
-// STUB(feature-3): copied verbatim from feature/3-user-role-management. Remove this line when Feature 3 merges.
 export const ROLE_NAMES = ["admin", "area_admin", "maintenance"];
 
 export default (sequelize, Sequelize) => {

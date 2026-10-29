@@ -25,12 +25,12 @@ const requestServices = {
     return apiClient.get(`requests/${requestId}/vehicle-options`);
   },
 
-  // STUB(feature-7): move to driverServices.js when Drivers merges.
+  // INTERIM(feature-7): move to driverServices.js when Drivers merges.
   getDrivers() {
     return apiClient.get("drivers");
   },
 
-  // STUB(feature-6): move to destinationServices.js when Destinations merges.
+  // INTERIM(feature-6): move to destinationServices.js when Destinations merges.
   getDestinations() {
     return apiClient.get("destinations");
   },

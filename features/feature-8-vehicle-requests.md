@@ -121,6 +121,11 @@
 
 - Every trip starts and ends at OC's campus. It does not need to be specified as a destination.
 - Each request belongs to an area.
+- API payloads use camelCase field names (`areaId`, `startAt`, …) per `api-conventions.mdc`; table columns stay snake_case.
+- Home (route `home`, `/`) is **My Requests**. This replaces Feature 3's welcome page; Feature 3's nav tests were updated to match. The admin list lives at `/requests` and shows in the nav for admins and area admins.
+- On the request page, Trip details, Destinations, and Drivers each save on their own (`ui-style-system.mdc` → Detail page conventions). A new request is one form with one submit.
+- **INTERIM** (until Features 4–7 merge): minimal models for vehicle types (plus `requiresCdl`), vehicles, destinations, and drivers (plus `hasCdl`); read-only `GET /api/drivers` and `GET /api/destinations` for the request form; and sample rows added by `npm run seed`. Each piece is marked `INTERIM(feature-N)` and is removed when that feature merges.
+- **INTERIM** (until Features 9, 11, and 13 merge): every vehicle reports as in service with unknown miles until service (`backend/app/helpers/vehicleService.js`).
 
 ## Edge Cases
 
@@ -171,12 +176,12 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 ```json
 {
-  "area_id": 1,
+  "areaId": 1,
   "purpose": "Lorem ipsum dolor sit amet.",
-  "start_at": "2026-12-18",
-  "end_at": "2026-12-21",
-  "all_day": true,
-  "number_of_people": 9,
+  "startAt": "2026-12-18",
+  "endAt": "2026-12-21",
+  "allDay": true,
+  "numberOfPeople": 9,
   "drivers": [],
   "destinations": []
 }
@@ -187,15 +192,15 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 ```json
 {
   "id": 1,
-  "area_id": 1,
+  "areaId": 1,
   "purpose": "Lorem ipsum dolor sit amet.",
-  "start_at": "2026-12-18",
-  "end_at": "2026-12-21",
-  "all_day": true,
-  "number_of_people": 9,
+  "startAt": "2026-12-18",
+  "endAt": "2026-12-21",
+  "allDay": true,
+  "numberOfPeople": 9,
   "drivers": [],
   "destinations": [],
-  "estimated_miles": 0,
+  "estimatedMiles": 0,
   "status": "pending",
   "createdAt": "2026-07-02T12:00:00.000Z",
   "updatedAt": "2026-07-02T12:00:00.000Z"

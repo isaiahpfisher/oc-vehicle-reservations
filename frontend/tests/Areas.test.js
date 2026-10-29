@@ -8,7 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import areaServices from "../src/services/areaServices.js";
-import { vuetify } from "./testUtils.js";
+import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -24,13 +24,14 @@ vi.mock("../src/services/areaServices.js", () => ({
   },
 }));
 
+// Managing areas is admin-only since Feature 3 (US-3.6), so Feature 2 scenarios run as an admin.
 const signedInUser = {
   userId: 2,
-  email: "jane@example.com",
+  email: "jane@oc.edu",
   firstName: "Jane",
   lastName: "Doe",
-  role: "student",
-  token: "student-token",
+  roles: [{ id: 1, role: "admin", areaId: null, area: null }],
+  token: "admin-token",
 };
 
 const athletics = {
@@ -78,9 +79,12 @@ const mountAppAt = async (path) => {
   return wrapper;
 };
 
-const signIn = () => {
-  localStorage.setItem("user", JSON.stringify(signedInUser));
+const signIn = (roles = signedInUser.roles) => {
+  signInAs({ ...signedInUser, roles });
 };
+
+const navLabels = () =>
+  [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
 
 const namedButton = (text) =>
   [...document.body.querySelectorAll("button, a")].find((el) => el.textContent.trim() === text);
@@ -118,7 +122,7 @@ const editButton = (name) => {
 };
 
 beforeEach(async () => {
-  localStorage.clear();
+  signInAs(null);
   vi.resetAllMocks();
   apiClient.get.mockResolvedValue({ data: [] });
   areaServices.getAreas.mockResolvedValue({ data: [] });
@@ -470,6 +474,47 @@ describe("Feature 2 — Area Management", () => {
       await mountAppAt("/areas");
 
       expect(router.currentRoute.value.path).toBe("/login");
+    });
+  });
+});
+
+describe("Feature 3 — User Role Management", () => {
+  describe("US-3.6 — Roles are enforced", () => {
+    it("Admins can manage Areas", async () => {
+      signIn();
+      areaServices.getAreas.mockResolvedValue({ data: [athletics] });
+      await mountAppAt("/");
+
+      expect(navLabels()).toContain("Areas");
+
+      await router.push("/areas");
+      await settle();
+      expect(router.currentRoute.value.name).toBe("areas");
+      await waitFor(() => expect(namedButton("+ New Area")).toBeDefined());
+      await waitFor(() => expect(editButton("Athletics")).toBeTruthy());
+      expect(document.body.querySelector('[aria-label="Delete area"]')).toBeTruthy();
+    });
+
+    it("Non-admins cannot manage Areas", async () => {
+      const nonAdminRoles = [
+        [],
+        [{ id: 2, role: "maintenance", areaId: null, area: null }],
+        [{ id: 3, role: "area_admin", areaId: 1, area: { id: 1, name: "Athletics" } }],
+      ];
+
+      for (const roles of nonAdminRoles) {
+        signIn(roles);
+        await mountAppAt("/areas");
+
+        expect(router.currentRoute.value.name).toBe("home");
+        expect(navLabels()).not.toContain("Areas");
+        expect(namedButton("+ New Area")).toBeUndefined();
+
+        wrapper.unmount();
+        document.body.innerHTML = "";
+        await router.push("/login");
+        signInAs(null);
+      }
     });
   });
 });

@@ -1,4 +1,4 @@
-// STUB(feature-5): minimal vehicle so Feature 8 can assign vehicles. Replace with Feature 5's model when it merges.
+// INTERIM(feature-5): minimal vehicle so Feature 8 can assign vehicles. Replace with Feature 5's model when it merges.
 export default (sequelize, Sequelize) => {
   const Vehicle = sequelize.define("vehicle", {
     areaId: {

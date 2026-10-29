@@ -4,6 +4,7 @@ import db from "../models/index.js";
 import authConfig from "../config/auth.config.js";
 import logger from "../config/logger.js";
 import { verifyGoogleIdToken } from "../authorization/googleToken.js";
+import { rolesInclude, toRolesResponse } from "../helpers/users.js";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const isOcEmail = (email) => {
@@ -20,8 +21,7 @@ const buildAuthResponse = (user, token) => ({
   email: user.email,
   firstName: user.firstName,
   lastName: user.lastName,
-  // STUB(feature-3): Feature 3 returns roles via helpers/users.js toRolesResponse(); remove when it merges.
-  roles: (user.roles ?? []).map(({ id, role, areaId }) => ({ id, role, areaId })),
+  roles: toRolesResponse(user.roles),
   token,
 });
 
@@ -52,6 +52,13 @@ const createOrReuseSession = async (user) => {
   return token;
 };
 
+/** Load roles, reuse or create a session, and send the login payload. */
+const sendSignedIn = async (res, user) => {
+  await user.reload({ include: rolesInclude() });
+  const token = await createOrReuseSession(user);
+  return res.status(200).send(buildAuthResponse(user, token));
+};
+
 const exports = {};
 
 exports.login = async (req, res) => {
@@ -75,7 +82,6 @@ exports.login = async (req, res) => {
         firstName,
         lastName,
         email,
-        role: "student",
       });
     } else {
       user.firstName = firstName;
@@ -83,12 +89,31 @@ exports.login = async (req, res) => {
       await user.save();
     }
 
-    const token = await createOrReuseSession(user);
-    // STUB(feature-3): Feature 3 loads roles with the user; remove when it merges.
-    user.roles = await db.role.findAll({ where: { userId: user.id } });
-    return res.status(200).send(buildAuthResponse(user, token));
+    return await sendSignedIn(res, user);
   } catch (err) {
     logger.error(`Login failed: ${err.message}`);
+    return res.status(500).send({ message: "Login failed." });
+  }
+};
+
+/** Feature 3 FR-014: development-only sign-in as an existing user (no Google, shared password). */
+exports.devLogin = async (req, res) => {
+  if (!authConfig.devLogin.enabled()) {
+    return res.status(404).send({ message: "Not found." });
+  }
+
+  try {
+    const email = String(req.body?.email ?? "").trim().toLowerCase();
+    const user = email ? await db.user.findOne({ where: { email } }) : null;
+
+    if (!user || req.body?.password !== authConfig.devLogin.password()) {
+      return res.status(401).send({ message: "Bad Credentials." });
+    }
+
+    logger.warn(`Development sign-in as ${email}`);
+    return await sendSignedIn(res, user);
+  } catch (err) {
+    logger.error(`Dev login failed: ${err.message}`);
     return res.status(500).send({ message: "Login failed." });
   }
 };

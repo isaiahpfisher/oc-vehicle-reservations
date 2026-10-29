@@ -1,11 +1,14 @@
 <script setup>
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import requestServices from "../../services/requestServices.js";
 import { useRequest } from "../../composables/useRequest.js";
+import PageShell from "../../components/layout/PageShell.vue";
 import RequestsBrowser from "../../components/requests/RequestsBrowser.vue";
+import RequestViewToggle from "../../components/requests/RequestViewToggle.vue";
 
 const router = useRouter();
+const view = ref("table");
 
 const {
   data: requests,
@@ -20,9 +23,13 @@ onMounted(getRequests);
 </script>
 
 <template>
-  <v-container class="oc-page py-8">
+  <PageShell title="Requests">
+    <template #actions>
+      <RequestViewToggle v-model="view" />
+    </template>
+
     <RequestsBrowser
-      title="Requests"
+      v-model:view="view"
       :requests
       :loading
       :error
@@ -30,5 +37,5 @@ onMounted(getRequests);
       empty-title="No one has any submitted requests."
       @open="openRequest"
     />
-  </v-container>
+  </PageShell>
 </template>

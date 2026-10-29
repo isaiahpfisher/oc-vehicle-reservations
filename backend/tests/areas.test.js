@@ -5,7 +5,7 @@
 import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
-import { syncTestDatabase, registerUser } from "./helpers.js";
+import { syncTestDatabase, createUserWithRoles } from "./helpers.js";
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 const tooLong = "a".repeat(256);
@@ -15,8 +15,9 @@ const areaBody = (overrides = {}) => ({
   ...overrides,
 });
 
-const signIn = async () => {
-  const { body } = await registerUser();
+// Managing areas is admin-only since Feature 3 (US-3.6), so Feature 2 scenarios run as an admin.
+const signIn = async (roles = ["admin"], overrides = {}) => {
+  const { body } = await createUserWithRoles(roles, overrides);
   return bearer(body.token);
 };
 
@@ -314,6 +315,67 @@ describe("Feature 2 — Area Management", () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ message: "Unauthorized! No token provided." });
+    });
+  });
+});
+
+describe("Feature 3 — User Role Management API", () => {
+  describe("US-3.6 — Roles are enforced", () => {
+    it("Admins can manage Areas", async () => {
+      const admin = await signIn();
+
+      const created = await createArea(admin);
+      expect(created.status).toBe(201);
+
+      const updated = await request(app)
+        .put(`/api/areas/${created.body.id}`)
+        .set(admin)
+        .send({ name: "Athletics A" });
+      expect(updated.status).toBe(200);
+      expect(updated.body.name).toBe("Athletics A");
+
+      const removed = await request(app).delete(`/api/areas/${created.body.id}`).set(admin);
+      expect(removed.status).toBe(200);
+      expect(await db.area.count()).toBe(0);
+    });
+
+    it("Non-admins cannot manage Areas", async () => {
+      const admin = await signIn();
+      const { body: area } = await createArea(admin);
+      const nonAdmins = [
+        await signIn([], { email: "requester@oc.edu" }),
+        await signIn(["maintenance"], { email: "maintenance@oc.edu" }),
+        await signIn([{ role: "area_admin", areaId: area.id }], { email: "areaadmin@oc.edu" }),
+      ];
+
+      for (const headers of nonAdmins) {
+        const attempts = await Promise.all([
+          createArea(headers, { name: "Music" }),
+          request(app).put(`/api/areas/${area.id}`).set(headers).send({ name: "Renamed" }),
+          request(app).delete(`/api/areas/${area.id}`).set(headers),
+        ]);
+        for (const response of attempts) {
+          expect(response.status).toBe(403);
+          expect(response.body).toEqual({ message: "Admin role required." });
+        }
+
+        // Listing areas is still open to every signed-in user.
+        expect((await request(app).get("/api/areas").set(headers)).status).toBe(200);
+        expect((await request(app).get(`/api/areas/${area.id}`).set(headers)).status).toBe(200);
+      }
+
+      expect((await db.area.findAll()).map(({ name }) => name)).toEqual(["Athletics"]);
+    });
+
+    it("Deleting an area removes its area admin roles", async () => {
+      const admin = await signIn();
+      const { body: area } = await createArea(admin);
+      await createUserWithRoles([{ role: "area_admin", areaId: area.id }, "maintenance"], { email: "areaadmin@oc.edu" });
+
+      await request(app).delete(`/api/areas/${area.id}`).set(admin);
+
+      expect(await db.role.count({ where: { role: "area_admin" } })).toBe(0);
+      expect(await db.role.count({ where: { role: "maintenance" } })).toBe(1);
     });
   });
 });

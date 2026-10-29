@@ -1,6 +1,6 @@
 import axios from "axios";
-import Utils from "../config/utils.js";
 import router from "../router.js";
+import { useAuthStore } from "../stores/auth.js";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.DEV ? "http://localhost:3200/api/" : "/course-t1/",
@@ -8,10 +8,10 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const user = Utils.getStore("user");
+  const { token } = useAuthStore();
 
-  if (user?.token) {
-    config.headers.Authorization = `Bearer ${user.token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
 
   if (config.data instanceof FormData) {
@@ -27,7 +27,7 @@ apiClient.interceptors.response.use(
     const message = error.response?.data?.message || "";
 
     if (error.response?.status === 401 || /Unauthorized/i.test(message)) {
-      Utils.removeItem("user");
+      useAuthStore().signOut();
       if (router.hasRoute("login")) {
         router.push({ name: "login" });
       }

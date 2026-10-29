@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import ListState from "../common/ListState.vue";
 import RequestStatusChip from "./RequestStatusChip.vue";
 import {
@@ -15,10 +15,12 @@ import {
   toDateInput,
   tripBounds,
   vehicleLabel,
-} from "../../utils/requests.js";
+} from "../../models/requests.js";
+
+/** "table", "week", or "month" — owned by the page so RequestViewToggle can sit in the PageShell header. */
+const view = defineModel("view", { type: String, default: "table" });
 
 const props = defineProps({
-  title: { type: String, required: true },
   requests: { type: Array, default: () => [] },
   loading: Boolean,
   error: { type: String, default: "" },
@@ -32,7 +34,6 @@ const emit = defineEmits(["open"]);
 
 const blankFilters = () => ({ area: null, destination: null, driver: null, vehicle: null, from: "", to: "" });
 
-const view = ref("table");
 const search = ref("");
 const statuses = ref([]);
 const needsAction = ref(false);
@@ -76,7 +77,7 @@ const visible = computed(() => {
       (!term || searchText(request).includes(term)) &&
       (!statuses.value.length || statuses.value.includes(request.status)) &&
       (!needsAction.value || NEEDS_ACTION_STATUSES.includes(request.status)) &&
-      (!area || request.area_id === area) &&
+      (!area || request.areaId === area) &&
       (!destination || request.destinations.some(({ id }) => id === destination)) &&
       (!driver || request.drivers.some(({ id }) => id === driver)) &&
       (!vehicle || request.vehicles.some(({ id }) => id === vehicle)) &&
@@ -84,17 +85,22 @@ const visible = computed(() => {
   );
 });
 
+// Admins see who asked (with the area underneath); requesters see the area. Vehicles sit under the head count.
 const headers = computed(() => [
-  { title: "Trip", key: "purpose", minWidth: "260px" },
+  { title: "Trip", key: "purpose", minWidth: "220px" },
   { title: "Dates", key: "dates", value: (request) => tripBounds(request)[0].getTime() },
-  { title: "Area", key: "area", value: (request) => request.area?.name ?? "" },
-  ...(props.admin ? [{ title: "Requester", key: "requester", value: (request) => personName(request.user) }] : []),
-  { title: "People", key: "number_of_people", align: "end" },
-  { title: "Vehicles", key: "vehicles", sortable: false },
+  props.admin
+    ? { title: "Requester", key: "requester", value: (request) => personName(request.user) }
+    : { title: "Area", key: "area", value: (request) => request.area?.name ?? "" },
+  { title: "People", key: "numberOfPeople" },
   { title: "Status", key: "status" },
 ]);
 
 const sortBy = ref([{ key: "dates", order: "desc" }]);
+const page = ref(1);
+
+// ui-style-system.mdc: changing search or filters returns to page 1.
+watch([search, statuses, needsAction, filters], () => (page.value = 1), { deep: true });
 
 const focus = ref(toDateInput(new Date()));
 const events = computed(() => visible.value.map(calendarEvent));
@@ -113,16 +119,6 @@ const moveCalendar = (direction) => {
 
 <template>
   <div>
-    <header class="d-flex flex-wrap align-center ga-4 mb-6">
-      <h1 class="text-headline-large font-weight-bold my-0 mr-auto">{{ props.title }}</h1>
-      <v-btn-toggle v-model="view" mandatory density="compact" variant="outlined" color="primary" divided>
-        <v-btn value="table" prepend-icon="mdi-table" class="oc-cta">Table</v-btn>
-        <v-btn value="week" prepend-icon="mdi-calendar-week" class="oc-cta">Week</v-btn>
-        <v-btn value="month" prepend-icon="mdi-calendar-month" class="oc-cta">Month</v-btn>
-      </v-btn-toggle>
-      <slot name="actions" />
-    </header>
-
     <div class="d-flex flex-wrap align-center ga-3 mb-4">
       <v-text-field
         v-model="search"
@@ -274,6 +270,8 @@ const moveCalendar = (direction) => {
         <v-card v-else border flat class="browser-card">
           <v-data-table
             v-model:sort-by="sortBy"
+            v-model:page="page"
+            :items-per-page="10"
             :headers
             :items="visible"
             item-value="id"
@@ -284,21 +282,31 @@ const moveCalendar = (direction) => {
           >
             <template #item.purpose="{ item }">
               <div class="py-3">
-                <div class="font-weight-bold">{{ item.purpose }}</div>
-                <div class="text-body-2 text-medium-emphasis">{{ routeSummary(item) }}</div>
+                <router-link
+                  :to="{ name: 'request', params: { requestId: item.id } }"
+                  class="trip-link d-block text-truncate font-weight-bold"
+                  :title="item.purpose"
+                  @click.stop
+                >
+                  {{ item.purpose }}
+                </router-link>
+                <div class="trip-route d-block text-truncate text-body-medium text-medium-emphasis" :title="routeSummary(item)">
+                  {{ routeSummary(item) }}
+                </div>
               </div>
             </template>
             <template #item.dates="{ item }">
               <span class="text-no-wrap">{{ formatTripDates(item) }}</span>
             </template>
             <template #item.requester="{ item }">
-              <span class="text-no-wrap">{{ personName(item.user) }}</span>
+              <div class="text-no-wrap">{{ personName(item.user) }}</div>
+              <div class="text-no-wrap text-body-medium text-medium-emphasis">{{ item.area?.name }}</div>
             </template>
-            <template #item.vehicles="{ item }">
-              <span v-if="item.vehicles.length" class="text-no-wrap">
-                {{ item.vehicles.map((vehicle) => vehicle.universityId).join(", ") }}
-              </span>
-              <span v-else class="text-disabled">—</span>
+            <template #item.numberOfPeople="{ item }">
+              <div class="text-no-wrap">{{ item.numberOfPeople }}</div>
+              <div class="text-no-wrap text-body-medium" :class="item.vehicles.length ? 'text-medium-emphasis' : 'text-disabled'">
+                {{ item.vehicles.length ? item.vehicles.map((vehicle) => vehicle.universityId).join(", ") : "No vehicle" }}
+              </div>
             </template>
             <template #item.status="{ item }">
               <RequestStatusChip :status="item.status" class="text-no-wrap" />
@@ -364,6 +372,21 @@ const moveCalendar = (direction) => {
 
 .browser-table :deep(tbody tr) {
   cursor: pointer;
+}
+
+.trip-link,
+.trip-route {
+  max-width: 280px;
+}
+
+.trip-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.trip-link:hover {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
 }
 
 .browser-table :deep(th) {

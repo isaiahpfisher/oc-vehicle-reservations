@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from "vue";
-import { statusMeta } from "../../utils/requests.js";
+import { statusMeta } from "../../models/requests.js";
 
 const props = defineProps({
   status: { type: String, required: true },

@@ -1,6 +1,5 @@
 export const REQUEST_STATUSES = ["pending", "awaiting_vehicle", "reserved", "returned", "cancelled", "denied"];
 
-// Attribute names are snake_case to match the Feature 8 API payloads.
 export default (sequelize, Sequelize) => {
   const VehicleRequest = sequelize.define("vehicleRequest", {
     id: {
@@ -8,11 +7,11 @@ export default (sequelize, Sequelize) => {
       primaryKey: true,
       autoIncrement: true,
     },
-    user_id: {
+    userId: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
-    area_id: {
+    areaId: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
@@ -20,33 +19,33 @@ export default (sequelize, Sequelize) => {
       type: Sequelize.TEXT,
       allowNull: false,
     },
-    start_at: {
+    startAt: {
       type: Sequelize.DATE,
       allowNull: false,
     },
-    end_at: {
+    endAt: {
       type: Sequelize.DATE,
       allowNull: false,
     },
-    all_day: {
+    allDay: {
       type: Sequelize.BOOLEAN,
       allowNull: false,
       defaultValue: false,
     },
-    number_of_people: {
+    numberOfPeople: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
-    estimated_miles: {
+    estimatedMiles: {
       type: Sequelize.INTEGER,
       allowNull: false,
       defaultValue: 0,
     },
-    approver_id: {
+    approverId: {
       type: Sequelize.INTEGER,
       allowNull: true,
     },
-    approved_at: {
+    approvedAt: {
       type: Sequelize.DATE,
       allowNull: true,
     },

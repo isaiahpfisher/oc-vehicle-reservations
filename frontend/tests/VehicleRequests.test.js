@@ -2,14 +2,14 @@
  * Feature 8 — Vehicle Request Management
  * Spec: features/feature-8-vehicle-requests.md
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import App from "../src/App.vue";
 import router from "../src/router.js";
 import areaServices from "../src/services/areaServices.js";
 import requestServices from "../src/services/requestServices.js";
-import { toDateInput } from "../src/utils/requests.js";
-import { vuetify } from "./testUtils.js";
+import { toDateInput } from "../src/models/requests.js";
+import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -51,17 +51,17 @@ const day = (offset) => {
 
 const tripRequest = (overrides = {}) => ({
   id: 1,
-  user_id: requester.userId,
-  area_id: athletics.id,
+  userId: requester.userId,
+  areaId: athletics.id,
   purpose: "Away game",
-  start_at: day(0),
-  end_at: day(0),
-  all_day: true,
-  number_of_people: 9,
-  estimated_miles: 210,
+  startAt: day(0),
+  endAt: day(0),
+  allDay: true,
+  numberOfPeople: 9,
+  estimatedMiles: 210,
   status: "pending",
-  approver_id: null,
-  approved_at: null,
+  approverId: null,
+  approvedAt: null,
   createdAt: new Date().toISOString(),
   area: athletics,
   user: { id: requester.userId, firstName: "Jane", lastName: "Doe", email: requester.email },
@@ -75,10 +75,10 @@ const tripRequest = (overrides = {}) => ({
 const farTrip = tripRequest({
   id: 2,
   purpose: "Spring retreat",
-  start_at: day(400),
-  end_at: day(401),
+  startAt: day(400),
+  endAt: day(401),
   status: "reserved",
-  area_id: music.id,
+  areaId: music.id,
   area: music,
   destinations: [okc],
   drivers: [sam],
@@ -108,7 +108,7 @@ const waitFor = async (assertion, timeout = 2000) => {
 let wrapper;
 
 const mountAppAt = async (path, user = requester) => {
-  localStorage.setItem("user", JSON.stringify(user));
+  signInAs(user);
   await router.push(path);
   await router.isReady();
   wrapper = mount(App, { attachTo: document.body, global: { plugins: [vuetify, router] } });
@@ -140,10 +140,7 @@ const stopNames = () =>
 const fillBasics = async () => {
   field("Area", "VSelect").vm.$emit("update:modelValue", athletics.id);
   await field("Number of people").setValue("9");
-  await wrapper
-    .findAllComponents({ name: "VTextarea" })
-    .find((component) => component.attributes("aria-label") === "Purpose" || component.props("placeholder") === "What's this trip for?")
-    .setValue("Away game");
+  await field("Purpose", "VTextarea").setValue("Away game");
   await field("Start date").setValue("2030-12-18");
   await field("End date").setValue("2030-12-21");
   await settle();
@@ -162,8 +159,13 @@ const selectDrivers = async (ids) => {
   await settle();
 };
 
+// The request views are lazy-loaded routes; compile them once up front so no single test pays for it.
+beforeAll(async () => {
+  await Promise.all([import("../src/views/Request.vue"), import("../src/views/Admin/Requests.vue")]);
+});
+
 beforeEach(async () => {
-  localStorage.clear();
+  signInAs(null);
   vi.resetAllMocks();
   areaServices.getAreas.mockResolvedValue({ data: [athletics, music] });
   requestServices.getDrivers.mockResolvedValue({ data: [dana, sam] });
@@ -183,7 +185,7 @@ afterEach(() => {
 describe("Feature 8 — Vehicle Request Management", () => {
   describe("US-8.1 — Create vehicle request", () => {
     it("Authenticated user creates a request", async () => {
-      const created = tripRequest({ id: 7, start_at: "2030-12-18", end_at: "2030-12-21" });
+      const created = tripRequest({ id: 7, startAt: "2030-12-18", endAt: "2030-12-21" });
       requestServices.createRequest.mockResolvedValue({ status: 201, data: created });
       requestServices.getRequest.mockResolvedValue({ data: created });
       await mountAppAt("/");
@@ -197,12 +199,12 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       await waitFor(() => expect(requestServices.createRequest).toHaveBeenCalledTimes(1));
       expect(requestServices.createRequest).toHaveBeenCalledWith({
-        area_id: athletics.id,
+        areaId: athletics.id,
         purpose: "Away game",
-        number_of_people: 9,
-        all_day: true,
-        start_at: "2030-12-18",
-        end_at: "2030-12-21",
+        numberOfPeople: 9,
+        allDay: true,
+        startAt: "2030-12-18",
+        endAt: "2030-12-21",
         drivers: [dana.id],
         destinations: [{ id: tulsa.id }],
       });
@@ -419,7 +421,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       await mountAppAt("/requests/1");
 
       await waitFor(() => expect(byTest("locked")).not.toBeNull());
-      expect(byTest("save-request")).toBeNull();
+      expect(document.body.querySelector('[data-test^="save-"]')).toBeNull();
       expect(byTest("cancel-request")).not.toBeNull();
     });
   });
@@ -427,27 +429,29 @@ describe("Feature 8 — Vehicle Request Management", () => {
   describe("US-8.4 — List vehicle requests for admins", () => {
     it("Admin sees all requests", async () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
-      await mountAppAt("/admin/requests", admin);
+      await mountAppAt("/requests", admin);
 
       await waitFor(() => expect(rowTexts()).toHaveLength(2));
       expect(document.body.textContent).toContain("Requests");
       expect(rowTexts().join()).toContain("Athletics");
       expect(rowTexts().join()).toContain("Music");
       expect(rowTexts().join()).toContain("Jane Doe");
+      const navLabels = [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
+      expect(navLabels).toEqual(expect.arrayContaining(["My Requests", "Requests"]));
       for (const view of ["Table", "Week", "Month"]) {
         expect(named(view)).toBeDefined();
       }
     });
 
     it("keeps requesters out of the admin requests view", async () => {
-      await mountAppAt("/admin/requests");
+      await mountAppAt("/requests");
 
       await waitFor(() => expect(router.currentRoute.value.name).toBe("home"));
       expect(requestServices.getRequests).not.toHaveBeenCalled();
     });
 
     it("shows the admin empty state", async () => {
-      await mountAppAt("/admin/requests", admin);
+      await mountAppAt("/requests", admin);
 
       await waitFor(() => expect(document.body.textContent).toContain("No one has any submitted requests."));
     });
@@ -456,7 +460,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
   describe("US-8.5 — Search and filter vehicle requests", () => {
     it("Admin searches and filters requests", async () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
-      await mountAppAt("/admin/requests", admin);
+      await mountAppAt("/requests", admin);
       await waitFor(() => expect(rowTexts()).toHaveLength(2));
 
       byTest("toggle-filters").click();
@@ -478,7 +482,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const awaiting = tripRequest({ id: 3, purpose: "Choir tour", status: "awaiting_vehicle" });
       const cancelled = tripRequest({ id: 4, purpose: "Old trip", status: "cancelled" });
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), awaiting, cancelled, farTrip] });
-      await mountAppAt("/admin/requests", admin);
+      await mountAppAt("/requests", admin);
       await waitFor(() => expect(rowTexts()).toHaveLength(4));
 
       byTest("needs-action").click();
@@ -495,7 +499,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin views the details of a request", async () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest()] });
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
-      await mountAppAt("/admin/requests", admin);
+      await mountAppAt("/requests", admin);
       await waitFor(() => expect(rowTexts()).toHaveLength(1));
 
       document.body.querySelector(".v-data-table tbody tr").click();
@@ -512,7 +516,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin changes a request's status", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
       requestServices.updateRequest.mockResolvedValue({
-        data: tripRequest({ status: "awaiting_vehicle", approved_at: new Date().toISOString(), approver: admin }),
+        data: tripRequest({ status: "awaiting_vehicle", approvedAt: new Date().toISOString(), approver: admin }),
       });
       await mountAppAt("/requests/1", admin);
 
@@ -525,7 +529,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
     it("warns admins that editing an approved request resets it to pending", async () => {
       requestServices.getRequest.mockResolvedValue({
-        data: tripRequest({ status: "awaiting_vehicle", approved_at: new Date().toISOString() }),
+        data: tripRequest({ status: "awaiting_vehicle", approvedAt: new Date().toISOString() }),
       });
       await mountAppAt("/requests/1", admin);
       await waitFor(() => expect(field("Number of people")).toBeDefined());
@@ -541,7 +545,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin assigns vehicles to a request", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest({ status: "awaiting_vehicle" }) });
       requestServices.getVehicleOptions.mockResolvedValue({
-        data: [{ vehicle: van, cdl_ok: true, conflicting_request_ids: [], out_of_service: false, miles_until_service: null }],
+        data: [{ vehicle: van, cdlOk: true, conflictingRequestIds: [], outOfService: false, milesUntilService: null }],
       });
       requestServices.updateRequest.mockResolvedValue({ data: tripRequest({ status: "reserved", vehicles: [van] }) });
       await mountAppAt("/requests/1", admin);
@@ -572,13 +576,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
       requestServices.getVehicleOptions.mockResolvedValue({
         data: [
-          { vehicle: van, cdl_ok: true, conflicting_request_ids: [4], out_of_service: false, miles_until_service: null },
+          { vehicle: van, cdlOk: true, conflictingRequestIds: [4], outOfService: false, milesUntilService: null },
           {
             vehicle: { ...van, id: 6, universityId: "BUS-1", vehicleType: { name: "Bus" } },
-            cdl_ok: false,
-            conflicting_request_ids: [],
-            out_of_service: false,
-            miles_until_service: null,
+            cdlOk: false,
+            conflictingRequestIds: [],
+            outOfService: false,
+            milesUntilService: null,
           },
         ],
       });
@@ -601,7 +605,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
   describe("US-8.9 — View estimated mileage of trip", () => {
     it("Estimated mileage is added when a request is created", async () => {
-      requestServices.getRequest.mockResolvedValue({ data: tripRequest({ estimated_miles: 1210 }) });
+      requestServices.getRequest.mockResolvedValue({ data: tripRequest({ estimatedMiles: 1210 }) });
       await mountAppAt("/requests/1");
 
       await waitFor(() => expect(byTest("estimated-miles")?.textContent).toContain("1,210 mi"));
@@ -609,12 +613,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
     it("Estimated mileage updates when destinations change", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
-      requestServices.updateRequest.mockResolvedValue({ data: tripRequest({ destinations: [okc, tulsa], estimated_miles: 230 }) });
+      requestServices.updateRequest.mockResolvedValue({ data: tripRequest({ destinations: [okc, tulsa], estimatedMiles: 230 }) });
       await mountAppAt("/requests/1");
       await waitFor(() => expect(byTest("estimated-miles")?.textContent).toContain("210 mi"));
 
       await addSavedDestination(okc);
-      await click("Save changes");
+      byTest("save-stops").click();
+      await settle();
 
       expect(requestServices.updateRequest.mock.calls[0][1].destinations).toEqual([{ id: tulsa.id }, { id: okc.id }]);
       await waitFor(() => expect(byTest("estimated-miles").textContent).toContain("230 mi"));

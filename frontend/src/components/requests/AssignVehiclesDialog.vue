@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import requestServices from "../../services/requestServices.js";
 import { useRequest } from "../../composables/useRequest.js";
 import Utils from "../../config/utils.js";
-import { capacityCheck, vehicleLabel } from "../../utils/requests.js";
+import { capacityCheck, vehicleLabel } from "../../models/requests.js";
 
 const open = defineModel({ type: Boolean, default: false });
 
@@ -35,11 +35,11 @@ watch(open, (isOpen) => {
 });
 
 const serviceDue = (option) =>
-  option.miles_until_service !== null && option.miles_until_service < props.request.estimated_miles;
+  option.milesUntilService !== null && option.milesUntilService < props.request.estimatedMiles;
 
 const isHidden = (option) =>
-  (onlyShow.value.includes("available") && (option.conflicting_request_ids.length > 0 || option.out_of_service)) ||
-  (onlyShow.value.includes("cdl") && !option.cdl_ok) ||
+  (onlyShow.value.includes("available") && (option.conflictingRequestIds.length > 0 || option.outOfService)) ||
+  (onlyShow.value.includes("cdl") && !option.cdlOk) ||
   (onlyShow.value.includes("service") && serviceDue(option));
 
 // Selected vehicles stay listed even when a filter would hide them.
@@ -49,7 +49,7 @@ const hiddenCount = computed(() => options.value.length - shown.value.length);
 const capacity = computed(() =>
   capacityCheck(
     options.value.filter((option) => selected.value.includes(option.vehicle.id)).map((option) => option.vehicle),
-    props.request.number_of_people,
+    props.request.numberOfPeople,
   ),
 );
 
@@ -78,12 +78,12 @@ const submit = async () => {
       <v-card-item class="px-6 pt-5">
         <v-card-title class="font-weight-bold">Assign vehicles</v-card-title>
         <v-card-subtitle>
-          {{ request.number_of_people }} people · about {{ request.estimated_miles }} miles · {{ request.area?.name }}
+          {{ request.numberOfPeople }} people · about {{ request.estimatedMiles }} miles · {{ request.area?.name }}
         </v-card-subtitle>
       </v-card-item>
 
       <div class="d-flex flex-wrap align-center ga-2 px-6 pb-3">
-        <span class="text-body-2 text-medium-emphasis mr-1">Show only</span>
+        <span class="text-body-medium text-medium-emphasis mr-1">Show only</span>
         <v-chip-group v-model="onlyShow" multiple filter column selected-class="text-primary" class="py-0">
           <v-chip value="available" variant="outlined">Available on these dates</v-chip>
           <v-chip value="cdl" variant="outlined">Drivable by these drivers</v-chip>
@@ -124,22 +124,22 @@ const submit = async () => {
             </v-list-item-title>
             <v-list-item-subtitle>
               {{ option.vehicle.vehicleType?.name }} · {{ option.vehicle.passengerCapacity }} seats
-              <template v-if="option.miles_until_service !== null">
-                · service in {{ option.miles_until_service }} mi
+              <template v-if="option.milesUntilService !== null">
+                · service in {{ option.milesUntilService }} mi
               </template>
             </v-list-item-subtitle>
             <template #append>
               <div class="d-flex flex-wrap justify-end ga-1">
-                <v-chip v-if="option.conflicting_request_ids.length" size="small" color="error" variant="tonal" label>
-                  Reserved · #{{ option.conflicting_request_ids.join(", #") }}
+                <v-chip v-if="option.conflictingRequestIds.length" size="small" color="error" variant="tonal" label>
+                  Reserved · #{{ option.conflictingRequestIds.join(", #") }}
                 </v-chip>
-                <v-chip v-if="option.out_of_service" size="small" color="error" variant="tonal" label>Out of service</v-chip>
-                <v-chip v-if="!option.cdl_ok" size="small" color="warning" variant="tonal" label>Needs CDL driver</v-chip>
+                <v-chip v-if="option.outOfService" size="small" color="error" variant="tonal" label>Out of service</v-chip>
+                <v-chip v-if="!option.cdlOk" size="small" color="warning" variant="tonal" label>Needs CDL driver</v-chip>
                 <v-chip v-if="serviceDue(option)" size="small" color="warning" variant="tonal" label>Service due</v-chip>
               </div>
             </template>
           </v-list-item>
-          <div v-if="hiddenCount" class="d-flex align-center ga-2 px-6 py-2 text-body-2 text-medium-emphasis">
+          <div v-if="hiddenCount" class="d-flex align-center ga-2 px-6 py-2 text-body-medium text-medium-emphasis">
             {{ hiddenCount }} hidden by filters
             <v-btn variant="text" color="primary" size="small" class="oc-cta" @click="onlyShow = []">Show all</v-btn>
           </div>
@@ -153,14 +153,14 @@ const submit = async () => {
       <v-card-actions class="flex-wrap px-6 py-4 ga-2">
         <div
           v-if="capacity.short"
-          class="assign-summary d-flex align-center ga-2 text-body-2 text-warning font-weight-medium"
+          class="assign-summary d-flex align-center ga-2 text-body-medium text-warning font-weight-medium"
           data-test="capacity-warning"
         >
           <v-icon icon="mdi-alert-outline" size="18" />
-          {{ capacity.seats }} seats selected for {{ request.number_of_people }} people. You can still save.
+          {{ capacity.seats }} seats selected for {{ request.numberOfPeople }} people. You can still save.
         </div>
-        <div v-else class="assign-summary text-body-2 text-medium-emphasis">
-          {{ selected.length }} selected · {{ capacity.seats }} seats for {{ request.number_of_people }} people
+        <div v-else class="assign-summary text-body-medium text-medium-emphasis">
+          {{ selected.length }} selected · {{ capacity.seats }} seats for {{ request.numberOfPeople }} people
         </div>
         <v-spacer />
         <v-btn color="secondary" variant="text" :disabled="saving" @click="open = false">Cancel</v-btn>

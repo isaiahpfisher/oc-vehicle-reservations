@@ -5,15 +5,15 @@ export default (sequelize, Sequelize) => {
       primaryKey: true,
       autoIncrement: true,
     },
-    destination_id: {
+    destinationId: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
-    vehicle_request_id: {
+    vehicleRequestId: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
-    stop_order: {
+    stopOrder: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },

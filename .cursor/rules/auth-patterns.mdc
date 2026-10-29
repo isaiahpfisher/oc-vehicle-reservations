@@ -8,30 +8,39 @@ globs: "frontend/src/**/*, backend/app/controllers/auth.*, backend/app/models/se
 *   Fields: `token`, `email`, `expirationDate`, `userId` (FK to users).
 *   Token stored server-side; client sends it as Bearer header on each request.
 *   Session TTL: 24 hours (`expiresIn: 86400` on JWT; matching `expirationDate` on row).
-*   On login, reuse non-expired session for same email before issuing a new token.
+*   On login, reuse non-expired session for same user before issuing a new token.
 
 ## Login Response Payload
-Return flat JSON (not wrapped):
+`POST /login` and `POST /dev-login` return flat JSON (not wrapped):
 ```json
 {
   "userId": 1,
-  "username": "jdoe",
-  "email": "jdoe@example.com",
-  "fName": "Jane",
-  "lName": "Doe",
-  "role": "worker",
+  "email": "jane.doe@eagles.oc.edu",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "roles": [{ "id": 3, "role": "area_admin", "areaId": 2, "area": { "id": 2, "name": "Athletics" } }],
   "token": "<jwt>"
 }
 ```
+There is no registration and no password sign-in: users come from Google sign-in only (Feature 3 FR-013). See `security.mdc`.
 
 ## Frontend Auth State
-*   Store full login response in `localStorage` key `user` via `Utils.setStore("user", res.data)`.
-*   `authServices.js`: `loginUser`, `logoutUser` methods calling `apiClient.post` (see `frontend-services.mdc`).
-*   Logout clears server session, then `Utils.removeItem("user")`, then route to login.
-*   `router.beforeEach`: if no `user` in store and route is not login → redirect to login.
+*   The signed-in user lives in the Pinia auth store, `useAuthStore()` (`stores/auth.js`). It is the only code that touches `localStorage`: it loads key `user` at startup and writes it back on every change, so sessions survive reloads.
+*   Change it only through its actions: `signIn(res.data)` with the full login response, `signOut()`, `setRoles(roles)`. Read `user`, `isSignedIn`, `token`, `roles`. Never read or write `localStorage` `user` directly.
+*   `authServices.js`: `loginUser`, `devLogin`, `logoutUser` methods calling `apiClient.post` (see `frontend-services.mdc`).
+*   Logout clears the server session, then `useAuthStore().signOut()`, then routes to login.
+*   `router.beforeEach`: routes with `meta.public` (login) are open without a session and send a signed-in user home; any other route without a session → login; then `meta.roles` via `canOpen()`.
 *   Axios token attachment and 401 redirect: `frontend-services.mdc`.
+*   Tests set the user with `signInAs(user)` / `signInAs(null)` from `tests/testUtils.js`, not `localStorage`.
 
-## Registration (when spec requires)
-*   Hash password server-side before `User.create`.
-*   Validate required fields in controller; return `400` with `{ message }`.
-*   Mirror the same field rules in the Vue form with Vuetify validation rules.
+## Role-aware UI
+*   Role checks go through `useRoles()`:
+    *   `hasAnyRole(roles)` — **access** decisions (route guards, nav links, action buttons). Admins always pass.
+    *   `hasRole(role, areaId?)` — **display** only (chips, labels). Admins do not implicitly hold other roles here.
+    *   `areaAdminAreaIds` — scope area-admin screens to the user's areas.
+*   Never compare role strings in components (`user.roles.some(r => r.role === "admin")`); add a helper to `useRoles` if one is missing.
+*   Roles refresh once per page load (`GET /api/users/:id` in the first `router.beforeEach`, Feature 3 FR-009). The UI can be stale until reload; the API is what enforces access, so every frontend check has a matching backend guard.
+*   An action a user cannot take on themselves (removing their own admin role, deleting their own account) stays visible but **disabled**, with the reason shown — not hidden.
+
+## Development-only UI
+*   Gate developer tools in the UI on `import.meta.env.DEV` (production builds never render them) **and** back them with a server switch that is off by default (e.g. `DEV_LOGIN=true`, refused when `NODE_ENV=production`).

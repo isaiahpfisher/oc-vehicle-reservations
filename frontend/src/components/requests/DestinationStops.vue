@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, ref } from "vue";
 import CustomDestinationDialog from "./CustomDestinationDialog.vue";
-import { CAMPUS_NAME, destinationAddress, destinationPlace, repeatsInARow } from "../../utils/requests.js";
+import { CAMPUS_NAME, destinationAddress, destinationPlace, repeatsInARow } from "../../models/requests.js";
 
 /** Ordered stops: saved destinations (with `id`) or new ones (address fields only). Each carries a list `key`. */
 const stops = defineModel({ type: Array, default: () => [] });
@@ -105,7 +105,7 @@ const remove = (index) => {
       </li>
     </ol>
 
-    <div v-if="error" class="text-error text-caption mt-2 ml-12" data-test="destinations-error">{{ error }}</div>
+    <div v-if="error" class="text-error text-body-small mt-2 ml-12" data-test="destinations-error">{{ error }}</div>
     <v-alert v-if="repeated" type="warning" variant="tonal" density="compact" class="mt-3">
       A destination can't be listed twice in a row.
     </v-alert>
