@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -50,8 +50,22 @@ Users are only created by Google sign-in (`POST /api/login`).
 
 Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissions without a row.
 
+## `service_types`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, unique ignoring case, max 255 |
+| `service_frequency_days` | INTEGER | Null when omitted. Positive whole number when present. At least one frequency is required. |
+| `service_frequency_miles` | INTEGER | Null when omitted. Positive whole number when present. At least one frequency is required. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+The JSON body uses `service_frequency_days` and `service_frequency_miles`.
+
 ## Associations
 
 - A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
 - A user has many roles. A role belongs to one user. Deleting the user deletes their roles.
 - An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
+- Service types have no associations.
