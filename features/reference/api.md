@@ -79,6 +79,32 @@ Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 | `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
 | Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
 
+## Vehicle types
+
+Every vehicle-type route requires `admin` (`authorizeRoles('admin')`).
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/vehicle-types` | Admin | `200` array of vehicle types, ordered by `name`. |
+| `GET` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200` with one vehicle type. |
+| `POST` | `/api/vehicle-types` | Admin | `201` with the created vehicle type. Body is `{ "name": "Bus", "identifier": "VIN" }`. |
+| `PUT` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200` with the updated vehicle type. A field omitted from the body keeps its stored value. |
+| `DELETE` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200`. The vehicle type row is removed. |
+
+Success body: `{ "id", "name", "identifier", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` | `403` | `{ "message": "Admin role required." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `name` matches another vehicle type, ignoring case | `400` | `{ "message": "Name already taken." }` |
+| Missing `identifier` | `400` | `{ "message": "Missing identifier." }` |
+| `identifier` is not `VIN` or `Serial` | `400` | `{ "message": "Unknown identifier." }` |
+| `vehicleTypeId` is not an integer | `400` | `{ "message": "Invalid vehicle type id." }` |
+| Vehicle type id does not exist | `404` | `{ "message": "Vehicle type with id=… not found." }` |
+
 ## Service types
 
 Every route requires a Bearer token and `admin`, `area_admin`, or `maintenance` (`authorizeRoles("admin", "area_admin", "maintenance")`). Admins pass that check.

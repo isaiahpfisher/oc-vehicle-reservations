@@ -14,7 +14,7 @@
 ### US-5.1: Create vehicles
 
 **As a** signed-in admin or area admin user
-**I want to** create a vehicle with an area, vehicle type, university id, make, model, year, identifier (VIN or serial), purchase date, color, passenger capacity, license plate, license plate expiration date, and status.
+**I want to** create a vehicle with an area, vehicle type, university id, make, model, year, identifier (VIN or Serial), purchase date, color, passenger capacity, license plate, license plate expiration date, and status.
 **So that** users managing vehicle requests can assign a particular vehicle
 
 **Priority:** P1
@@ -254,14 +254,14 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
     - Area <v-select> shows the area names but submits the area id.
     - Area shows all areas for admins, only areas that the area admin is admin of for area admins.
     - Vehicle type <v-select> shows the vehicle type names but submits the vehicle type id.
-    - **VIN**/**Serial** is a computed property for label corresponding to `identifier`. If the identifier is `VIN`, the label is **VIN**. If the identifier is `serial`, the label is **Serial**. When no vehicle type is selected yet, the label is **VIN**.
+    - **VIN**/**Serial** is a computed property for label corresponding to `identifier`. If the identifier is `VIN`, the label is **VIN**. If the identifier is `Serial`, the label is **Serial**. When no vehicle type is selected yet, the label is **VIN**.
     - **Status** is a <v-select> with `active` and `retired`.
 - Display vehicles as cards modeled in the same style as existing management views. Each row shows the make, model, and color with a chip that shows red, yellow, or green based on whether the status is `retired`, `active` with an existing license plate expiration date that is less than the current date, or `active` for other scenarios.
 - **Edit** icon opens a `<v-dialog>` pre-filled with the current **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate** (optional), **License Plate Expiration Date** (optional), and **Status**; **Save** / **Cancel**.
     - Area <v-select> shows the area names but submits the area id.
     - Area shows all areas for admins, only areas that the area admin is admin of for area admins.
     - Vehicle type <v-select> shows the vehicle type names but submits the vehicle type id.
-    - **VIN**/**Serial** is a computed property for label corresponding to `identifier`. If the identifier is `VIN`, the label is **VIN**. If the identifier is `serial`, the label is **Serial**. When no vehicle type is selected yet, the label is **VIN**.
+    - **VIN**/**Serial** is a computed property for label corresponding to `identifier`. If the identifier is `VIN`, the label is **VIN**. If the identifier is `Serial`, the label is **Serial**. When no vehicle type is selected yet, the label is **VIN**.
     - **Status** is a <v-select> with `active` and `retired`.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit vehicle**, **Delete vehicle**).
@@ -338,7 +338,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user selects vehicle type to be one with a serial number on create
 
 - **Given** I am signed in as admin on the vehicles view
-- **And** A vehicle type exists with name `Golf Cart` and identifier `serial`
+- **And** A vehicle type exists with name `Golf Cart` and identifier `Serial`
 - **When** I select `Golf Cart` for vehicle type
 - **Then** the label **VIN** changes to **Serial**
 - **And** I can enter values in that field that are not exactly 17 characters
@@ -620,7 +620,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user creates vehicle with serial identifier longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **And** There exists a vehicle type with id `1` and identifier `serial`
+- **And** There exists a vehicle type with id `1` and identifier `Serial`
 - **When** I submit the create dialog with vehicle type id `1` and a vehicle identifier longer than 255 characters
 - **Then** validation blocks the request and I see a `Serial number too long.` message
 
@@ -671,7 +671,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user requests to create a vehicle with serial identifier longer than 255 characters
 
 - **Given** I am signed in as admin
-- **And** There exists a vehicle type with id `1` and identifier `serial`
+- **And** There exists a vehicle type with id `1` and identifier `Serial`
 - **When** I request `POST /api/vehicles` with `{ vehicle_type_id: 1 }` and identifier longer than 255 characters and a valid rest of the body
 - **Then** the API returns `400` with `{ message: "Serial number too long." }`
 
@@ -876,7 +876,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user selects vehicle type to be one with a VIN number
 
 - **Given** I am signed in as admin on the vehicles view and a vehicle with vehicle_type_id `1` exists
-- **And** A vehicle type exists with name `Golf Cart`, id `1`, and identifier `serial`
+- **And** A vehicle type exists with name `Golf Cart`, id `1`, and identifier `Serial`
 - **And** A vehicle type exists with name `Bus`, id `2`, and identifier `VIN`
 - **When** I select `Bus` for vehicle type
 - **Then** the label **Serial** changes to **VIN**
@@ -884,7 +884,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user selects vehicle type to be one with a serial number on edit
 
 - **Given** I am signed in as admin on the vehicles view and a vehicle with vehicle_type_id `2` exists
-- **And** A vehicle type exists with name `Golf Cart`, id `1`, and identifier `serial`
+- **And** A vehicle type exists with name `Golf Cart`, id `1`, and identifier `Serial`
 - **And** A vehicle type exists with name `Bus`, id `2`, and identifier `VIN`
 - **When** I select `Golf Cart` for vehicle type
 - **Then** the label **VIN** changes to **Serial**
@@ -1268,7 +1268,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user edits a vehicle to have a serial identifier longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **And** There exists a vehicle type with id `1` and identifier `serial`
+- **And** There exists a vehicle type with id `1` and identifier `Serial`
 - **When** I submit the edit dialog with vehicle type id `1` and a vehicle identifier longer than 255 characters
 - **Then** validation blocks the request and I see a `Serial number too long.` message
 
@@ -1323,7 +1323,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in as admin
 - **And** A vehicle with id `1` exists
-- **And** There exists a vehicle type with id `1` and identifier `serial`
+- **And** There exists a vehicle type with id `1` and identifier `Serial`
 - **When** I request `PUT /api/vehicles/1` with `{ vehicle_type_id: 1 }` and identifier longer than 255 characters and a valid rest of the body
 - **Then** the API returns `400` with `{ message: "Serial number too long." }`
 

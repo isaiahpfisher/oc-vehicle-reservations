@@ -1,6 +1,7 @@
 # Behavior & Rules Reference
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, and Feature 12 service type rules are recorded here.
+
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, and Feature 12 service type rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -35,6 +36,17 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Logo is a URL or an empty string | The value is trimmed. `""` is stored when the logo is omitted or blank. `logo.png` returns `400` `{ "message": "Invalid logo URL." }`. A non-empty logo must be an `http` or `https` URL. The areas list renders an image only when `logo` is not empty. | Feature 2, FR-005, FR-006 |
 | Delete removes the area | `DELETE` returns `200` and does not check for other rows that point at the area. The area's `area_admin` roles are deleted with it. | Feature 2, Assumptions; Feature 3 |
 | Areas are managed on one screen | `/areas` heading is **Area Management**. Create and edit use a dialog with **Name** and **Logo**. Delete uses the shared confirmation dialog. Empty list copy is **No areas yet. Create your first area.** | Feature 2, Screen Requirements |
+
+## Vehicle types
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Only admins manage vehicle types | Every `/api/vehicle-types` route uses `authorizeRoles('admin')`. A missing token is `401`. A signed-in user without `admin` is `403` `{ "message": "Admin role required." }`. `/vehicle-types` has `meta.nav: "Vehicle Types"` and `meta.roles: ["admin"]`, so admins see the **Vehicle Types** link and everyone else does not. Non-admins who open the URL are redirected home. An unsigned visit redirects to `/login`. | Feature 4, FR-001, US-4.5 |
+| Name is trimmed, required, unique without regard to case, and at most 255 characters | Empty or whitespace-only name returns `400` `{ "message": "Missing name." }`. A longer name returns `{ "message": "Name too long." }`. A name already stored on a different vehicle type, compared after lowercasing, returns `{ "message": "Name already taken." }`. Saving a vehicle type with its own current name is allowed. | Feature 4, FR-002, FR-004 |
+| Identifier is `VIN` or `Serial` | Any other value returns `400` `{ "message": "Unknown identifier." }`. An empty identifier returns `{ "message": "Missing identifier." }`. | Feature 4, FR-005 |
+| A field left out of an update keeps its stored value | `PUT` with only `name` does not clear `identifier`, and the reverse. | Feature 4, US-4.4 |
+| Delete removes the vehicle type | `DELETE` returns `200` and does not check for other rows that point at the vehicle type. | Feature 4, Assumptions |
+| Vehicle types are managed on one screen | `/vehicle-types` heading is **Vehicle Type Management**. The list is a table of 10 rows per page with **Name** and **Identifier**. Create uses a dialog with **Name** and an **Identifier** select (`VIN`, `Serial`). Edit replaces that row with the same fields and **Save** / **Cancel**; Cancel leaves the stored row unchanged. Row icon buttons use `size="small"` and `variant="text"`. Delete uses the shared confirmation dialog. Empty list copy is **No vehicle types yet. Create your first vehicle type.** | Feature 4, Screen Requirements |
 
 ## Roles
 

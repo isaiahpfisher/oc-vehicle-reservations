@@ -70,6 +70,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Home",
       "Users",
       "Areas",
+      "Vehicle Types",
       "Service Types",
     ]);
 
