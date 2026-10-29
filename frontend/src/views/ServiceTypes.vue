@@ -50,8 +50,8 @@ const startEdit = (serviceType) => {
   editingId.value = serviceType.id;
   draft.value = {
     name: serviceType.name,
-    service_frequency_days: String(serviceType.service_frequency_days),
-    service_frequency_miles: String(serviceType.service_frequency_miles),
+    service_frequency_days: serviceType.service_frequency_days ?? "",
+    service_frequency_miles: serviceType.service_frequency_miles ?? "",
   };
   formError.value = "";
 };

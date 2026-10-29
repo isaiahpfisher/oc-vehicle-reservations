@@ -1,14 +1,14 @@
-const positiveWholeNumber = (value) => {
+const optionalFrequency = (value) => {
   const text = String(value ?? "").trim();
   if (!text) {
-    return "Required field.";
+    return { value: null };
   }
 
   if (!/^\d+$/.test(text) || Number(text) < 1) {
-    return "Must be a positive whole number.";
+    return { message: "Must be a positive whole number." };
   }
 
-  return "";
+  return { value: Number(text) };
 };
 
 /** Client validation for the create dialog and inline row edit. Returns `{ message }` or `{ value }`. */
@@ -23,14 +23,18 @@ export const validateServiceTypeForm = (form, serviceTypes, exceptId = null) => 
     return { message: "Name too long." };
   }
 
-  const daysError = positiveWholeNumber(form.service_frequency_days);
-  if (daysError) {
-    return { message: daysError };
+  const days = optionalFrequency(form.service_frequency_days);
+  if (days.message) {
+    return days;
   }
 
-  const milesError = positiveWholeNumber(form.service_frequency_miles);
-  if (milesError) {
-    return { message: milesError };
+  const miles = optionalFrequency(form.service_frequency_miles);
+  if (miles.message) {
+    return miles;
+  }
+
+  if (days.value === null && miles.value === null) {
+    return { message: "Required field." };
   }
 
   const taken = serviceTypes.some(
@@ -44,8 +48,8 @@ export const validateServiceTypeForm = (form, serviceTypes, exceptId = null) => 
   return {
     value: {
       name,
-      service_frequency_days: Number(String(form.service_frequency_days).trim()),
-      service_frequency_miles: Number(String(form.service_frequency_miles).trim()),
+      service_frequency_days: days.value,
+      service_frequency_miles: miles.value,
     },
   };
 };

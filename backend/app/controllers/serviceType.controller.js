@@ -7,7 +7,7 @@ const exports = {};
 
 const frequencyField = (value, field) => {
   if (value === undefined || value === null || String(value).trim() === "") {
-    return { message: `Missing ${field}.` };
+    return { value: null };
   }
 
   const text = String(value).trim();
@@ -35,6 +35,10 @@ const validateServiceType = async (name, daysInput, milesInput, exceptId) => {
   const miles = frequencyField(milesInput, "service_frequency_miles");
   if (miles.message) {
     return miles;
+  }
+
+  if (days.value === null && miles.value === null) {
+    return { message: "Missing service_frequency_days or service_frequency_miles." };
   }
 
   const taken = await db.serviceType.findOne({

@@ -7,12 +7,12 @@ export default (sequelize, Sequelize) => {
     },
     service_frequency_days: {
       type: Sequelize.INTEGER,
-      allowNull: false,
+      allowNull: true,
       field: "service_frequency_days",
     },
     service_frequency_miles: {
       type: Sequelize.INTEGER,
-      allowNull: false,
+      allowNull: true,
       field: "service_frequency_miles",
     },
   });

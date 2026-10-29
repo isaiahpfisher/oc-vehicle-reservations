@@ -69,12 +69,8 @@ describe("Feature 12 — Service Type Management", () => {
           message: "Missing name.",
         },
         {
-          body: { name: "Oil Change", service_frequency_miles: 5000 },
-          message: "Missing service_frequency_days.",
-        },
-        {
-          body: { name: "Oil Change", service_frequency_days: 500 },
-          message: "Missing service_frequency_miles.",
+          body: { name: "Oil Change" },
+          message: "Missing service_frequency_days or service_frequency_miles.",
         },
         {
           body: { name: "Oil Change", service_frequency_days: 0, service_frequency_miles: 5000 },
@@ -93,6 +89,38 @@ describe("Feature 12 — Service Type Management", () => {
       }
 
       expect(await db.serviceType.count()).toBe(0);
+    });
+
+    it("Admin user creates a service type with only one frequency", async () => {
+      const headers = await signIn();
+
+      const daysOnly = await createServiceType(headers, { service_frequency_miles: null });
+      expect(daysOnly.status).toBe(201);
+      expect(daysOnly.body).toMatchObject({
+        name: "Oil Change",
+        service_frequency_days: 500,
+        service_frequency_miles: null,
+      });
+
+      const milesOnly = await createServiceType(headers, {
+        name: "Tire Rotation",
+        service_frequency_days: null,
+        service_frequency_miles: 6000,
+      });
+      expect(milesOnly.status).toBe(201);
+      expect(milesOnly.body).toMatchObject({
+        name: "Tire Rotation",
+        service_frequency_days: null,
+        service_frequency_miles: 6000,
+      });
+
+      const list = await request(app).get("/api/service-types").set(headers);
+      expect(list.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "Oil Change", service_frequency_miles: null }),
+          expect.objectContaining({ name: "Tire Rotation", service_frequency_days: null }),
+        ]),
+      );
     });
 
     it("Admin user creates service type with a whitespace-only name", async () => {

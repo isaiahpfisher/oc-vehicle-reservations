@@ -87,7 +87,7 @@ Every route requires a Bearer token and `admin`, `area_admin`, or `maintenance` 
 | ------ | -------- | ---- | ------- |
 | `GET` | `/api/service-types` | Admin, area admin, or maintenance | `200` array of service types, ordered by `name`. |
 | `GET` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with one service type. |
-| `POST` | `/api/service-types` | Admin, area admin, or maintenance | `201` with the created service type. Body is `{ "name": "Oil Change", "service_frequency_days": 500, "service_frequency_miles": 5000 }`. `name` is trimmed before save. |
+| `POST` | `/api/service-types` | Admin, area admin, or maintenance | `201` with the created service type. Body is `{ "name": "Oil Change", "service_frequency_days": 500, "service_frequency_miles": 5000 }`. Either frequency may be `null`. `name` is trimmed before save. |
 | `PUT` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with the updated service type. Body is the same shape as create. |
 | `DELETE` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200`. The service type row is removed. |
 
@@ -100,8 +100,8 @@ Success body: `{ "id", "name", "service_frequency_days", "service_frequency_mile
 | Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
 | `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
 | `name` matches another service type, ignoring case | `400` | `{ "message": "Name already taken." }` |
-| Missing `service_frequency_days` or `service_frequency_miles` | `400` | `{ "message": "Missing service_frequency_days." }` or `{ "message": "Missing service_frequency_miles." }` |
-| Frequency is not a positive whole number | `400` | `{ "message": "Invalid service_frequency_days." }` or `{ "message": "Invalid service_frequency_miles." }` |
+| Both frequencies omitted or blank | `400` | `{ "message": "Missing service_frequency_days or service_frequency_miles." }` |
+| A provided frequency is not a positive whole number | `400` | `{ "message": "Invalid service_frequency_days." }` or `{ "message": "Invalid service_frequency_miles." }` |
 | `serviceTypeId` is not an integer | `400` | `{ "message": "Invalid service type id." }` |
 | Service type id does not exist | `404` | `{ "message": "Service type with id=… not found." }` |
 

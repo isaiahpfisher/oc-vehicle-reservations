@@ -56,8 +56,8 @@ Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissi
 | ------ | ---- | ----- |
 | `id` | INTEGER | Primary key, auto-increment |
 | `name` | STRING | Required, trimmed, unique ignoring case, max 255 |
-| `service_frequency_days` | INTEGER | Required. Positive whole number. |
-| `service_frequency_miles` | INTEGER | Required. Positive whole number. |
+| `service_frequency_days` | INTEGER | Null when omitted. Positive whole number when present. At least one frequency is required. |
+| `service_frequency_miles` | INTEGER | Null when omitted. Positive whole number when present. At least one frequency is required. |
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 

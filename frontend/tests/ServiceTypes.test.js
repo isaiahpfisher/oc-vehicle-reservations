@@ -215,11 +215,41 @@ describe("Feature 12 — Service Type Management", () => {
 
       await openNewServiceType();
       await (await textField("Name")).setValue("Oil Change");
-      await (await textField("Frequency Miles")).setValue("5000");
       await clickNamed("Create");
 
       expect(serviceTypeServices.createServiceType).not.toHaveBeenCalled();
       expect(document.body.textContent).toContain("Required field.");
+    });
+
+    it("Admin user creates a service type with only one frequency", async () => {
+      signIn();
+      const saved = {
+        status: 201,
+        data: { ...oilChange, service_frequency_miles: null },
+      };
+      serviceTypeServices.createServiceType.mockResolvedValue(saved);
+      serviceTypeServices.getServiceTypes
+        .mockResolvedValueOnce({ data: [] })
+        .mockResolvedValueOnce({ data: [saved.data] });
+      await mountAppAt("/service-types");
+
+      await openNewServiceType();
+      await (await textField("Name")).setValue("Oil Change");
+      await (await textField("Frequency Days")).setValue("500");
+      await clickNamed("Create");
+
+      await waitFor(() => expect(serviceTypeServices.createServiceType).toHaveBeenCalledTimes(1));
+      expect(serviceTypeServices.createServiceType).toHaveBeenCalledWith({
+        name: "Oil Change",
+        service_frequency_days: 500,
+        service_frequency_miles: null,
+      });
+      expect(saved.status).toBe(201);
+      await waitFor(() => {
+        const row = [...document.body.querySelectorAll("tbody tr")].find((item) => item.textContent.includes("Oil Change"));
+        expect(row?.textContent).toContain("500");
+        expect(row?.textContent).not.toContain("5000");
+      });
     });
 
     it("Admin user creates service type with a whitespace-only name", async () => {

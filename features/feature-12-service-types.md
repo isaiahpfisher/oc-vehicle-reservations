@@ -69,7 +69,7 @@
 
 - **FR-001**: All service type endpoints MUST require a valid session and `admin`, `area_admin`, or `maintenance` role (`authorizeRoles('admin', 'area_admin', 'maintenance')` middleware).
 - **FR-002**: `name` MUST be trimmed before save. An empty service type name MUST be rejected.
-- **FR-003**: A service type MUST store `name` and `service_frequency_days`,`service_frequency_miles`. `id` is assigned by the database.
+- **FR-003**: A service type MUST store `name`, `service_frequency_days`, and `service_frequency_miles`. At least one frequency is required. A frequency that is provided MUST be a positive whole number. The frequency that is left empty is stored as `null`. Both frequencies MAY be provided. `id` is assigned by the database.
 - **FR-004**: `name` MUST be unique (not case-sensitive). Creating a service type with a name identical to an existing name MUST be rejected. Updating a service type to have a different name that is also identical to an existing name MUST be rejected.
 
 ---
@@ -82,6 +82,7 @@
 ## Edge Cases
 
 - Empty or whitespace-only service type name → client block and/or `400`.
+- Neither frequency provided → client block and/or `400`. A provided frequency that is not a positive whole number → `400`.
 - Service type name longer than 255 characters → `400`.
 - Unauthenticated service types screen → redirect. 
 - Authenticated service types screen without `admin`, `area_admin`, or `maintenance` role → redirect. 
@@ -180,8 +181,8 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 |-------|------|-------|
 | `id` | INTEGER PK | Auto-increment |
 | `name` | STRING | Required; trimmed; unique; not case-sensitive; max 255 |
-| `service_frequency_days` | INT | Required; positive |
-| `service_frequency_miles` | INT | Required; positive |
+| `service_frequency_days` | INT | Optional; positive when present. At least one of the two frequencies is required. |
+| `service_frequency_miles` | INT | Optional; positive when present. At least one of the two frequencies is required. |
 | `createdAt` | DATE | Sequelize timestamps |
 | `updatedAt` | DATE | Sequelize timestamps |
 
@@ -217,8 +218,15 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 #### Scenario: Admin user creates service type with missing field
 
 - **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog without a required field.
+- **When** I submit the create dialog with a name and neither frequency
 - **Then** validation blocks the request and I see a `Required field.` message
+
+#### Scenario: Admin user creates a service type with only one frequency
+
+- **Given** I am signed in as admin , area admin, or maintenance on the service types view
+- **When** I submit the create dialog with name `Oil Change` and frequency days `500`, and leave frequency miles empty
+- **Then** the API returns `201` with that service type and `service_frequency_miles` is `null`
+- **And** `Oil Change` appears in the service types list
 
 #### Scenario: Admin user requests to create a service type with a missing name
 
@@ -435,6 +443,8 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 | US-12.1 | Admin user saves service type | `frontend/tests/ServiceTypes.test.js` | `Admin user saves service type` |
 | US-12.1 | Admin user creates service type with missing name | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with missing name` |
 | US-12.1 | Admin user creates service type with missing field | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with missing field` |
+| US-12.1 | Admin user creates a service type with only one frequency | `backend/tests/serviceTypes.test.js` | `Admin user creates a service type with only one frequency` |
+| US-12.1 | Admin user creates a service type with only one frequency | `frontend/tests/ServiceTypes.test.js` | `Admin user creates a service type with only one frequency` |
 | US-12.1 | Admin user requests to create a service type with a missing name | `backend/tests/serviceTypes.test.js` | `Admin user requests to create a service type with a missing name` |
 | US-12.1 | Admin user creates service type with a whitespace-only name | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with a whitespace-only name` |
 | US-12.1 | Admin user creates service type with a whitespace-only name | `backend/tests/serviceTypes.test.js` | `Admin user creates service type with a whitespace-only name` |
