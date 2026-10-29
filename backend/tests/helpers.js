@@ -4,9 +4,39 @@ import authConfig from "../app/config/auth.config.js";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Drop and recreate all tables so each test starts from an empty database. */
+let schemaReady = false;
+
+/**
+ * Start each test from an empty database.
+ * The first call in a test file drops every table (not just current models, so stale tables from removed
+ * features can't block FK drops) and recreates the schema. Later calls only truncate, which is several
+ * times faster and still resets auto-increment ids.
+ */
 export const syncTestDatabase = async () => {
-  await db.sequelize.sync({ force: true });
+  // Last line of defense: this wipes every table, so only ever run it against a *-test database.
+  const name = db.sequelize.config.database;
+  if (!name.endsWith("-test")) {
+    throw new Error(`Refusing to reset "${name}": test databases must be named *-test.`);
+  }
+
+  if (!schemaReady) {
+    await db.sequelize.getQueryInterface().dropAllTables();
+    await db.sequelize.sync({ force: true });
+    schemaReady = true;
+    return;
+  }
+
+  // FOREIGN_KEY_CHECKS is per connection, so the transaction keeps every statement on one pooled connection.
+  await db.sequelize.transaction(async (transaction) => {
+    await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 0", { transaction });
+    try {
+      for (const model of Object.values(db.sequelize.models)) {
+        await model.truncate({ transaction });
+      }
+    } finally {
+      await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 1", { transaction });
+    }
+  });
 };
 
 export const validRegistration = (overrides = {}) => ({
@@ -26,7 +56,6 @@ export const registerUser = async (overrides = {}) => {
     firstName: data.firstName,
     lastName: data.lastName,
     email: data.email,
-    role: data.role || "student",
   });
 
   const token = jwt.sign({ userId: user.id, email: user.email }, authConfig.secret, { expiresIn: 86400 });
@@ -44,16 +73,23 @@ export const registerUser = async (overrides = {}) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: user.role,
+      roles: [],
       token,
     },
   };
 };
 
-/** Create a user, then set their stored role directly (there is no API to create an admin). */
-export const createUserWithRole = async (role, overrides = {}) => {
+/**
+ * Create a user holding `roles` (there is no API that grants the first admin).
+ * Each role is a name (`"admin"`) or a row (`{ role: "area_admin", areaId }`).
+ */
+export const createUserWithRoles = async (roles, overrides = {}) => {
   const response = await registerUser(overrides);
-  await db.user.update({ role }, { where: { id: response.body.userId } });
-  response.body.role = role;
+  const rows = roles.map((role) => (typeof role === "string" ? { role } : role));
+  await db.role.bulkCreate(rows.map((row) => ({ ...row, userId: response.body.userId })));
+  response.body.roles = rows;
   return response;
 };
+
+/** Create an area row directly (Feature 2's API needs an admin session; see areas.test.js for that path). */
+export const createArea = (name) => db.area.create({ name });

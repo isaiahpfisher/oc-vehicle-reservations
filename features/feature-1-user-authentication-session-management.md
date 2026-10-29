@@ -176,7 +176,7 @@ File: `frontend/src/views/Home.vue`.
 
 - Title **Vehicle Registration System**
 - Session present: avatar menu with name/email and **Sign out**
-- Name and email are display only. **Edit Profile** has no first name, last name, or email fields.
+- Name and email are display only. There is no **Edit Profile** action (removed in Feature 3).
 - **Sign out** calls `POST /api/logout`, removes `localStorage` `user`, navigates to `login`
 
 Axios (`frontend/src/services/services.js`) attaches `Authorization: Bearer <token>` from `localStorage` `user` when present.
@@ -243,9 +243,9 @@ No `username` column.
 #### Scenario: User cannot change name or email
 
 - **Given** I am signed in
-- **When** I update my profile with a different first name, last name, or email
+- **When** I send `PUT /api/users/{my id}` with a different first name, last name, or email
 - **Then** my stored name and email stay unchanged
-- **And** the profile form has no first name, last name, or email fields
+- **And** the avatar menu has no **Edit Profile** action and no first name, last name, or email fields
 
 ---
 

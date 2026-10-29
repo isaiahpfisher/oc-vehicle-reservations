@@ -4,6 +4,7 @@ import areaServices from "../services/areaServices.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
 import ListState from "../components/common/ListState.vue";
+import PageShell from "../components/layout/PageShell.vue";
 import AreaFormModal from "../components/areas/AreaFormModal.vue";
 
 const formOpen = ref(false);
@@ -56,13 +57,10 @@ onMounted(getAreas);
 </script>
 
 <template>
-  <v-container class="py-8">
-    <v-toolbar color="transparent" flat>
-      <template #title>
-        <h2 class="text-headline-large font-weight-bold">Area Management</h2>
-      </template>
+  <PageShell title="Area Management">
+    <template #actions>
       <v-btn color="primary" variant="elevated" class="oc-cta" @click="openCreate">+ New Area</v-btn>
-    </v-toolbar>
+    </template>
 
     <ListState
       :loading
@@ -88,5 +86,5 @@ onMounted(getAreas);
     </ListState>
 
     <AreaFormModal v-model="formOpen" :area="editing" :areas="areas" :save="saveArea" />
-  </v-container>
+  </PageShell>
 </template>

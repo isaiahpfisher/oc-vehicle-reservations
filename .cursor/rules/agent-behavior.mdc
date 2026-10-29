@@ -63,6 +63,14 @@ For multi-step work, a brief plan with verify steps:
 
 Prefer strong criteria (mapped scenarios, commands) over “make it work.”
 
+## 5. Specs move with the code
+
+**The spec changes first, in the same change as the code.**
+
+- **Changing an earlier feature's behavior** (e.g. Feature 3 making area management admin-only): record it in the *later* feature's spec and the reference docs; leave the earlier feature's spec untouched. Update the earlier feature's tests to match, with a comment naming the later story.
+- **Depending on an unmerged feature:** build the smallest stand-in that unblocks you, mark every piece `INTERIM` with when to remove it, and note it in the spec's Assumptions. Remove it all when the real feature merges.
+- **Placeholders for later features:** list them under "Delivered to later features" in the spec, naming which feature fills each one.
+
 ---
 
 **Working if:** smaller diffs, fewer speculative abstractions, clarifying questions before wrong implementation.

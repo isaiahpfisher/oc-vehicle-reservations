@@ -3,14 +3,23 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import ConfirmProvider from "./components/common/ConfirmProvider.vue";
 import MenuBar from "./components/MenuBar.vue";
+import Sidebar from "./components/Sidebar.vue";
+import { useRoles } from "./composables/useRoles.js";
 
 const route = useRoute();
-const showMenu = computed(() => route.name !== "login");
+const { user } = useRoles();
+
+// ui-style-system.mdc: no chrome on login; Sidebar for users with roles, MenuBar for requesters.
+// `route.matched` is empty until the first navigation resolves (it awaits the role refresh),
+// so checking it keeps the chrome from flashing on page load before a redirect to login.
+const showChrome = computed(() => route.matched.length > 0 && route.name !== "login" && !!user.value);
+const showSidebar = computed(() => showChrome.value && (user.value?.roles?.length ?? 0) > 0);
 </script>
 
 <template>
   <v-app>
-    <MenuBar v-if="showMenu" />
+    <Sidebar v-if="showSidebar" />
+    <MenuBar v-else-if="showChrome" />
     <v-main>
       <router-view />
     </v-main>
@@ -20,6 +29,12 @@ const showMenu = computed(() => route.name !== "login");
 
 <style>
 /* OC Academic Edition — typography (see ui-style-system.mdc) */
+/* Vuetify 4 type classes (text-headline-*, text-body-*) read these instead of inheriting */
+:root {
+  --v-font-body: Inter, sans-serif;
+  --v-font-heading: Inter, sans-serif;
+}
+
 .v-application {
   font-family: Inter, sans-serif !important;
   font-size: 16px;

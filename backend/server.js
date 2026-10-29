@@ -1,3 +1,4 @@
+import "./app/config/env.js";
 import routes from "./app/routes/index.js";
 import express from "express";
 import cors from "cors";

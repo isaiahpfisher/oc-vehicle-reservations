@@ -29,7 +29,7 @@ const cancel = () => {
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" :disabled="loading" @click="cancel">{{ cancelText }}</v-btn>
+        <v-btn color="secondary" variant="text" :disabled="loading" @click="cancel">{{ cancelText }}</v-btn>
         <v-btn :color="confirmColor" variant="elevated" class="oc-cta" :loading="loading" @click="emit('confirm')">
           {{ confirmText }}
         </v-btn>

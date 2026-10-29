@@ -1,6 +1,7 @@
 /**
  * Feature 1 — User Authentication and Session Management
  * Spec: features/feature-1-user-authentication-session-management.md
+ * Also: features/feature-3-user-role-management.md (US-3.7 "Stored user includes roles")
  */
 import jwt from "jsonwebtoken";
 import request from "supertest";
@@ -45,6 +46,7 @@ describe("Feature 1 — User Authentication and Session Management API", () => {
         email: "jane@eagles.oc.edu",
         firstName: "Jane",
         lastName: "Doe",
+        roles: [],
         token: expect.any(String),
       });
       expect(response.body).not.toHaveProperty("password");
@@ -71,6 +73,7 @@ describe("Feature 1 — User Authentication and Session Management API", () => {
         email: "jane@eagles.oc.edu",
         firstName: "Janet",
         lastName: "Smith",
+        roles: [],
         token: first.body.token,
       });
       const stored = await db.user.findByPk(first.body.userId);
@@ -82,16 +85,21 @@ describe("Feature 1 — User Authentication and Session Management API", () => {
 
     it("User cannot change name or email", async () => {
       const { body } = await loginWithGoogle();
+      const changes = { firstName: "Janet", lastName: "Smith", email: "janet@eagles.oc.edu" };
 
-      const response = await request(app).put(`/api/users/${body.userId}`).set(bearer(body.token)).send({
-        firstName: "Janet",
-        lastName: "Smith",
-        email: "janet@eagles.oc.edu",
-        role: "student",
-      });
+      // Without the admin role, PUT is refused outright.
+      const asSelf = await request(app).put(`/api/users/${body.userId}`).set(bearer(body.token)).send(changes);
+      expect(asSelf.status).toBe(403);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({
+      // Even an admin's PUT only changes roles; name and email come from Google.
+      await db.role.create({ userId: body.userId, role: "admin" });
+      const asAdmin = await request(app)
+        .put(`/api/users/${body.userId}`)
+        .set(bearer(body.token))
+        .send({ ...changes, roles: [{ role: "admin" }] });
+
+      expect(asAdmin.status).toBe(200);
+      expect(asAdmin.body).toMatchObject({
         firstName: "Jane",
         lastName: "Doe",
         email: "jane@eagles.oc.edu",
@@ -188,6 +196,27 @@ describe("Feature 1 — User Authentication and Session Management API", () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ message: "Unauthorized! No token provided." });
+    });
+  });
+});
+
+describe("Feature 3 — User Role Management API", () => {
+  describe("US-3.7 — Reusable Authorization Middleware and Hooks", () => {
+    it("Stored user includes roles", async () => {
+      const first = await loginWithGoogle();
+      const athletics = await db.area.create({ name: "Athletics" });
+      await db.role.bulkCreate([
+        { userId: first.body.userId, role: "maintenance" },
+        { userId: first.body.userId, role: "area_admin", areaId: athletics.id },
+      ]);
+
+      const response = await loginWithGoogle();
+
+      expect(response.status).toBe(200);
+      expect(response.body.roles).toEqual([
+        { id: expect.any(Number), role: "area_admin", areaId: athletics.id, area: { id: athletics.id, name: "Athletics" } },
+        { id: expect.any(Number), role: "maintenance", areaId: null, area: null },
+      ]);
     });
   });
 });
