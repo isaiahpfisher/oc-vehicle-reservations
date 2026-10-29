@@ -741,20 +741,6 @@ Unique on (`user_id`, `role`, `area_id`) (**FR-003**). The `users.role` column f
 | US-3.7 | Roles refresh on page load                                    | `frontend/tests/Authorization.test.js` | `Roles refresh on page load`                                  |
 | US-3.7 | Removed role is dropped on page load                          | `frontend/tests/Authorization.test.js` | `Removed role is dropped on page load`                        |
 | US-3.7 | Role refresh with an invalid session                          | `frontend/tests/Authorization.test.js` | `Role refresh with an invalid session`                        |
-| US-3.8 | Script makes an existing user an admin                        | `backend/tests/makeAdmin.test.js`      | `Script makes an existing user an admin`                      |
-| US-3.8 | Script matching ignores case and spaces                       | `backend/tests/makeAdmin.test.js`      | `Script matching ignores case and spaces`                     |
-| US-3.8 | Script with an unknown email                                  | `backend/tests/makeAdmin.test.js`      | `Script with an unknown email`                                |
-| US-3.8 | Script on an existing admin                                   | `backend/tests/makeAdmin.test.js`      | `Script on an existing admin`                                 |
-| US-3.8 | Script without an email                                       | `backend/tests/makeAdmin.test.js`      | `Script without an email`                                     |
-| US-3.9 | Developer signs in as a seeded user                           | `backend/tests/devLogin.test.js`       | `Developer signs in as a seeded user`                         |
-| US-3.9 | Developer signs in as a seeded user                           | `frontend/tests/Login.test.js`         | `Developer signs in as a seeded user`                         |
-| US-3.9 | Developer sign-in with a wrong password                       | `backend/tests/devLogin.test.js`       | `Developer sign-in with a wrong password`                     |
-| US-3.9 | Developer sign-in for an unknown email                        | `backend/tests/devLogin.test.js`       | `Developer sign-in for an unknown email`                      |
-| US-3.9 | Developer sign-in is off unless enabled                       | `backend/tests/devLogin.test.js`       | `Developer sign-in is off unless enabled`                     |
-| US-3.9 | Developer sign-in is never available in production            | `backend/tests/devLogin.test.js`       | `Developer sign-in is never available in production`          |
-| US-3.9 | Developer sign-in form only appears in development builds     | `frontend/tests/Login.test.js`         | `Developer sign-in form only appears in development builds`   |
-| US-3.9 | Seed replaces data and keeps listed accounts                  | `backend/tests/seed.test.js`           | `Seed replaces data and keeps listed accounts`                |
-| US-3.9 | Seed refuses to run in production                             | `backend/tests/seed.test.js`           | `Seed refuses to run in production`                           |
 
 ## Definition of Done
 
