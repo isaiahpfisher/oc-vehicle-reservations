@@ -120,6 +120,9 @@ const signIn = (nextRoles = adminRoles) => {
 const namedButton = (text) =>
   [...document.body.querySelectorAll("button, a")].find((el) => el.textContent.trim() === text);
 
+const navLabels = () =>
+  [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
+
 const clickNamed = async (text) => {
   const button = await waitFor(() => {
     const match = namedButton(text);
@@ -253,14 +256,16 @@ describe("Feature 5 — Vehicles", () => {
   });
 
   describe("US-5.3 — Manage vehicle rows", () => {
-    it("Vehicle rows have view and delete actions", async () => {
+    it("Vehicle rows have edit and delete actions", async () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle] });
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
-        expect(document.body.querySelector('[aria-label="View vehicle"]')).toBeTruthy();
+        expect(document.body.querySelector('[aria-label="Edit vehicle"]')).toBeTruthy();
         expect(document.body.querySelector('[aria-label="Delete vehicle"]')).toBeTruthy();
+        const make = [...document.body.querySelectorAll("td")].find((cell) => cell.textContent.trim() === "Toyota");
+        expect(make?.querySelector("a")).toBeNull();
       });
     });
 
@@ -268,8 +273,8 @@ describe("Feature 5 — Vehicles", () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({
         data: [
-          vehicle,
-          { ...vehicle, id: 2, make: "Honda", licensePlateExpirationDate: today() },
+          { ...vehicle, licensePlateExpirationDate: today() },
+          { ...vehicle, id: 2, make: "Honda", licensePlateExpirationDate: "2999-01-01" },
         ],
       });
       await mountAppAt("/vehicles");
@@ -282,12 +287,15 @@ describe("Feature 5 — Vehicles", () => {
     it("Vehicle rows with yellow chip", async () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({
-        data: [{ ...vehicle, licensePlateExpirationDate: "2000-01-01" }],
+        data: [
+          vehicle,
+          { ...vehicle, id: 2, make: "Honda", licensePlateExpirationDate: "2000-01-01" },
+        ],
       });
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
-        expect(document.body.querySelector(".vehicle-chip-yellow")).toBeTruthy();
+        expect(document.body.querySelectorAll(".vehicle-chip-yellow")).toHaveLength(2);
       });
     });
 
@@ -310,8 +318,8 @@ describe("Feature 5 — Vehicles", () => {
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle] });
       await mountAppAt("/vehicles");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="View vehicle"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="View vehicle"]').click();
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit vehicle"]')).toBeTruthy());
+      document.body.querySelector('[aria-label="Edit vehicle"]').click();
       await settle();
 
       await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
@@ -323,8 +331,8 @@ describe("Feature 5 — Vehicles", () => {
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle] });
       await mountAppAt("/vehicles");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="View vehicle"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="View vehicle"]').click();
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit vehicle"]')).toBeTruthy());
+      document.body.querySelector('[aria-label="Edit vehicle"]').click();
       await settle();
 
       await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
@@ -354,6 +362,49 @@ describe("Feature 5 — Vehicles", () => {
   });
 
   describe("US-5.5 — Access", () => {
+    it("Signed-in admin user sees nav link", async () => {
+      signIn();
+      await mountAppAt("/");
+
+      await waitFor(() => expect(navLabels()).toContain("Vehicles"));
+    });
+
+    it("Signed-in area admin user sees nav link", async () => {
+      signIn(areaAdminRoles);
+      await mountAppAt("/");
+
+      await waitFor(() => expect(navLabels()).toContain("Vehicles"));
+    });
+
+    const clickVehiclesLink = async () => {
+      const item = await waitFor(() => {
+        const match = wrapper.findAllComponents({ name: "VListItem" }).find((component) => component.props("title") === "Vehicles");
+        expect(match).toBeDefined();
+        return match;
+      });
+      await item.trigger("click");
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles"));
+    };
+
+    it("Signed-in admin user clicks on nav link", async () => {
+      signIn();
+      await mountAppAt("/");
+      await clickVehiclesLink();
+    });
+
+    it("Signed-in area admin user clicks on nav link", async () => {
+      signIn(areaAdminRoles);
+      await mountAppAt("/");
+      await clickVehiclesLink();
+    });
+
+    it("Signed-in user without admin or area admin role does not see nav link", async () => {
+      signIn(maintenanceRoles);
+      await mountAppAt("/");
+
+      await waitFor(() => expect(navLabels()).not.toContain("Vehicles"));
+    });
+
     it("Un-signed-in user accesses vehicles page", async () => {
       await mountAppAt("/vehicles");
       expect(router.currentRoute.value.path).toBe("/login");

@@ -253,14 +253,15 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - Heading: **Vehicle Management**
 - Primary action: **+ New Vehicle** opens `/vehicles/new`.
-- Display vehicles in a `<v-data-table>` (10 per page), matching the users table. Columns are **Make**, **Model**, **Color**, and **Status**.
-- The status cell is a chip: red when `retired`; yellow when `active` and the license plate expiration date is before today; green when `active` and there is no expiration date or the date is today or later.
-- The make and the **View vehicle** icon open `/vehicles/:id`.
+- Display vehicles in a `<v-data-table>` (10 per page), matching the users table. Columns are **Make**, **Model**, **Color**, **Status**, and **Actions**. Those five columns are equal width, so **Status** sits evenly between **Color** and **Actions**.
+- The status cell is a chip: red when `retired`; yellow when `active` and there is no license plate expiration date, or the date is before today; green when `active` and the license plate expiration date is today or later. The yellow chip is bright sunny yellow (`#FFE500`) with dark text.
+- Make is text. The **Edit vehicle** icon (`mdi-pencil`) opens `/vehicles/:id`.
 - **Delete vehicle** opens a confirmation `<ConfirmModal>` from `components/common`.
-- Icon-only row actions use `size="small"`, `variant="text"`, and `aria-label`s **View vehicle** and **Delete vehicle**.
+- Icon-only row actions use `size="small"`, `variant="text"`, and `aria-label`s **Edit vehicle** and **Delete vehicle**.
 - **Empty state:** **"No vehicles yet. Create your first vehicle."**
 - **Loading state:** skeleton or progress indicator while vehicles are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
+- **App chrome:** the list route has `meta.nav: "Vehicles"` and `meta.roles: ["admin", "area_admin"]`, so the **Vehicles** link shows for admins and area admins and is hidden for everyone else. Create and edit do not add a nav link.
 
 ### [View: New vehicle] — route name `vehicleCreate` (`/vehicles/new`)
 
@@ -268,6 +269,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - Heading: **New vehicle**
 - Empty fields: **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate** (optional), **License Plate Expiration Date** (optional), and **Status**, plus **Create** / **Cancel**.
+- **Year** is a number input. Its arrows increment and decrement the value. It accepts at most 4 characters.
 - **Cancel** returns to `/vehicles` without saving.
 - Area `<v-select>` shows area names and submits the area id. Admins see every area. Area admins see only their areas.
 - Vehicle type `<v-select>` shows vehicle type names and submits the vehicle type id.
@@ -281,13 +283,15 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 **VehicleForm.vue**, same fields as the create page, pre-filled from `GET /api/vehicles/:vehicleId`.
 
 - Heading: the vehicle's make and model.
-- **Save** submits `PUT /api/vehicles/:vehicleId` and stays on the page.
-- **Cancel** restores the saved values and stays on the page.
+- **Year** uses the same number input as the create page.
+- **Save** and **Cancel** are buttons on this page. **Save** submits `PUT /api/vehicles/:vehicleId`. On success, go to `/vehicles`. **Save** shows **Saving…** while that request is in progress.
+- **Cancel** returns to `/vehicles` without saving. It does not call the API.
+- If **Save** fails, the message is shown directly above **Save** and **Cancel**.
 - Area, vehicle type, VIN/Serial label, and status behave the same as on the create page.
 - An area admin opening a vehicle outside their areas is redirected to `/home`.
 - Same loading and error states as the list.
 
-**Implementation note:** three routes. The table is `Vehicles.vue`. Create and edit share `VehicleForm.vue`. Delete uses the shared confirm dialog.
+**Implementation note:** three routes. The table is `Vehicles.vue`. Create and edit share `VehicleForm.vue`. Delete uses the shared confirm dialog. The **Vehicles** nav link is only on the list route.
 
 ---
 
@@ -345,6 +349,12 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **When** I click **+ New Vehicle**
 - **Then** I am on `/vehicles/new` and I see **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
 - **And** The **Area** dropdown only lists the areas that the area admin user is the area admin of
+
+#### Scenario: Year input accepts at most four characters
+
+- **Given** I am signed in as admin on the new vehicle page
+- **When** I enter `12345` in **Year**
+- **Then** **Year** is a number input and shows `1234`
 
 #### Scenario: Admin user saves vehicle
 
@@ -826,23 +836,24 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 ### US-5.3 — Manage vehicle rows
 
-#### Scenario: Vehicle rows have view and delete actions
+#### Scenario: Vehicle rows have edit and delete actions
 
 - **Given** I am signed in as admin and at least one vehicle exists
 - **When** I view the vehicle list
-- **Then** each row shows **View vehicle** and **Delete vehicle** actions
+- **Then** each row shows **Edit vehicle** and **Delete vehicle** actions
+- **And** the make is text, not a link
 
 #### Scenario: Vehicle rows with green chip
 
 - **Given** I am signed in as admin and at least one vehicle exists
 - **When** I view the vehicle list
-- **Then** each row with status `active` that has no license plate expiration date, or a license plate expiration date today or after, has a green chip
+- **Then** each row with status `active` and a license plate expiration date today or after has a green chip
 
 #### Scenario: Vehicle rows with yellow chip
 
 - **Given** I am signed in as admin and at least one vehicle exists
 - **When** I view the vehicle list
-- **Then** each row with status `active` and a license plate expiration date before today has a yellow chip
+- **Then** each row with status `active` that has no license plate expiration date, or a license plate expiration date before today, has a yellow chip
 
 #### Scenario: Vehicle rows with red chip
 
@@ -866,6 +877,13 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **When** I open that vehicle
 - **Then** I am on `/vehicles/:id` and I see **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
 - **And** the **Area** select only shows the areas which I am the area admin of
+
+#### Scenario: Admin user cancels vehicle edits
+
+- **Given** I am signed in as admin on a vehicle page
+- **When** I change the color and click **Cancel**
+- **Then** I am on `/vehicles`
+- **And** the API is not called
 
 #### Scenario: Admin user edits a vehicle area
 
@@ -1496,6 +1514,36 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 ### US-5.5: Signed-in admin user access only
 
+#### Scenario: Signed-in admin user sees nav link
+
+- **Given** I have admin role
+- **When** I am logged in
+- **Then** I see a nav link for vehicles
+
+#### Scenario: Signed-in area admin user sees nav link
+
+- **Given** I have area admin role
+- **When** I am logged in
+- **Then** I see a nav link for vehicles
+
+#### Scenario: Signed-in admin user clicks on nav link
+
+- **Given** I am signed in as admin
+- **When** I click on the nav link for vehicles
+- **Then** I am redirected to `/vehicles`
+
+#### Scenario: Signed-in area admin user clicks on nav link
+
+- **Given** I am signed in as area admin
+- **When** I click on the nav link for vehicles
+- **Then** I am redirected to `/vehicles`
+
+#### Scenario: Signed-in user without admin or area admin role does not see nav link
+
+- **Given** I do not have admin or area admin role
+- **When** I am logged in
+- **Then** I do not see a nav link for vehicles
+
 #### Scenario: Un-signed-in user accesses vehicles page
 - **Given** I am not signed in
 - **When** I navigate to `/vehicles` by URL
@@ -1676,6 +1724,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 |-------|----------|-----------|-----------|
 | US-5.1 | Admin user creates a vehicle | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle` |
 | US-5.1 | Area admin user creates a vehicle | `frontend/tests/Vehicles.test.js` | `Area admin user creates a vehicle` |
+| US-5.1 | Year input accepts at most four characters | `frontend/tests/VehicleForm.test.js` | `Year input accepts at most four characters` |
 | US-5.1 | Admin user saves vehicle | `backend/tests/vehicles.test.js` | `Admin user saves vehicle` |
 | US-5.1 | Admin user saves vehicle | `frontend/tests/VehicleForm.test.js` | `Admin user saves vehicle` |
 | US-5.1 | Admin user selects vehicle type to be one with a serial number on create | `frontend/tests/VehicleForm.test.js` | `Admin user selects vehicle type to be one with a serial number on create` |
@@ -1753,12 +1802,13 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.2 | Vehicles view lists vehicles for admin | `frontend/tests/Vehicles.test.js` | `Vehicles view lists vehicles for admin` |
 | US-5.2 | Vehicles view lists vehicles for area admin | `frontend/tests/Vehicles.test.js` | `Vehicles view lists vehicles for area admin` |
 | US-5.2 | Vehicles empty state | `frontend/tests/Vehicles.test.js` | `Vehicles empty state` |
-| US-5.3 | Vehicle rows have view and delete actions | `frontend/tests/Vehicles.test.js` | `Vehicle rows have view and delete actions` |
+| US-5.3 | Vehicle rows have edit and delete actions | `frontend/tests/Vehicles.test.js` | `Vehicle rows have edit and delete actions` |
 | US-5.3 | Vehicle rows with green chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with green chip` |
 | US-5.3 | Vehicle rows with yellow chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with yellow chip` |
 | US-5.3 | Vehicle rows with red chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with red chip` |
 | US-5.4 | Admin user opens the vehicle page | `frontend/tests/Vehicles.test.js` | `Admin user opens the vehicle page` |
 | US-5.4 | Area admin user opens the vehicle page | `frontend/tests/Vehicles.test.js` | `Area admin user opens the vehicle page` |
+| US-5.4 | Admin user cancels vehicle edits | `frontend/tests/VehicleForm.test.js` | `Admin user cancels vehicle edits` |
 | US-5.4 | Admin user edits a vehicle area | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle area` |
 | US-5.4 | Admin user edits a vehicle area | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle area` |
 | US-5.4 | Admin user edits a vehicle type with identifier of 17 characters | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle type with identifier of 17 characters` |
@@ -1865,6 +1915,11 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.4 | Admin user updates a vehicle with an invalid vehicleId | `backend/tests/vehicles.test.js` | `Admin user updates a vehicle with an invalid vehicleId` |
 | US-5.4 | Admin user deletes a vehicle that does not exist | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle that does not exist` |
 | US-5.4 | Admin user deletes a vehicle with an invalid vehicleId | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle with an invalid vehicleId` |
+| US-5.5 | Signed-in admin user sees nav link | `frontend/tests/Vehicles.test.js` | `Signed-in admin user sees nav link` |
+| US-5.5 | Signed-in area admin user sees nav link | `frontend/tests/Vehicles.test.js` | `Signed-in area admin user sees nav link` |
+| US-5.5 | Signed-in admin user clicks on nav link | `frontend/tests/Vehicles.test.js` | `Signed-in admin user clicks on nav link` |
+| US-5.5 | Signed-in area admin user clicks on nav link | `frontend/tests/Vehicles.test.js` | `Signed-in area admin user clicks on nav link` |
+| US-5.5 | Signed-in user without admin or area admin role does not see nav link | `frontend/tests/Vehicles.test.js` | `Signed-in user without admin or area admin role does not see nav link` |
 | US-5.5 | Un-signed-in user accesses vehicles page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses vehicles page` |
 | US-5.5 | Un-signed-in user accesses the new vehicle page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses the new vehicle page` |
 | US-5.5 | Un-signed-in user accesses a vehicle page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses a vehicle page` |

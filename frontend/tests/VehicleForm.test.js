@@ -302,6 +302,17 @@ const editFields = [
 
 describe("Feature 5 — Vehicle form", () => {
   describe("US-5.1 — Create vehicles", () => {
+    it("Year input accepts at most four characters", async () => {
+      signIn();
+      await mountAppAt("/vehicles/new");
+      const year = await textField("Year");
+      expect(year.props("type")).toBe("number");
+      await year.setValue("12345");
+      await settle();
+
+      expect((await textField("Year")).props("modelValue")).toBe("1234");
+    });
+
     it("Admin user saves vehicle", async () => {
       signIn();
       const created = { ...vehicle, id: 3, make: "Toyota", model: "Sienna", color: "gray", status: "active" };
@@ -430,6 +441,16 @@ describe("Feature 5 — Vehicle form", () => {
   });
 
   describe("US-5.4 — Edit vehicles", () => {
+    it("Admin user cancels vehicle edits", async () => {
+      signIn();
+      await mountAppAt("/vehicles/1");
+      await (await textField("Color")).setValue("white");
+      await clickNamed("Cancel");
+
+      expect(vehicleServices.updateVehicle).not.toHaveBeenCalled();
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles"));
+    });
+
     for (const [title, overrides, key, expected] of editFields) {
       it(title, async () => {
         signIn();
@@ -440,7 +461,7 @@ describe("Feature 5 — Vehicle form", () => {
         const response = await vehicleServices.updateVehicle.mock.results.at(-1).value;
         expect(response.status).toBe(200);
         expect(response.data[key]).toBe(expected);
-        expect(router.currentRoute.value.path).toBe("/vehicles/1");
+        await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles"));
       });
     }
 

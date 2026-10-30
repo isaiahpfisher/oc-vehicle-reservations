@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
 import vehicleServices from "../services/vehicleServices.js";
@@ -39,7 +39,6 @@ const blank = () => ({
 });
 
 const form = ref(blank());
-const saved = ref(blank());
 
 const visibleAreas = computed(() => {
   if (hasRole("admin")) {
@@ -107,7 +106,6 @@ const load = async () => {
     if (isCreate.value) {
       loaded.value = null;
       form.value = blank();
-      saved.value = blank();
       return;
     }
 
@@ -119,7 +117,6 @@ const load = async () => {
 
     loaded.value = data;
     form.value = fromVehicle(data);
-    saved.value = fromVehicle(data);
   } catch (error) {
     if (error.response?.status === 403) {
       await router.replace({ name: "home" });
@@ -150,11 +147,11 @@ const validate = () => {
     return "Required field.";
   }
 
-  const universityId = value.universityId.trim();
-  const make = value.make.trim();
-  const modelName = value.model.trim();
-  const identifier = value.identifier.trim();
-  const color = value.color.trim();
+  const universityId = String(value.universityId).trim();
+  const make = String(value.make).trim();
+  const modelName = String(value.model).trim();
+  const identifier = String(value.identifier).trim();
+  const color = String(value.color).trim();
   const plate = String(value.licensePlate ?? "").trim();
 
   if (universityId.length > 255) return "University id too long.";
@@ -176,27 +173,35 @@ const validate = () => {
 const payload = () => ({
   areaId: form.value.areaId,
   vehicleTypeId: form.value.vehicleTypeId,
-  universityId: form.value.universityId.trim(),
-  make: form.value.make.trim(),
-  model: form.value.model.trim(),
+  universityId: String(form.value.universityId).trim(),
+  make: String(form.value.make).trim(),
+  model: String(form.value.model).trim(),
   year: Number(form.value.year),
-  identifier: form.value.identifier.trim(),
+  identifier: String(form.value.identifier).trim(),
   purchasedAt: form.value.purchasedAt,
-  color: form.value.color.trim(),
+  color: String(form.value.color).trim(),
   passengerCapacity: Number(form.value.passengerCapacity),
   licensePlate: String(form.value.licensePlate ?? "").trim() || null,
   licensePlateExpirationDate: String(form.value.licensePlateExpirationDate ?? "").trim() || null,
   status: form.value.status,
 });
 
-const submit = async () => {
-  formError.value = validate();
-  if (formError.value || saving.value) {
+const submit = async (event) => {
+  event?.preventDefault?.();
+  if (saving.value) {
     return;
   }
 
   saving.value = true;
+  formError.value = "";
+  await nextTick();
+
   try {
+    formError.value = validate();
+    if (formError.value) {
+      return;
+    }
+
     if (isCreate.value) {
       const response = await vehicleServices.createVehicle(payload());
       if (response?.status !== 201) {
@@ -213,9 +218,7 @@ const submit = async () => {
       return;
     }
 
-    loaded.value = { ...loaded.value, ...response.data };
-    saved.value = fromVehicle(response.data);
-    form.value = fromVehicle(response.data);
+    await router.push({ name: "vehicles" });
   } catch (error) {
     formError.value = Utils.errorMessage(error, "Failed to save vehicle.");
   } finally {
@@ -223,29 +226,57 @@ const submit = async () => {
   }
 };
 
-const cancel = () => {
-  formError.value = "";
-  if (isCreate.value) {
-    router.push({ name: "vehicles" });
+const setYear = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length <= 4) {
+    form.value.year = digits;
     return;
   }
 
-  form.value = { ...saved.value };
+  const previous = String(form.value.year ?? "");
+  form.value.year = previous.length === 4 ? previous : digits.slice(0, 4);
+};
+
+const onYearKeydown = (event) => {
+  if (["e", "E", "+", "-", "."].includes(event.key)) {
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key.length !== 1 || !/\d/.test(event.key)) {
+    return;
+  }
+
+  const input = event.target;
+  const selected = (input.selectionEnd ?? 0) - (input.selectionStart ?? 0);
+  if (String(form.value.year ?? "").length - selected >= 4) {
+    event.preventDefault();
+  }
+};
+
+const cancel = () => {
+  router.push({ name: "vehicles" });
 };
 </script>
 
 <template>
   <PageShell :title="title" :breadcrumbs :loading :error="loadError" :max-width="720">
     <v-form @submit.prevent="submit">
-      <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
-
       <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" />
       <v-select v-model="form.vehicleTypeId" :items="typeItems" item-title="title" item-value="value" label="Vehicle Type" />
       <v-text-field v-model="form.universityId" label="University Id" />
       <v-text-field v-model="form.identifier" :label="identifierLabel" />
       <v-text-field v-model="form.make" label="Make" />
       <v-text-field v-model="form.model" label="Model" />
-      <v-text-field v-model="form.year" label="Year" />
+      <v-text-field
+        :model-value="form.year"
+        label="Year"
+        type="number"
+        step="1"
+        max="9999"
+        @update:model-value="setYear"
+        @keydown="onYearKeydown"
+      />
       <v-text-field v-model="form.color" label="Color" />
       <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" />
       <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" />
@@ -253,12 +284,47 @@ const cancel = () => {
       <v-text-field v-model="form.licensePlateExpirationDate" label="License Plate Expiration Date" type="date" />
       <v-select v-model="form.status" :items="statusItems" label="Status" />
 
+      <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
+
       <div class="d-flex ga-2 mt-2">
-        <v-btn type="button" color="primary" variant="elevated" class="oc-cta" @click="submit">
-          {{ isCreate ? "Create" : "Save" }}
-        </v-btn>
-        <v-btn type="button" variant="text" @click="cancel">Cancel</v-btn>
+        <button type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
+          {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
+        </button>
+        <button type="button" class="vehicle-form__cancel" :disabled="saving" @click="cancel">Cancel</button>
       </div>
     </v-form>
   </PageShell>
 </template>
+
+<style scoped>
+.vehicle-form__save,
+.vehicle-form__cancel {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.vehicle-form__save {
+  border: 0;
+  background: #801328;
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.vehicle-form__save:disabled,
+.vehicle-form__cancel:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.vehicle-form__cancel {
+  border: 0;
+  background: transparent;
+  color: rgb(var(--v-theme-on-surface));
+}
+</style>

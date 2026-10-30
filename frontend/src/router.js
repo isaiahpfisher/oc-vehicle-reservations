@@ -55,7 +55,7 @@ const router = createRouter({
       path: "/vehicles",
       name: "vehicles",
       component: () => import("./views/Vehicles.vue"),
-      meta: { roles: ["admin", "area_admin"] },
+      meta: { nav: "Vehicles", icon: "mdi-car-multiple", roles: ["admin", "area_admin"] },
     },
     {
       path: "/vehicles/new",

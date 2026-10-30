@@ -42,21 +42,25 @@ const tone = (vehicle) => {
     return "red";
   }
 
-  if (vehicle.status === "active" && vehicle.licensePlateExpirationDate && vehicle.licensePlateExpirationDate < today()) {
-    return "yellow";
+  if (
+    vehicle.status === "active" &&
+    vehicle.licensePlateExpirationDate &&
+    vehicle.licensePlateExpirationDate >= today()
+  ) {
+    return "green";
   }
 
-  return "green";
+  return "yellow";
 };
 
-const toneColor = { red: "error", yellow: "warning", green: "success" };
+const toneColor = { red: "error", green: "success" };
 
 const headers = [
-  { title: "Make", key: "make", sortable: false },
-  { title: "Model", key: "model", sortable: false },
-  { title: "Color", key: "color", sortable: false },
-  { title: "Status", key: "status", sortable: false },
-  { title: "Actions", key: "actions", sortable: false, align: "end" },
+  { title: "Make", key: "make", sortable: false, width: "20%" },
+  { title: "Model", key: "model", sortable: false, width: "20%" },
+  { title: "Color", key: "color", sortable: false, width: "20%" },
+  { title: "Status", key: "status", sortable: false, width: "20%", align: "center" },
+  { title: "Actions", key: "actions", sortable: false, width: "20%", align: "center" },
 ];
 
 const confirmDelete = useConfirm();
@@ -75,7 +79,7 @@ const deleteVehicle = async (vehicle) => {
   }
 };
 
-const viewVehicle = (vehicle) => router.push({ name: "vehicleDetails", params: { id: vehicle.id } });
+const editVehicle = (vehicle) => router.push({ name: "vehicleDetails", params: { id: vehicle.id } });
 
 onMounted(getVehicles);
 </script>
@@ -97,27 +101,27 @@ onMounted(getVehicles);
     >
       <v-data-table
         v-model:page="page"
+        class="vehicles-table"
         :headers="headers"
         :items="visibleVehicles"
         :items-per-page="ITEMS_PER_PAGE"
         :items-per-page-options="[ITEMS_PER_PAGE]"
         item-value="id"
       >
-        <template #[`item.make`]="{ item }">
-          <router-link :to="{ name: 'vehicleDetails', params: { id: item.id } }" class="text-primary font-weight-medium">
-            {{ item.make }}
-          </router-link>
-        </template>
-
         <template #[`item.status`]="{ item }">
-          <v-chip :color="toneColor[tone(item)]" :class="`vehicle-chip-${tone(item)}`" size="small" variant="flat">
+          <v-chip
+            :color="tone(item) === 'yellow' ? '#FFE500' : toneColor[tone(item)]"
+            :class="`vehicle-chip-${tone(item)}`"
+            size="small"
+            variant="flat"
+          >
             {{ item.status }}
           </v-chip>
         </template>
 
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-1">
-            <v-btn icon="mdi-eye-outline" size="small" variant="text" aria-label="View vehicle" @click="viewVehicle(item)" />
+            <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit vehicle" @click="editVehicle(item)" />
             <v-btn icon="mdi-delete" size="small" variant="text" aria-label="Delete vehicle" @click="deleteVehicle(item)" />
           </div>
         </template>
@@ -125,3 +129,20 @@ onMounted(getVehicles);
     </ListState>
   </PageShell>
 </template>
+
+<style scoped>
+.vehicles-table :deep(table) {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.vehicles-table :deep(th),
+.vehicles-table :deep(td) {
+  width: 20%;
+}
+
+.vehicles-table :deep(.vehicle-chip-yellow) {
+  background-color: #ffe500 !important;
+  color: #1a1a1a !important;
+}
+</style>
