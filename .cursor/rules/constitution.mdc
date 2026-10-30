@@ -24,7 +24,7 @@ This document establishes the absolute operational guardrails for this engineeri
 
 ## 🏛️ Principle 5: Stack Consistency
 *   **The Law:** Implementation must follow the patterns documented in `.cursor/rules/` unless a feature spec explicitly documents a deviation.
-*   **The Guardrail:** Vue 3 + Vuetify 4 + axios on the frontend; Node + Express + Sequelize (ES modules) on the backend. Do not introduce alternate frameworks, response envelopes, or directory layouts without updating the spec and rules first.
+*   **The Guardrail:** Vue 3 + Vuetify 4 + Pinia + axios on the frontend; Node + Express + Sequelize (ES modules) on the backend. Do not introduce alternate frameworks, response envelopes, or directory layouts without updating the spec and rules first.
 
 ## 🤖 Principle 6: The Developer is the Tech Lead
 *   **The Law:** The AI is the executor; the human developer is the Architect and Auditor.

@@ -1,18 +1,19 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 6 adds `enrollments`. Sequelize creates `id`, `createdAt`, and `updatedAt`.
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
 | Column | Type | Rules |
 | ------ | ---- | ----- |
 | `id` | INTEGER | Primary key, auto-increment |
-| `firstName` | STRING | Required. Replaced from the Google token on every login. Profile update does not change it. |
-| `lastName` | STRING | Required. Replaced from the Google token on every login. Profile update does not change it. |
-| `email` | STRING | Required, unique. Google login stores the lowercased token email. Profile update does not change it. |
-| `role` | STRING | Existing course features. Not set by the Google login request. New Google users default to `student`. |
+| `firstName` | STRING | Required. Replaced from the Google token on every login. No API changes it. |
+| `lastName` | STRING | Required. Replaced from the Google token on every login. No API changes it. |
+| `email` | STRING | Required, unique. Google login stores the lowercased token email. No API changes it. |
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
+
+Users are only created by Google sign-in (`POST /api/login`).
 
 ## `sessions`
 
@@ -26,8 +27,6 @@
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
-A user has many sessions. A session belongs to one user.
-
 ## `areas`
 
 | Column | Type | Rules |
@@ -38,20 +37,45 @@ A user has many sessions. A session belongs to one user.
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
-An area has no associations in this feature.
-
-## `enrollments`
+## `roles`
 
 | Column | Type | Rules |
 | ------ | ---- | ----- |
 | `id` | INTEGER | Primary key, auto-increment |
-| `studentId` | INTEGER | Required. References `users.id`. Set from the session. |
-| `sectionId` | INTEGER | Required. References `sections.id`. |
+| `userId` (`user_id`) | INTEGER | Required. References `users.id`. |
+| `areaId` (`area_id`) | INTEGER | Required for `area_admin`, `null` otherwise. References `areas.id`. |
+| `role` | STRING(20) | Required. One of `admin`, `area_admin`, `maintenance`. |
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
+Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissions without a row.
+
+## `vehicleTypes`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, unique without regard to case, max 255 |
+| `identifier` | ENUM | Required. Exactly `VIN` or `Serial` |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+## `service_types`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, unique ignoring case, max 255 |
+| `service_frequency_days` | INTEGER | Null when omitted. Positive whole number when present. At least one frequency is required. |
+| `service_frequency_miles` | INTEGER | Null when omitted. Positive whole number when present. At least one frequency is required. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+The JSON body uses `service_frequency_days` and `service_frequency_miles`.
+
 ## Associations
 
-- A user has many enrollments (`studentId`). Deleting the user deletes those enrollments.
-- An enrollment belongs to one user and one section.
-- A section has many enrollments (`sectionId`). Deleting the section deletes those enrollments.
+- A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
+- A user has many roles. A role belongs to one user. Deleting the user deletes their roles.
+- An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
+- Service types have no associations.

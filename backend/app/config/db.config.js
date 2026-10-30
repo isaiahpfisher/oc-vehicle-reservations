@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env.js";
 
 const dbConfig = {
   HOST: process.env.DB_HOST || "localhost",

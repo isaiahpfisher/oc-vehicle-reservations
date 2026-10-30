@@ -8,7 +8,7 @@ No application code may be written unless it maps to a requirement in one of the
 **Student guide (design):** [writing-feature-design.md](./writing-feature-design.md) — ownership, API, screens, test map, DoD, out of scope.  
 **Student guide (living reference):** [reference/writing-living-reference.md](./reference/writing-living-reference.md) — update api / data-model / behavior in the same PR.
 
-*(Examples in the writing guides often cite the OC CS Speckit Todo sample app — use them as patterns for your product.)*
+*(Examples in the writing guides often cite the OC CS Speckit Todo sample app — use them as patterns for this app.)*
 
 **Sprints** live in your agile tool — they are **not** part of these specs.
 

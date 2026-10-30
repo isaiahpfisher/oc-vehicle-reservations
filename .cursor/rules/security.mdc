@@ -1,50 +1,52 @@
 ---
-description: Authentication, session management, data scoping, and role-based access.
+description: Authentication, sessions, role-based access, and area scoping.
 globs: "backend/app/**/*"
 ---
 # Security & Access Control
 
-## Authentication Flow
-1.  `POST /login` — validate `username` + `password`; normalize username: `trim().toLowerCase()`.
-2.  Look up user; compare password with `bcrypt.compare()` against hash from `User.unscoped()`.
-3.  Reuse valid Session row if token not expired; otherwise create new JWT + Session row.
-4.  Return user payload including `token`, `userId`, `role` (never return password hash).
-5.  `POST /logout` — clear token on Session row.
-6.  `AUTH_SECRET` from environment; no hardcoded secrets in production.
+## Sign-in (Feature 1, Feature 3)
+1.  `POST /login` — verify the Google ID token (`googleCredentials`); read `email`, `given_name`, `family_name`. Normalize email with `trim().toLowerCase()`; only `oc.edu` and its subdomains are accepted.
+2.  A new email creates the user — the **only** way users are created (FR-013). There is no registration endpoint and there are no passwords.
+3.  Reuse an unexpired Session row for that user; otherwise sign a JWT (24h) and create a Session row.
+4.  Respond with `{ userId, email, firstName, lastName, roles, token }` (roles from `toRolesResponse`).
+5.  `POST /logout` — delete the Session row for the Bearer token.
+6.  `POST /dev-login` (FR-014) — development only: `404` unless `DEV_LOGIN=true` **and** `NODE_ENV !== "production"`; signs in an existing user with the shared `DEV_LOGIN_PASSWORD`. Never add another password or bypass path.
+7.  Secrets (`AUTH_SECRET`, `GOOGLE_CLIENT_ID`) come from the environment; never hardcode them.
 
 ## Request Authentication
-*   `authenticate` middleware reads `Authorization: Bearer <token>`.
-*   Validates token exists in Session table and `expirationDate >= Date.now()`.
-*   Sets `req.user = { id, role, organizationId }` from joined User row.
-*   Missing/invalid → `401` with `{ message: "Unauthorized! ..." }`.
-
-## User-Scoped Data (Todo App)
-*   Every list/todo query must include `userId: req.user.id` in the `where` clause.
-*   On create, set `userId` from `req.user.id` — never from request body.
-*   Before update/delete, load the row and verify ownership; return `404` if not found or not owned (do not leak existence via `403`).
-
-## Row-Level Access Helpers
-Centralize repeated checks in `app/authorization/`:
-```javascript
-export const getAccessibleListOrNull = async (req, listId) => {
-  const row = await List.findOne({ where: { id: listId, userId: req.user.id } });
-  return row ?? null;
-};
-```
-Controllers call helpers; do not duplicate scope logic inline.
+*   `authenticate` reads `Authorization: Bearer <token>`, requires an unexpired Session row, and loads the user **with roles from the database on every request** — a role change applies on the user's next request.
+*   It sets `req.user = { id, roles: [{ id, role, areaId }] }`. Never trust ids or roles sent in the request body.
+*   Missing/invalid token → `401` `{ message: "Unauthorized! ..." }`.
 
 ## Role Guards
-Export named middleware from `authorization/authorization.js`:
-*   `requireAdmin` — role is `admin` or `superadmin`.
-*   `requireSuperAdmin` — role is `superadmin` only.
+Roles: `admin`, `area_admin` (one row per area, with `areaId`), `maintenance`. Every user is also a requester without a row. All guards live in `app/authorization/authorization.js`:
 
-## Password Rules
-*   Hash with bcryptjs, `SALT_ROUNDS = 10`.
-*   Minimum length enforced at controller (e.g. 8 chars on reset).
-*   `reset-password` disabled when `NODE_ENV === "production"`.
+| Export | Use |
+| --- | --- |
+| `authenticate` | Any signed-in user |
+| `authenticateAdmin` | `admin` only |
+| `authenticateMaintenance` | `maintenance` (or admin) |
+| `authenticateAreaAdmin` | `area_admin` of any area (or admin) |
+| `authorizeRoles(...roles)` | Any listed role (or admin) |
+| `canAccessArea(req.user, areaId)` | In controllers: admin, or area admin **of that area** |
+| `isAdmin(user)`, `holdsAnyRole(user, roles)` | In controllers, when a rule depends on who is asking |
 
-## Optional Multi-Org Scoping (future)
-If org tenancy is added, centralize filters in `authorization/tenantScope.js`:
-*   `sessionTenantScopeWhere(req)` for standard users.
-*   `X-Acting-Organization-Id` header for superadmin org switching.
-*   Never trust client-supplied `organizationId` on write operations.
+*   **Admins pass every role check.** Do not re-check for `"admin"` by hand; use the helpers.
+*   Every route uses one of these guards. Only `/login`, `/dev-login`, and `/health` are public.
+*   Guard the route in `*.routes.js` (`router.post("/", [authenticateAdmin], …)`); keep record-level checks in the controller.
+
+## Status Codes for Access
+| Situation | Status |
+| --- | --- |
+| No session, invalid or expired token | `401` |
+| Signed in but missing the required role | `403` with the guard's role message |
+| Record the user may not see (e.g. a non-admin reading another user) | `404` — do not reveal it exists |
+| Self-lockout attempt (removing your own `admin` role, deleting yourself) | `400` with a message |
+
+## Area Scoping
+*   Area-scoped records (requests, vehicles, … in later features) are checked with `canAccessArea(req.user, areaId)` — never with inline role logic.
+*   An area admin only reads and changes records of their own areas. Records outside the user's scope return `404`.
+*   Centralize repeated scope queries in `app/authorization/` (e.g. a `where` builder for "areas this user administers") so controllers share one definition.
+
+## Self-protection
+*   An admin cannot remove their own `admin` role or delete their own account (`400`). The UI disables these too, but the API is the enforcement.

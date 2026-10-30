@@ -20,11 +20,6 @@ export default (sequelize, Sequelize) => {
         allowNull: false,
         unique: true,
       },
-      role: {
-        type: Sequelize.STRING(20),
-        allowNull: false,
-        defaultValue: "student",
-      },
     },
   );
 

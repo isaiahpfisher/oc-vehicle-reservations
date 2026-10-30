@@ -1,10 +1,8 @@
-# Courses App
+# OC Vehicle Reservations
 
-Spec-Driven Development (SDD) starter kit — **empty product shell**.
+Oklahoma Christian University's vehicle reservation system: staff and students sign in with their OC Google account to request vehicles, and admins manage users, roles, and areas.
 
-Specifications define _what_ to build (`features/`). Cursor rules define _how_ (`.cursor/rules/`). Tests verify both.
-
-This repository was generated from the Speckit starter kit. Replace this README’s product name, database, and API prefix, then add `features/feature-1-….md` before writing application code.
+Built with Spec-Driven Development (SDD). Specifications define _what_ to build ([`features/`](features/README.md)); Cursor rules define _how_ (`.cursor/rules/`); tests verify both.
 
 **Docs:** [features/framework.md](features/framework.md) · [docs/STARTER-KIT.md](docs/STARTER-KIT.md) · [docs/adr/README.md](docs/adr/README.md)
 
@@ -14,7 +12,7 @@ This repository was generated from the Speckit starter kit. Replace this README�
 
 | Layer    | Technology                                                        |
 | -------- | ----------------------------------------------------------------- |
-| Frontend | Vue 3, Vuetify 4, Vite, vue-router, axios                         |
+| Frontend | Vue 3, Vuetify 4, Vite, vue-router, Pinia, axios                  |
 | Backend  | Node.js (ES modules), Express, Sequelize, MySQL                   |
 | Tests    | Jest + supertest (backend), Vitest + `@vue/test-utils` (frontend) |
 
@@ -44,6 +42,38 @@ cd frontend && npm run dev
 
 Works on **macOS, Windows, and Linux** — use `npm run …` for all tooling (PDF, Agility, bundles).
 
+### Make the first admin
+
+Every account comes from Google sign-in, so a fresh install has no admin. Start the app, sign in with Google once to create your account, then from `backend/`:
+
+```bash
+npm run make-admin -- you@oc.edu
+```
+
+Reload the app; you now hold the `admin` role and can grant roles to others from **Users**. The email is matched case-insensitively. The script exits `1` and changes nothing if no account has that email.
+
+### Seed test data and sign in as other users (development only)
+
+To test role-based access, seed realistic users and sign in as them without Google. From the repo root or `backend/`:
+
+```bash
+npm run seed -- --keep you@eagles.oc.edu   # replaces users, sessions, roles, and areas; --keep preserves your account
+```
+
+Re-run it any time to reset to the same data. The backend (server and scripts) reads `backend/.env`, falling back to the repo-root `.env`, from whatever directory you start it in.
+
+Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Developer sign-in** form under the Google button on the login page (it only appears in development builds). Every account's password is `password` (override with `DEV_LOGIN_PASSWORD`). Dev sign-in is refused whenever `NODE_ENV=production`, and `npm run seed` refuses to run there.
+
+| Email | Roles |
+| ----- | ----- |
+| `admin@oc.edu` | Admin |
+| `maintenance@oc.edu` | Maintenance |
+| `areaadmin@oc.edu` | Area Admin — Athletics |
+| `multirole@oc.edu` | Maintenance, Area Admin — Music, Area Admin — Theatre |
+| `requester@oc.edu` | none (requester) |
+
+The seed also adds staff and students across six areas (Admissions, Athletics, Facilities, Music, Student Life, Theatre); see `backend/scripts/seed.mjs`.
+
 ## Branching
 
 | Branch        | Purpose                                      |
@@ -57,8 +87,8 @@ git checkout -b dev
 git checkout -b feature/1-short-name
 ```
 
-## Next steps
+## Adding a feature
 
-1. Write `features/feature-1-….md` (see [framework template](../../features/framework.md#feature-spec-template) — **Status**, **Input**, **FR-00N**, **SC-00N**, **Key Entities**, **Agent implementation request**, **Definition of Done**).
-2. Update `features/README.md` catalog.
-3. Implement with Cursor: `Implement @features/feature-1-….md per its Agent implementation request and Definition of Done`, or one layer at a time (reference updates in the same PR when API/schema changes).
+1. Write or update `features/feature-N-….md` (see the [framework template](features/framework.md#feature-spec-template): **Status**, **Input**, **FR-00N**, **SC-00N**, **Key Entities**, **Agent implementation request**, **Definition of Done**).
+2. Add it to the [feature catalog](features/README.md#feature-catalog).
+3. Implement on `feature/N-…` per the spec's Agent implementation request and Definition of Done, updating `features/reference/` in the same PR when the API, schema, or rules change.

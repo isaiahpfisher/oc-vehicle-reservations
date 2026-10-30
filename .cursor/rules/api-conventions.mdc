@@ -6,59 +6,74 @@ globs: "backend/**/*, **/*.routes.js, **/*.controller.js, **/*.model.js"
 
 ## Stack
 *   Node.js `"type": "module"` — import/export only.
-*   Express 4, mounted at `/todo/`.
-*   Sequelize 6 + mysql2; config in `app/config/db.config.js` via dotenv.
-*   Separate `sequelizeInstance.js`; models import it and register in `models/index.js`.
-*   bcryptjs + jsonwebtoken + Session model for auth.
+*   Express 4. API prefix `API_PREFIX` in `server.js`: `/api` in development and test; the production prefix must match `baseURL` in `frontend/src/services/services.js`.
+*   Sequelize 6 + mysql2; config in `app/config/db.config.js`, instance in `app/config/sequelizeInstance.js`, models registered in `models/index.js`.
+*   google-auth-library + jsonwebtoken + Session model for auth (see `security.mdc`).
 *   winston + morgan (morgan streams to winston).
 
+## Environment Loading
+*   Every entry point (`server.js`, each `backend/scripts/*.mjs`) imports `app/config/env.js` first, directly or through the models. It loads `backend/.env`, then the repo-root `.env`, from any working directory, and is skipped under `NODE_ENV=test` (tests load `.env.test` in `tests/setup.js`).
+*   Keep `dialectOptions: { timezone: "local" }` in `sequelizeInstance.js`: Sequelize copies its IANA `timezone` into mysql2, which rejects it.
+
 ## server.js Responsibilities
-*   `db.sequelize.sync()` on startup; optional `{ alter: true }` when `SEQUELIZE_SYNC_ALTER=true`.
-*   CORS with `credentials: true` and frontend origin.
+*   `db.sequelize.sync()` on startup (`{ alter: true }` in development unless `SEQUELIZE_SYNC_ALTER=false`); never in test.
+*   CORS with `credentials: true` and the frontend origin.
 *   `express.json()` and `urlencoded({ extended: true })`.
-*   Mount routes: `app.use("/todo", routes)`.
+*   Mount `app.use(API_PREFIX, routes)`.
 *   Export `app` as default; call `listen()` only when `NODE_ENV !== "test"`.
 
 ## Route Layout
-*   `app/routes/index.js` — central router registering each `*.routes.js`.
-*   Auth at mount root: `POST /register`, `POST /login`, `POST /logout`, `POST /reset-password` (dev only).
-*   Resource routes: `router.use("/lists", ListRoutes)` etc.
-*   Nested children on parent router: `GET /lists/:listId/todos`.
-
-Todo REST shape:
-*   `GET/POST /todo/lists`
-*   `GET/POST /todo/lists/:listId/todos`
-*   `PUT/DELETE /todo/todos/:id`
+*   `app/routes/index.js` registers each `*.routes.js`: auth routes at the root (`/login`, `/logout`, `/dev-login`), resources by plural kebab-case path (`router.use("/users", userRoutes)`).
+*   Every route declares its guard (see `security.mdc`):
+    ```javascript
+    router.get("/", [authenticate], areaController.findAll);
+    router.post("/", [authenticateAdmin], areaController.create);
+    ```
+*   The current endpoint list lives in `features/reference/api.md` — update it in the same change as the routes.
 
 ## Controller Pattern
 ```javascript
 import db from "../models/index.js";
 import logger from "../config/logger.js";
+import { parseId, requiredText } from "../helpers/fields.js";
 
 const exports = {};
-exports.findAll = async (req, res) => { /* ... */ };
+exports.findOne = async (req, res) => {
+  try {
+    const areaId = parseId(req.params.areaId);
+    if (areaId === null) return res.status(400).send({ message: "Invalid area id." });
+    // ...
+  } catch (err) {
+    logger.error(`area findOne failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to fetch area." });
+  }
+};
 export default exports;
 ```
-*   Parse route IDs: `parseInt(req.params.id, 10)`; reject `NaN`.
-*   Use `logger.debug/warn/error` — never `console.log`.
+*   Parse ids and body fields with `helpers/fields.js` (`parseId`, `requiredText`, `requiredInt`), not ad-hoc `parseInt`. A bad id → `400 "Invalid <thing> id."`; repeated per-controller checks get a small local helper (e.g. `userIdParam`).
+*   Use `logger.debug/warn/error` — never `console.log` (scripts may print their result).
 *   Sequelize `include` for associations; `order` for stable list sorting.
 
 ## JSON Responses
-*   **Success:** `res.send(data)` or `res.status(201).send(created)`.
+*   **Success:** `res.send(data)`, `res.status(201).send(created)`, or `res.status(204).send()` for deletes with no body.
 *   **Failure:** `res.status(4xx).send({ message: "Human-readable explanation." })`.
-*   **404 format:** ``{ message: `List with id=${id} not found.` }``
+*   **404 format:** ``{ message: `Area with id=${id} not found.` }``
 *   Do **not** use `{ success, data }` envelopes.
+*   Shape non-trivial payloads with a helper in `app/helpers/` (e.g. `toUserResponse`, `toRolesResponse` in `helpers/users.js`) instead of sending raw model instances, so every endpoint returns the same shape and internal fields never leak.
 
 ## Model Conventions
-*   Sensitive fields excluded via `defaultScope` (e.g. User password).
-*   Use `Model.unscoped()` only when password compare is required at login.
-*   Associations and `hasMany`/`belongsTo` defined in `models/index.js`, not scattered in controllers.
+*   `underscored: true` is global: attributes are camelCase in code and JSON, columns are snake_case. Name foreign keys `userId` / `areaId`; indexes reference columns (`["user_id", "area_id"]`).
+*   Define associations in `models/index.js`, not in controllers. Set `onDelete: "CASCADE"` explicitly where child rows must go with their parent (a user's sessions and roles; an area's roles).
+*   Enumerated values are exported constants next to the model (e.g. `ROLE_NAMES`) and validated in the controller with a `400`.
 
-## Schema Changes
-Incremental scripts in `app/scripts/` — one concern per file, runnable via `npm run <script>`.
+## Writes
+*   Replacing a set of rows (e.g. a user's roles) happens in one `db.sequelize.transaction`.
+*   Validate referenced ids with **one** query (`count({ where: { id: ids } })`), not one per id.
+*   Translate `SequelizeUniqueConstraintError` into a `400` with the same message the pre-check uses.
 
-## Protected Routes
-```javascript
-router.get("/", [authenticate], controller.findAll);
-```
-`authenticate` looks up Bearer token in Session table, checks expiration, sets `req.user`.
+## Scripts (`backend/scripts/*.mjs`)
+*   One concern per file. Export the work as a function returning `{ exitCode, message }` so tests can call it; run the CLI only when the file is executed directly, and close the Sequelize connection when done.
+*   Add an npm script in `backend/package.json` and a passthrough in the root `package.json` (`"seed": "npm run seed --prefix backend --"`).
+*   Scripts that change data refuse to run when `NODE_ENV=production`.
+*   Each script has a test in `backend/tests/` and is documented in the README.
+*   Schema changes come from the models (`sync`); there are no migration scripts yet.
