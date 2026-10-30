@@ -9,7 +9,7 @@ import router from "../src/router.js";
 import areaServices from "../src/services/areaServices.js";
 import requestServices from "../src/services/requestServices.js";
 import placeServices from "../src/services/placeServices.js";
-import { toDateInput } from "../src/models/requests.js";
+import { calendarTitle, toDateInput } from "../src/models/requests.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
@@ -416,6 +416,10 @@ describe("Feature 8 — Vehicle Request Management", () => {
       });
       await waitFor(() => expect(calendar.textContent).toContain("Away game"));
       expect(calendar.textContent).not.toContain("Spring retreat");
+      // The title spans the week, within a month and across months or years.
+      expect(calendarTitle("2026-10-30", "week")).toMatch(/^Oct 25\s–\s31, 2026$/);
+      expect(calendarTitle("2026-10-01", "week")).toMatch(/^Sep 27\s–\sOct 3, 2026$/);
+      expect(calendarTitle("2026-12-30", "week")).toMatch(/^Dec 27, 2026\s–\sJan 2, 2027$/);
     });
 
     it("User views requests as a monthly calendar", async () => {
@@ -476,6 +480,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(requestServices.getRequest).toHaveBeenCalledWith("1");
       await waitFor(() => expect(stopNames()).toEqual(["BOK Center"]));
       expect(document.body.querySelector('[data-test="purpose"] textarea').value).toBe("Away game");
+      expect(document.body.querySelector(".detail-header h2").textContent).toBe("Trip to BOK Center");
       // The request number stays in the URL only.
       expect(document.body.textContent).not.toContain("#1");
       expect(document.body.textContent).toContain("Submitted by");
@@ -484,12 +489,16 @@ describe("Feature 8 — Vehicle Request Management", () => {
     });
 
     it("locks the form once the request is no longer pending", async () => {
-      requestServices.getRequest.mockResolvedValue({ data: tripRequest({ status: "reserved" }) });
+      requestServices.getRequest.mockResolvedValue({
+        data: tripRequest({ status: "reserved", destinations: [tulsa, okc] }),
+      });
       await mountAppAt("/requests/1");
 
       await waitFor(() => expect(byTest("locked")).not.toBeNull());
       expect(document.body.querySelector('[data-test^="save-"]')).toBeNull();
       expect(byTest("cancel-request")).not.toBeNull();
+      expect(document.body.querySelector(".detail-header h2").textContent).toBe("Trip to BOK Center +1 more");
+      expect(byTest("trip-purpose").textContent).toBe("Away game");
     });
   });
 

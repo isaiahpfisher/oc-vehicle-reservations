@@ -26,6 +26,7 @@ import {
   toDateInput,
   toTimeInput,
   tripBounds,
+  tripTitle,
   vehicleLabel,
 } from "../models/requests.js";
 
@@ -324,7 +325,7 @@ const cancelRequest = async () => {
   let updated = null;
   const cancelled = await confirm({
     title: "Cancel request",
-    message: `Cancel "${request.value.purpose}"? An admin will no longer act on it.`,
+    message: `Cancel "${tripTitle(request.value)}"? An admin will no longer act on it.`,
     confirmText: "Cancel Request",
     cancelText: "Keep Request",
     confirmColor: "error",
@@ -402,7 +403,7 @@ const saveVehicles = async (vehicleIds) => {
       <DetailLayout>
         <template #header>
           <DetailHeader
-            :title="request.purpose"
+            :title="tripTitle(request)"
             :subtitle="`${formatTripDates(request)} · ${request.area?.name}`"
             :meta="headerMeta"
             icon="mdi-van-passenger"

@@ -29,6 +29,8 @@ const areaName = computed(() => props.request?.area?.name ?? props.areas.find(({
 
 <template>
   <dl v-if="readonly" class="facts">
+    <dt>Purpose</dt>
+    <dd class="purpose" data-test="trip-purpose">{{ request.purpose }}</dd>
     <dt>Area</dt>
     <dd>{{ areaName }}</dd>
     <dt>People</dt>
@@ -119,5 +121,10 @@ const areaName = computed(() => props.request?.area?.name ?? props.areas.find(({
 
 .facts dd {
   margin: 0;
+}
+
+.facts .purpose {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 </style>

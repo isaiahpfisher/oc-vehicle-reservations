@@ -43,6 +43,10 @@ export const repeatsInARow = (stops) => stops.some((stop, i) => i > 0 && stopKey
 
 export const routeSummary = (request) => request.destinations.map(({ name }) => name).join(" → ");
 
+/** Short name for a request: "Trip to BOK Center", "Trip to BOK Center +2 more". Purpose is long-form text, so it isn't used. */
+export const tripTitle = ({ destinations: [first, ...rest] }) =>
+  `Trip to ${first.name}${rest.length ? ` +${rest.length} more` : ""}`;
+
 const pad = (value) => String(value).padStart(2, "0");
 
 /** Local `YYYY-MM-DD`, the format of `<input type="date">`. */
@@ -107,14 +111,7 @@ export const calendarTitle = (day, view) => {
   start.setDate(focus.getDate() - focus.getDay());
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const startText = start.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
-  const endText = end.toLocaleDateString(undefined, {
-    ...(start.getMonth() === end.getMonth() && sameYear ? {} : { month: "short" }),
-    day: "numeric",
-    year: "numeric",
-  });
-  return `${startText} – ${endText}`;
+  return dayFormat.formatRange(start, end);
 };
 
 /** A `v-calendar` event for the request. All-day trips use date strings so they render as all-day. */

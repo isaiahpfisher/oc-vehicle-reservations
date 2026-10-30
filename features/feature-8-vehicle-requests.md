@@ -264,6 +264,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - Section for destinations (can add multiple, reorderable)
 - Vehicle assignment (can add multiple, only by admins, only after it's been created)
 - Creating and editing happen on this screen. Certain fields are hidden during creation.
+- The header names the trip by its first destination ("Trip to BOK Center +2 more"), not its purpose. Purpose is long-form text and shows in the basic fields section, editable or not.
 
 - **Error state:** `<v-alert type="error">` for API failures.
 
