@@ -1,7 +1,7 @@
 # Behavior & Rules Reference
 
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, and Feature 12 service type rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, and Feature 12 service type rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -34,19 +34,31 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Any signed-in user can list areas; only admins manage them | `GET /api/areas` and `GET /api/areas/:areaId` use `authenticate`. `POST`, `PUT`, and `DELETE` use `authenticateAdmin` (`403` otherwise). `/areas` has `meta.roles: ["admin"]`, so non-admins don't see the **Areas** link and are redirected home. | Feature 2, FR-001; Feature 3, US-3.6 |
 | Name is trimmed, required, unique, and at most 255 characters | Empty or whitespace-only name returns `400` `{ "message": "Missing name." }`. A longer name returns `{ "message": "Name too long." }`. A name already stored on a different area returns `{ "message": "Name already taken." }`. Saving an area with its own current name is allowed. | Feature 2, FR-002, FR-004 |
 | Logo is a URL or an empty string | The value is trimmed. `""` is stored when the logo is omitted or blank. `logo.png` returns `400` `{ "message": "Invalid logo URL." }`. A non-empty logo must be an `http` or `https` URL. The areas list renders an image only when `logo` is not empty. | Feature 2, FR-005, FR-006 |
-| Delete removes the area | `DELETE` returns `200` and does not check for other rows that point at the area. The area's `area_admin` roles are deleted with it. | Feature 2, Assumptions; Feature 3 |
+| Delete removes the area when it has no vehicles | `DELETE` returns `200` and deletes the area's `area_admin` roles with it. If the area still has vehicles, `DELETE` returns `400` `{ "message": "Area has vehicles. Delete vehicles or reassign them to a different area first." }` and the area stays. | Feature 2, Assumptions; Feature 3; Feature 5, FR-026 |
 | Areas are managed on one screen | `/areas` heading is **Area Management**. Create and edit use a dialog with **Name** and **Logo**. Delete uses the shared confirmation dialog. Empty list copy is **No areas yet. Create your first area.** | Feature 2, Screen Requirements |
 
 ## Vehicle types
 
 | Rule | Enforcement | Provenance |
 | ---- | ----------- | ---------- |
-| Only admins manage vehicle types | Every `/api/vehicle-types` route uses `authorizeRoles('admin')`. A missing token is `401`. A signed-in user without `admin` is `403` `{ "message": "Admin role required." }`. `/vehicle-types` has `meta.nav: "Vehicle Types"` and `meta.roles: ["admin"]`, so admins see the **Vehicle Types** link and everyone else does not. Non-admins who open the URL are redirected home. An unsigned visit redirects to `/login`. | Feature 4, FR-001, US-4.5 |
+| Only admins manage vehicle types | `POST`, `PUT`, and `DELETE` use `authorizeRoles('admin')`. `GET` also allows `area_admin` so the vehicle form can list types. A missing token is `401`. A signed-in user with neither role is `403` `{ "message": "Admin role required." }`. `/vehicle-types` has `meta.nav: "Vehicle Types"` and `meta.roles: ["admin"]`, so admins see the **Vehicle Types** link and everyone else does not. Non-admins who open the URL are redirected home. An unsigned visit redirects to `/login`. | Feature 4, FR-001, US-4.5; Feature 5 |
 | Name is trimmed, required, unique without regard to case, and at most 255 characters | Empty or whitespace-only name returns `400` `{ "message": "Missing name." }`. A longer name returns `{ "message": "Name too long." }`. A name already stored on a different vehicle type, compared after lowercasing, returns `{ "message": "Name already taken." }`. Saving a vehicle type with its own current name is allowed. | Feature 4, FR-002, FR-004 |
 | Identifier is `VIN` or `Serial` | Any other value returns `400` `{ "message": "Unknown identifier." }`. An empty identifier returns `{ "message": "Missing identifier." }`. | Feature 4, FR-005 |
 | A field left out of an update keeps its stored value | `PUT` with only `name` does not clear `identifier`, and the reverse. | Feature 4, US-4.4 |
-| Delete removes the vehicle type | `DELETE` returns `200` and does not check for other rows that point at the vehicle type. | Feature 4, Assumptions |
+| Delete removes the vehicle type when it has no vehicles | `DELETE` returns `200`. If the vehicle type still has vehicles, `DELETE` returns `400` `{ "message": "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first." }` and the type stays. | Feature 4, Assumptions; Feature 5, FR-027 |
 | Vehicle types are managed on one screen | `/vehicle-types` heading is **Vehicle Type Management**. The list is a table of 10 rows per page with **Name** and **Identifier**. Create uses a dialog with **Name** and an **Identifier** select (`VIN`, `Serial`). Edit replaces that row with the same fields and **Save** / **Cancel**; Cancel leaves the stored row unchanged. Row icon buttons use `size="small"` and `variant="text"`. Delete uses the shared confirmation dialog. Empty list copy is **No vehicle types yet. Create your first vehicle type.** | Feature 4, Screen Requirements |
+
+## Vehicles
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Admins and area admins manage vehicles | Every `/api/vehicles` route requires `admin` or `area_admin`. A missing token is `401`. Anyone else is `403` `{ "message": "Admin or area admin role required." }`. `/vehicles`, `/vehicles/new`, and `/vehicles/:id` use `meta.roles: ["admin", "area_admin"]`. There is no nav link. Unsigned visits redirect to `/login`. Other signed-in roles redirect home (`/`). | Feature 5, FR-001, US-5.5 |
+| Area admins stay in their areas | The list returns only vehicles in their areas. Reading, editing, or deleting a vehicle in another area is `403` `{ "message": "Not authorized for the specified area." }`. Creating or moving a vehicle into another area is the same `403`. The create and edit pages list only their areas. Opening another area's vehicle redirects home. | Feature 5, FR-001, US-5.5 |
+| Required fields are trimmed | Empty or whitespace-only university id, make, model, identifier, or color is `400` with `Missing …`. Area, vehicle type, year, purchase date, passenger capacity, and status use the same shape. A blank license plate or expiration date is stored as `null`. | Feature 5, FR-002–FR-025 |
+| Length, range, and format | Text max 255. A VIN identifier must be 17 characters (`VIN must be 17 characters.`). A longer serial identifier is `Serial number too long.`. Year is an integer from 1950 through next year. Passenger capacity is an integer from 1 through 300. Purchase date is `yyyy-mm-dd` from `1950-01-01` through today. Expiration date is `yyyy-mm-dd` or null, including dates before today. License plate max 8. Status is `active` or `retired`. | Feature 5, FR-010–FR-025 |
+| University id, identifier, and license plate are unique | A duplicate is `400` with `University id already taken.`, `Identifier already taken.`, or `License plate already taken.`. Saving a vehicle with its own current value is allowed. | Feature 5, FR-014, FR-024 |
+| A field left out of an update keeps its stored value | `PUT` changes only the keys in the body. | Feature 5, US-5.4 |
+| Vehicles are a table plus two pages | `/vehicles` heading is **Vehicle Management**. The table shows 10 rows per page with **Make**, **Model**, **Color**, and a status chip. The chip is red when `retired`, yellow when `active` and the expiration date is before today, and green when `active` with no date or a date today or later. Make and **View vehicle** open `/vehicles/:id`. **Delete vehicle** uses the shared confirmation dialog. Empty copy is **No vehicles yet. Create your first vehicle.** `/vehicles/new` heading is **New vehicle** and **Create** returns to the list. Edit heading is the make and model. **Save** stays on the page. **Cancel** on create returns to the list; on edit it restores the saved values. The identifier label is **VIN** until a `Serial` type is selected. | Feature 5, Screen Requirements |
 
 ## Roles
 
