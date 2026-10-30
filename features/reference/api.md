@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -64,7 +64,7 @@ User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, 
 | `GET` | `/api/areas/:areaId` | Bearer | `200` with one area. |
 | `POST` | `/api/areas` | Admin | `201` with the created area. Body is `{ "name": "Athletics", "logo": "https://example.com/logo.png" }`. Omitted `logo` is stored as `""`. |
 | `PUT` | `/api/areas/:areaId` | Admin | `200` with the updated area. A field omitted from the body keeps its stored value. |
-| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it. |
+| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it. An area that still has vehicles is `400`. |
 
 Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 
@@ -78,18 +78,19 @@ Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 | Non-empty `logo` is not an `http` or `https` URL | `400` | `{ "message": "Invalid logo URL." }` |
 | `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
 | Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
+| Area still has vehicles | `400` | `{ "message": "Area has vehicles. Delete vehicles or reassign them to a different area first." }` |
 
 ## Vehicle types
 
-Every vehicle-type route requires `admin` (`authorizeRoles('admin')`).
+Creating, editing, and deleting vehicle types requires `admin`. Reading them also allows `area_admin` so the vehicle form can list types (Feature 5). A signed-in user with neither role still gets `403` `{ "message": "Admin role required." }`.
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
-| `GET` | `/api/vehicle-types` | Admin | `200` array of vehicle types, ordered by `name`. |
-| `GET` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200` with one vehicle type. |
+| `GET` | `/api/vehicle-types` | Admin or area admin | `200` array of vehicle types, ordered by `name`. |
+| `GET` | `/api/vehicle-types/:vehicleTypeId` | Admin or area admin | `200` with one vehicle type. |
 | `POST` | `/api/vehicle-types` | Admin | `201` with the created vehicle type. Body is `{ "name": "Bus", "identifier": "VIN" }`. |
 | `PUT` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200` with the updated vehicle type. A field omitted from the body keeps its stored value. |
-| `DELETE` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200`. The vehicle type row is removed. |
+| `DELETE` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200`. The vehicle type row is removed. A type that still has vehicles is `400`. |
 
 Success body: `{ "id", "name", "identifier", "createdAt", "updatedAt" }`.
 
@@ -104,6 +105,44 @@ Success body: `{ "id", "name", "identifier", "createdAt", "updatedAt" }`.
 | `identifier` is not `VIN` or `Serial` | `400` | `{ "message": "Unknown identifier." }` |
 | `vehicleTypeId` is not an integer | `400` | `{ "message": "Invalid vehicle type id." }` |
 | Vehicle type id does not exist | `404` | `{ "message": "Vehicle type with id=… not found." }` |
+| Vehicle type still has vehicles | `400` | `{ "message": "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first." }` |
+
+## Vehicles
+
+Every vehicle route requires a Bearer token and `admin` or `area_admin`. Admins pass. Area admins only see and change vehicles in areas they administer. JSON keys are camelCase.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/vehicles` | Admin or area admin | `200` array. Admins receive every vehicle. Area admins receive vehicles whose `areaId` is one of their areas. Ordered by make, then model. |
+| `GET` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with one vehicle. An area admin asking for another area's vehicle is `403`. |
+| `POST` | `/api/vehicles` | Admin or area admin | `201` with the created vehicle. An area admin can only set `areaId` to an area they administer. |
+| `PUT` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with the updated vehicle. A field omitted from the body keeps its stored value. An area admin cannot edit a vehicle outside their areas, or move one into an area they do not administer. |
+| `DELETE` | `/api/vehicles/:vehicleId` | Admin or area admin | `200`. The vehicle row is removed. An area admin cannot delete a vehicle outside their areas. |
+
+Create body: `{ "areaId", "vehicleTypeId", "universityId", "make", "model", "year", "identifier", "purchasedAt", "color", "passengerCapacity", "licensePlate", "licensePlateExpirationDate", "status" }`. A blank license plate or expiration date is stored as `null`. The same keys are accepted with underscores (`area_id`, `purchased_at`).
+
+Success body: `{ "id", "areaId", "vehicleTypeId", "universityId", "make", "model", "year", "identifier", "purchasedAt", "color", "passengerCapacity", "licensePlate", "licensePlateExpirationDate", "status", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Area admin acts on another area | `403` | `{ "message": "Not authorized for the specified area." }` |
+| Missing or whitespace-only required text | `400` | `{ "message": "Missing university id." }` (and the same shape for make, model, identifier, and color) |
+| Missing area, vehicle type, year, purchase date, passenger capacity, or status | `400` | `{ "message": "Missing area id." }` and the matching message for that field |
+| Unknown area or vehicle type | `400` | `{ "message": "Area does not exist." }` or `{ "message": "Vehicle type does not exist." }` |
+| Text longer than 255 characters | `400` | `{ "message": "University id too long." }` (make, model, and color use the same shape) |
+| Serial identifier longer than 255 characters | `400` | `{ "message": "Serial number too long." }` |
+| VIN identifier not exactly 17 characters | `400` | `{ "message": "VIN must be 17 characters." }` |
+| Duplicate university id, identifier, or license plate | `400` | `{ "message": "University id already taken." }` (identifier and license plate use the same shape) |
+| Year is not an integer, or is outside 1950 through next year | `400` | `{ "message": "Year must be an integer." }` or `{ "message": "Year must be between 1950 and the year after this year." }` |
+| Passenger capacity is not an integer, or is outside 1 through 300 | `400` | `{ "message": "Passenger capacity must be an integer." }` or `{ "message": "Passenger capacity must be between 1 and 300." }` |
+| Purchase date is not numerical, not `yyyy-mm-dd`, or outside 1950-01-01 through today | `400` | `{ "message": "Purchase date must be a numerical date." }`, `{ "message": "Purchase date must be in format 'yyyy-mm-dd'." }`, or `{ "message": "Purchase date must be between 1950 and the current date." }` |
+| Expiration date is not numerical or not `yyyy-mm-dd` | `400` | `{ "message": "License plate expiration date must be a numerical date." }` or `{ "message": "License plate expiration date must be in format 'yyyy-mm-dd'." }` |
+| License plate longer than 8 characters | `400` | `{ "message": "License plate too long." }` |
+| Status is not `active` or `retired` | `400` | `{ "message": "Invalid status." }` |
+| `:vehicleId` is not an integer | `400` | `{ "message": "Invalid vehicle id." }` |
+| Vehicle id does not exist | `404` | `{ "message": "Vehicle with id=… not found." }` |
 
 ## Service types
 

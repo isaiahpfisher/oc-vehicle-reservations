@@ -143,6 +143,13 @@ exports.remove = async (req, res) => {
       return res.status(404).send({ message: `Area with id=${areaId} not found.` });
     }
 
+    const vehicleCount = await db.vehicle.count({ where: { areaId } });
+    if (vehicleCount > 0) {
+      return res.status(400).send({
+        message: "Area has vehicles. Delete vehicles or reassign them to a different area first.",
+      });
+    }
+
     await db.area.destroy({ where: { id: areaId } });
 
     return res.status(200).send({ message: "Area deleted successfully." });
