@@ -175,7 +175,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 **Not found:** `404`.
 **Unauthorized** (lacking `area_admin` or `admin` role): `403`.
 
----
+--- 
 
 ## Screen Requirements
 
@@ -1520,18 +1520,267 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 ---
 
+### US-5.6: Areas with vehicles cannot be deleted
+
+#### Scenario: Admin user tries to delete an area with a vehicle
+
+- **Given** I am signed in as admin on the areas view
+- **And** An area with id `1` exists
+- **And** A vehicle with area id `1` exists
+- **When** I submit the delete dialog for area with id `1`
+- **Then** validation blocks the request and I see a `Area has vehicles. Delete vehicles or reassign them to a different area first.` message
+
+#### Scenario: Signed-in user API request to delete an area that has a vehicle
+- **Given** I am signed in as admin
+- **And** An area with id `1` exists
+- **And** A vehicle with area id `1` exists
+- **When** I request `DELETE /api/areas/1`
+- **Then** the API returns `400` with `{ message: "Area has vehicles. Delete vehicles or reassign them to a different area first." }`
+
+---
+
+### US-5.7: Vehicle types with vehicles cannot be deleted
+
+#### Scenario: Admin user tries to delete a vehicle type with a vehicle
+
+- **Given** I am signed in as admin on the vehicle types view
+- **And** A vehicle type with id `1` exists
+- **And** A vehicle with vehicle type id `1` exists
+- **When** I submit the delete dialog for vehicle type with id `1`
+- **Then** validation blocks the request and I see a `Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first.` message
+
+#### Scenario: Signed-in user API request to delete a vehicle type that has a vehicle
+- **Given** I am signed in as admin
+- **And** A vehicle type with id `1` exists
+- **And** A vehicle with vehicle type id `1` exists
+- **When** I request `DELETE /api/vehicle-types/1`
+- **Then** the API returns `400` with `{ message: "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first." }`
+
+---
+
 ## Test Coverage Map
 
 | Story | Scenario | Test file | Test name |
 |-------|----------|-----------|-----------|
-
+| US-5.1 | Admin user creates a vehicle | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle` |
+| US-5.1 | Area admin user creates a vehicle | `frontend/tests/Vehicles.test.js` | `Area admin user creates a vehicle` |
+| US-5.1 | Admin user saves vehicle | `backend/tests/vehicles.test.js` | `Admin user saves vehicle` |
+| US-5.1 | Admin user saves vehicle | `frontend/tests/Vehicles.test.js` | `Admin user saves vehicle` |
+| US-5.1 | Admin user selects vehicle type to be one with a serial number on create | `frontend/tests/Vehicles.test.js` | `Admin user selects vehicle type to be one with a serial number on create` |
+| US-5.1 | Admin user creates vehicle with missing area | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing area` |
+| US-5.1 | Admin user creates vehicle with missing vehicle type | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing vehicle type` |
+| US-5.1 | Admin user creates vehicle with missing university id | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing university id` |
+| US-5.1 | Admin user creates vehicle with missing identifier | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing identifier` |
+| US-5.1 | Admin user creates vehicle with missing make | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing make` |
+| US-5.1 | Admin user creates vehicle with missing model | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing model` |
+| US-5.1 | Admin user creates vehicle with missing year | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing year` |
+| US-5.1 | Admin user creates vehicle with missing purchase date | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing purchase date` |
+| US-5.1 | Admin user creates vehicle with missing color | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing color` |
+| US-5.1 | Admin user creates vehicle with missing passenger capacity | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing passenger capacity` |
+| US-5.1 | Admin user creates vehicle with missing status | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing status` |
+| US-5.1 | Admin user requests to create a vehicle with a missing area id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing area id` |
+| US-5.1 | Admin user requests to create a vehicle with a missing vehicle type id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing vehicle type id` |
+| US-5.1 | Admin user requests to create a vehicle with a missing make | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing make` |
+| US-5.1 | Admin user requests to create a vehicle with a missing model | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing model` |
+| US-5.1 | Admin user requests to create a vehicle with a missing year | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing year` |
+| US-5.1 | Admin user requests to create a vehicle with a missing identifier | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing identifier` |
+| US-5.1 | Admin user requests to create a vehicle with a missing purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing purchase date` |
+| US-5.1 | Admin user requests to create a vehicle with a missing color | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing color` |
+| US-5.1 | Admin user requests to create a vehicle with a missing passenger capacity | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing passenger capacity` |
+| US-5.1 | Admin user requests to create a vehicle with a missing status | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing status` |
+| US-5.1 | Admin user creates vehicle with a whitespace only university id | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only university id` |
+| US-5.1 | Admin user creates vehicle with a whitespace only make | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only make` |
+| US-5.1 | Admin user creates vehicle with a whitespace only model | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only model` |
+| US-5.1 | Admin user creates vehicle with a whitespace only identifier | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only identifier` |
+| US-5.1 | Admin user creates vehicle with a whitespace only color | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only color` |
+| US-5.1 | Admin user creates vehicle with a whitespace only license plate | `backend/tests/vehicles.test.js` | `Admin user creates vehicle with a whitespace only license plate` |
+| US-5.1 | Admin user creates vehicle with a whitespace only license plate | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only license plate` |
+| US-5.1 | Admin user requests to create a vehicle with a whitespace-only university id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only university id` |
+| US-5.1 | Admin user requests to create a vehicle with a whitespace-only make | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only make` |
+| US-5.1 | Admin user requests to create a vehicle with a whitespace-only model | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only model` |
+| US-5.1 | Admin user requests to create a vehicle with a whitespace-only identifier | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only identifier` |
+| US-5.1 | Admin user requests to create a vehicle with a whitespace-only color | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only color` |
+| US-5.1 | Admin user requests to create a vehicle with a whitespace-only license plate | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only license plate` |
+| US-5.1 | Admin user requests to create a vehicle with an area_id that does not correspond to an existing area_id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with an area_id that does not correspond to an existing area_id` |
+| US-5.1 | Admin user requests to create a vehicle with a vehicle_type_id that does not correspond to an existing vehicle_type_id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a vehicle_type_id that does not correspond to an existing vehicle_type_id` |
+| US-5.1 | Admin user requests to create a vehicle with a status other than active or retired | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a status other than active or retired` |
+| US-5.1 | Admin user requests to create a vehicle with a non-integer value for year | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-integer value for year` |
+| US-5.1 | Admin user requests to create a vehicle with a non-integer value for passenger capacity | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-integer value for passenger capacity` |
+| US-5.1 | Admin user requests to create a vehicle with a non-date value for purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-date value for purchase date` |
+| US-5.1 | Admin user requests to create a vehicle with a non-date value for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-date value for license plate expiration date` |
+| US-5.1 | Admin user requests to create a vehicle with a bad date format for purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a bad date format for purchase date` |
+| US-5.1 | Admin user requests to create a vehicle with a bad date format for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a bad date format for license plate expiration date` |
+| US-5.1 | Admin user creates vehicle with university id longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with university id longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with make longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with make longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with model longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with model longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with serial identifier longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with serial identifier longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with VIN identifier less than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with VIN identifier less than 17 characters` |
+| US-5.1 | Admin user creates vehicle with VIN identifier more than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with VIN identifier more than 17 characters` |
+| US-5.1 | Admin user creates vehicle with color longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with color longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with license plate longer than 8 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with license plate longer than 8 characters` |
+| US-5.1 | Admin user requests to create a vehicle with university id longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with university id longer than 255 characters` |
+| US-5.1 | Admin user requests to create a vehicle with make longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with make longer than 255 characters` |
+| US-5.1 | Admin user requests to create a vehicle with model longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with model longer than 255 characters` |
+| US-5.1 | Admin user requests to create a vehicle with serial identifier longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with serial identifier longer than 255 characters` |
+| US-5.1 | Admin user requests to create a vehicle with VIN identifier less than 17 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with VIN identifier less than 17 characters` |
+| US-5.1 | Admin user requests to create a vehicle with VIN identifier more than 17 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with VIN identifier more than 17 characters` |
+| US-5.1 | Admin user requests to create a vehicle with color longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with color longer than 255 characters` |
+| US-5.1 | Admin user requests to create a vehicle with license plate longer than 8 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with license plate longer than 8 characters` |
+| US-5.1 | Admin user creates a vehicle with a non-unique university id | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle with a non-unique university id` |
+| US-5.1 | Admin user creates a vehicle with a non-unique identifier | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle with a non-unique identifier` |
+| US-5.1 | Admin user creates a vehicle with a non-unique license plate | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle with a non-unique license plate` |
+| US-5.1 | Admin user requests to create a vehicle with a non-unique university id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-unique university id` |
+| US-5.1 | Admin user requests to create a vehicle with a non-unique identifier | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-unique identifier` |
+| US-5.1 | Admin user requests to create a vehicle with a non-unique license plate | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-unique license plate` |
+| US-5.1 | Admin user requests to create a vehicle with a year before 1950 | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a year before 1950` |
+| US-5.1 | Admin user requests to create a vehicle with a year after the current year + 1 | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a year after the current year + 1` |
+| US-5.1 | Admin user requests to create a vehicle with a passenger capacity less than 1 | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a passenger capacity less than 1` |
+| US-5.1 | Admin user requests to create a vehicle with a passenger capacity greater than 300 | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a passenger capacity greater than 300` |
+| US-5.1 | Admin user requests to create a vehicle with a purchase date before 1950 | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a purchase date before 1950` |
+| US-5.1 | Admin user requests to create a vehicle with a purchase date after the current date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a purchase date after the current date` |
+| US-5.2 | Vehicles view lists vehicles for admin | `frontend/tests/Vehicles.test.js` | `Vehicles view lists vehicles for admin` |
+| US-5.2 | Vehicles view lists vehicles for area admin | `frontend/tests/Vehicles.test.js` | `Vehicles view lists vehicles for area admin` |
+| US-5.2 | Vehicles empty state | `frontend/tests/Vehicles.test.js` | `Vehicles empty state` |
+| US-5.3 | Vehicle rows have edit and delete actions | `frontend/tests/Vehicles.test.js` | `Vehicle rows have edit and delete actions` |
+| US-5.3 | Vehicle rows with green chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with green chip` |
+| US-5.3 | Vehicle rows with yellow chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with yellow chip` |
+| US-5.3 | Vehicle rows with red chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with red chip` |
+| US-5.4 | Admin user opens vehicle edit dialog | `frontend/tests/Vehicles.test.js` | `Admin user opens vehicle edit dialog` |
+| US-5.4 | Area admin user opens vehicle edit dialog | `frontend/tests/Vehicles.test.js` | `Area admin user opens vehicle edit dialog` |
+| US-5.4 | Admin user edits a vehicle area | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle area` |
+| US-5.4 | Admin user edits a vehicle area | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle area` |
+| US-5.4 | Admin user edits a vehicle type with identifier of 17 characters | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle type with identifier of 17 characters` |
+| US-5.4 | Admin user edits a vehicle type with identifier of 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle type with identifier of 17 characters` |
+| US-5.4 | Admin user edits a vehicle type with identifier other than 17 characters while current vehicle type has identifier Serial | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle type with identifier other than 17 characters while current vehicle type has identifier Serial` |
+| US-5.4 | Admin user selects vehicle type to be one with a VIN number | `frontend/tests/Vehicles.test.js` | `Admin user selects vehicle type to be one with a VIN number` |
+| US-5.4 | Admin user selects vehicle type to be one with a serial number on edit | `frontend/tests/Vehicles.test.js` | `Admin user selects vehicle type to be one with a serial number on edit` |
+| US-5.4 | Admin user edits a vehicle university id | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle university id` |
+| US-5.4 | Admin user edits a vehicle university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle university id` |
+| US-5.4 | Admin user edits a vehicle make | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle make` |
+| US-5.4 | Admin user edits a vehicle make | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle make` |
+| US-5.4 | Admin user edits a vehicle model | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle model` |
+| US-5.4 | Admin user edits a vehicle model | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle model` |
+| US-5.4 | Admin user edits a vehicle year | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle year` |
+| US-5.4 | Admin user edits a vehicle year | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle year` |
+| US-5.4 | Admin user edits a vehicle identifier | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle identifier` |
+| US-5.4 | Admin user edits a vehicle identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle identifier` |
+| US-5.4 | Admin user edits a vehicle purchase date | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle purchase date` |
+| US-5.4 | Admin user edits a vehicle purchase date | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle purchase date` |
+| US-5.4 | Admin user edits a vehicle color | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle color` |
+| US-5.4 | Admin user edits a vehicle color | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle color` |
+| US-5.4 | Admin user edits a vehicle passenger capacity | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle passenger capacity` |
+| US-5.4 | Admin user edits a vehicle passenger capacity | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle passenger capacity` |
+| US-5.4 | Admin user edits a vehicle license plate | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle license plate` |
+| US-5.4 | Admin user edits a vehicle license plate | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle license plate` |
+| US-5.4 | Admin user edits a vehicle license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle license plate expiration date` |
+| US-5.4 | Admin user edits a vehicle license plate expiration date | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle license plate expiration date` |
+| US-5.4 | Admin user edits a vehicle status | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle status` |
+| US-5.4 | Admin user edits a vehicle status | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle status` |
+| US-5.4 | Admin user edits a vehicle to have a missing area | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing area` |
+| US-5.4 | Admin user edits a vehicle to have a missing vehicle type | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing vehicle type` |
+| US-5.4 | Admin user edits a vehicle to have a missing university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing university id` |
+| US-5.4 | Admin user edits a vehicle to have a missing identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing identifier` |
+| US-5.4 | Admin user edits a vehicle to have a missing make | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing make` |
+| US-5.4 | Admin user edits a vehicle to have a missing model | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing model` |
+| US-5.4 | Admin user edits a vehicle to have a missing year | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing year` |
+| US-5.4 | Admin user edits a vehicle to have a missing purchase date | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing purchase date` |
+| US-5.4 | Admin user edits a vehicle to have a missing color | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing color` |
+| US-5.4 | Admin user edits a vehicle to have a missing passenger capacity | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing passenger capacity` |
+| US-5.4 | Admin user edits a vehicle to have a missing status | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing status` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing area id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing area id` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing vehicle type id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing vehicle type id` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing make | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing make` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing model | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing model` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing year | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing year` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing identifier | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing identifier` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing purchase date` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing color | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing color` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing passenger capacity | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing passenger capacity` |
+| US-5.4 | Admin user requests to edit a vehicle to have a missing status | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing status` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only university id` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only make | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only make` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only model | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only model` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only identifier` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only color | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only color` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only license plate | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only license plate` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only license plate | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only license plate` |
+| US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only university id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only university id` |
+| US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only make | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only make` |
+| US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only model | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only model` |
+| US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only identifier | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only identifier` |
+| US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only color | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only color` |
+| US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only license plate | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only license plate` |
+| US-5.4 | Admin user requests to edit a vehicle to have an area_id that does not correspond to an existing area_id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have an area_id that does not correspond to an existing area_id` |
+| US-5.4 | Admin user requests to edit a vehicle to have a vehicle_type_id that does not correspond to an existing vehicle_type_id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a vehicle_type_id that does not correspond to an existing vehicle_type_id` |
+| US-5.4 | Admin user requests to edit a vehicle to have a status other than active or retired | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a status other than active or retired` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-integer value for year | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-integer value for year` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-integer value for passenger capacity | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-integer value for passenger capacity` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-date value for purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-date value for purchase date` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-date value for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-date value for license plate expiration date` |
+| US-5.4 | Admin user requests to edit a vehicle to have a bad date format for purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a bad date format for purchase date` |
+| US-5.4 | Admin user requests to edit a vehicle to have a bad date format for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a bad date format for license plate expiration date` |
+| US-5.4 | Admin user edits a vehicle to have a university id longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a university id longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a make longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a make longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a model longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a model longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a serial identifier longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a serial identifier longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a VIN identifier less than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a VIN identifier less than 17 characters` |
+| US-5.4 | Admin user edits a vehicle to have a VIN identifier more than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a VIN identifier more than 17 characters` |
+| US-5.4 | Admin user edits a vehicle to have a color longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a color longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a license plate longer than 8 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a license plate longer than 8 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a university id longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a university id longer than 255 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a make longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a make longer than 255 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a model longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a model longer than 255 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a serial identifier longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a serial identifier longer than 255 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a VIN identifier less than 17 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a VIN identifier less than 17 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a VIN identifier more than 17 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a VIN identifier more than 17 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a color longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a color longer than 255 characters` |
+| US-5.4 | Admin user requests to edit a vehicle to have a license plate longer than 8 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a license plate longer than 8 characters` |
+| US-5.4 | Admin user edits a vehicle to have a non-unique university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a non-unique university id` |
+| US-5.4 | Admin user edits a vehicle to have a non-unique identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a non-unique identifier` |
+| US-5.4 | Admin user edits a vehicle to have a non-unique license plate | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a non-unique license plate` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-unique university id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-unique university id` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-unique identifier | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-unique identifier` |
+| US-5.4 | Admin user requests to edit a vehicle to have a non-unique license plate | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-unique license plate` |
+| US-5.4 | Admin user requests to edit a vehicle to have a year before 1950 | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a year before 1950` |
+| US-5.4 | Admin user requests to edit a vehicle to have a year after the current year + 1 | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a year after the current year + 1` |
+| US-5.4 | Admin user requests to edit a vehicle to have a passenger capacity less than 1 | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a passenger capacity less than 1` |
+| US-5.4 | Admin user requests to edit a vehicle to have a passenger capacity greater than 300 | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a passenger capacity greater than 300` |
+| US-5.4 | Admin user requests to edit a vehicle to have a purchase date before 1950 | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a purchase date before 1950` |
+| US-5.4 | Admin user requests to edit a vehicle to have a purchase date after the current date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a purchase date after the current date` |
+| US-5.4 | Admin user deletes a vehicle | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle` |
+| US-5.4 | Admin user deletes a vehicle | `frontend/tests/Vehicles.test.js` | `Admin user deletes a vehicle` |
+| US-5.4 | Admin user updates a vehicle that does not exist | `backend/tests/vehicles.test.js` | `Admin user updates a vehicle that does not exist` |
+| US-5.4 | Admin user updates a vehicle with an invalid vehicleId | `backend/tests/vehicles.test.js` | `Admin user updates a vehicle with an invalid vehicleId` |
+| US-5.4 | Admin user deletes a vehicle that does not exist | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle that does not exist` |
+| US-5.4 | Admin user deletes a vehicle with an invalid vehicleId | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle with an invalid vehicleId` |
+| US-5.5 | Un-signed-in user accesses vehicles page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses vehicles page` |
+| US-5.5 | Unauthenticated API request to vehicles | `backend/tests/vehicles.test.js` | `Unauthenticated API request to vehicles` |
+| US-5.5 | Unauthenticated API request to a particular vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to a particular vehicle` |
+| US-5.5 | Unauthenticated API request to create a vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to create a vehicle` |
+| US-5.5 | Unauthenticated API request to update a vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to update a vehicle` |
+| US-5.5 | Unauthenticated API request to delete a vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to delete a vehicle` |
+| US-5.5 | Signed-in user without admin or area admin role accesses vehicles page | `frontend/tests/Vehicles.test.js` | `Signed-in user without admin or area admin role accesses vehicles page` |
+| US-5.5 | Signed-in user without admin or area admin role API request to vehicles | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to vehicles` |
+| US-5.5 | Signed-in user without admin or area admin role API request to a particular vehicle | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to a particular vehicle` |
+| US-5.5 | Signed-in user without admin or area admin role API request to create a vehicle | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to create a vehicle` |
+| US-5.5 | Signed-in user without admin or area admin role API request to update a vehicle | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to update a vehicle` |
+| US-5.5 | Signed-in user without admin or area admin role API request to delete a vehicle | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to delete a vehicle` |
+| US-5.5 | Signed-in user with area admin role API request to a particular vehicle of different area | `backend/tests/vehicles.test.js` | `Signed-in user with area admin role API request to a particular vehicle of different area` |
+| US-5.5 | Signed-in user with area admin role API request to create a vehicle in a different area | `backend/tests/vehicles.test.js` | `Signed-in user with area admin role API request to create a vehicle in a different area` |
+| US-5.5 | Signed-in user with area admin role API request to update a vehicle to have a different area | `backend/tests/vehicles.test.js` | `Signed-in user with area admin role API request to update a vehicle to have a different area` |
+| US-5.5 | Signed-in user with area admin role API request to update a vehicle with a different area | `backend/tests/vehicles.test.js` | `Signed-in user with area admin role API request to update a vehicle with a different area` |
+| US-5.5 | Signed-in user with area admin role API request to delete a vehicle of a different area | `backend/tests/vehicles.test.js` | `Signed-in user with area admin role API request to delete a vehicle of a different area` |
+| US-5.6 | Admin user tries to delete an area with a vehicle | `frontend/tests/Areas.test.js` | `Admin user tries to delete an area with a vehicle` |
+| US-5.6 | Signed-in user API request to delete an area that has a vehicle | `backend/tests/areas.test.js` | `Signed-in user API request to delete an area that has a vehicle` |
+| US-5.7 | Admin user tries to delete a vehicle type with a vehicle | `frontend/tests/VehicleTypes.test.js` | `Admin user tries to delete a vehicle type with a vehicle` |
+| US-5.7 | Signed-in user API request to delete a vehicle type that has a vehicle | `backend/tests/vehicleTypes.test.js` | `Signed-in user API request to delete a vehicle type that has a vehicle` |
 
 ## Agent implementation request
 
 Copy when asking Cursor to implement this feature (`@` this file):
 
 ```text
-Implement Feature 7 from @features/feature-7-drivers.md on branch `feature/7-drivers`.
+Implement Feature 5 from @features/feature-5-vehicles.md on branch `feature/5-vehicles`.
 
 Follow layer order in @features/framework.md (models → routes → backend tests → frontend → frontend tests).
 Map every Gherkin scenario in the Test Coverage Map; run `npm test` before finishing.
@@ -1546,7 +1795,7 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-013** satisfied)
+- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-027** satisfied)
 - [ ] **Success Criteria (SC-001**–**SC-004)** met
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
