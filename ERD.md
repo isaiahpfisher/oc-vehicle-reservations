@@ -67,7 +67,7 @@ erDiagram
       date license_expiration_date
       boolean has_cdl
       timestamp approved_at optional
-      enum status "pending, approved, denied, revoked"
+      enum status "pending, approved, denied, revoked, former"
     }
 
     DESTINATION {
