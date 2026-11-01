@@ -379,3 +379,32 @@ describe("Feature 3 — User Role Management API", () => {
     });
   });
 });
+
+describe("Feature 5 — areas with vehicles", () => {
+  it("Signed-in user API request to delete an area that has a vehicle", async () => {
+    const headers = await signIn();
+    const { body: area } = await createArea(headers);
+    const type = await db.vehicleType.create({ name: "Car", identifier: "VIN" });
+    await db.vehicle.create({
+      areaId: area.id,
+      vehicleTypeId: type.id,
+      universityId: "ABCD12345EFG",
+      make: "Toyota",
+      model: "Sienna",
+      year: 2015,
+      identifier: "1HGCM82633A004352",
+      purchasedAt: "2018-01-01",
+      color: "gray",
+      passengerCapacity: 8,
+      status: "active",
+    });
+
+    const response = await request(app).delete(`/api/areas/${area.id}`).set(headers);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      message: "Area has vehicles. Delete vehicles or reassign them to a different area first.",
+    });
+    expect(await db.area.count({ where: { id: area.id } })).toBe(1);
+  });
+});

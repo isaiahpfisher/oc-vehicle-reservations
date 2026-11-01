@@ -8,7 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import areaServices from "../src/services/areaServices.js";
-import { signInAs, vuetify } from "./testUtils.js";
+import { apiError, signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -466,6 +466,22 @@ describe("Feature 2 — Area Management", () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain("No areas yet. Create your first area.");
       });
+    });
+
+    it("Admin user tries to delete an area with a vehicle", async () => {
+      signIn();
+      const message = "Area has vehicles. Delete vehicles or reassign them to a different area first.";
+      areaServices.getAreas.mockResolvedValue({ data: [athletics] });
+      areaServices.removeArea.mockRejectedValue(apiError(400, message));
+      await mountAppAt("/areas");
+
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete area"]')).toBeTruthy());
+      document.body.querySelector('[aria-label="Delete area"]').click();
+      await settle();
+      await clickNamed("Delete");
+
+      await waitFor(() => expect(document.body.textContent).toContain(message));
+      expect(document.body.textContent).toContain("Athletics");
     });
   });
 

@@ -4,7 +4,9 @@ import userModel from "./user.model.js";
 import sessionModel from "./session.model.js";
 import roleModel from "./role.model.js";
 import areaModel from "./area.model.js";
+import vehicleTypeModel from "./vehicleType.model.js";
 import serviceTypeModel from "./serviceType.model.js";
+import vehicleModel from "./vehicle.model.js";
 
 const db = {};
 db.Sequelize = Sequelize;
@@ -14,8 +16,10 @@ db.sequelize = sequelize;
 db.user = userModel(sequelize, Sequelize);
 db.session = sessionModel(sequelize, Sequelize);
 db.area = areaModel(sequelize, Sequelize);
+db.vehicleType = vehicleTypeModel(sequelize, Sequelize);
 db.role = roleModel(sequelize, Sequelize);
 db.serviceType = serviceTypeModel(sequelize, Sequelize);
+db.vehicle = vehicleModel(sequelize, Sequelize);
 
 db.user.hasMany(db.session, {
   foreignKey: "userId",
@@ -48,6 +52,30 @@ db.area.hasMany(db.role, {
 db.role.belongsTo(db.area, {
   foreignKey: "areaId",
   as: "area",
+});
+
+db.area.hasMany(db.vehicle, {
+  foreignKey: "areaId",
+  as: "vehicles",
+  onDelete: "RESTRICT",
+});
+
+db.vehicle.belongsTo(db.area, {
+  foreignKey: "areaId",
+  as: "area",
+  onDelete: "RESTRICT",
+});
+
+db.vehicleType.hasMany(db.vehicle, {
+  foreignKey: "vehicleTypeId",
+  as: "vehicles",
+  onDelete: "RESTRICT",
+});
+
+db.vehicle.belongsTo(db.vehicleType, {
+  foreignKey: "vehicleTypeId",
+  as: "vehicleType",
+  onDelete: "RESTRICT",
 });
 
 export default db;
