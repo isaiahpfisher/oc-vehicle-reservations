@@ -23,7 +23,9 @@
     "agility:export": "node scripts/export-agility-import.mjs --project \"Courses App\"",
     "agility:push": "node scripts/push-agility-api.mjs",
     "agility:push:dry-run": "node scripts/push-agility-api.mjs --dry-run",
-    "agility:verify": "node scripts/push-agility-api.mjs --verify"
+    "agility:verify": "node scripts/push-agility-api.mjs --verify",
+    "agility:sync-results": "node scripts/sync-agility-test-results.mjs",
+    "test:agility": "node --test \"scripts/agility/*.test.mjs\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

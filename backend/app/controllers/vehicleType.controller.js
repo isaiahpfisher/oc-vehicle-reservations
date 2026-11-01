@@ -181,6 +181,13 @@ exports.remove = async (req, res) => {
       return res.status(404).send({ message: `Vehicle type with id=${vehicleTypeId} not found.` });
     }
 
+    const vehicleCount = await db.vehicle.count({ where: { vehicleTypeId } });
+    if (vehicleCount > 0) {
+      return res.status(400).send({
+        message: "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first.",
+      });
+    }
+
     await db.vehicleType.destroy({ where: { id: vehicleTypeId } });
 
     return res.status(200).send({ message: "Vehicle type deleted successfully." });

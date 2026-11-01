@@ -8,7 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import vehicleTypeServices from "../src/services/vehicleTypeServices.js";
-import { signInAs, vuetify } from "./testUtils.js";
+import { apiError, signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -421,6 +421,22 @@ describe("Feature 4 — Vehicle Type Management", () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain("No vehicle types yet. Create your first vehicle type.");
       });
+    });
+
+    it("Admin user tries to delete a vehicle type with a vehicle", async () => {
+      signIn();
+      const message = "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first.";
+      vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [bus] });
+      vehicleTypeServices.removeVehicleType.mockRejectedValue(apiError(400, message));
+      await mountAppAt("/vehicle-types");
+
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete vehicle type"]')).toBeTruthy());
+      document.body.querySelector('[aria-label="Delete vehicle type"]').click();
+      await settle();
+      await clickNamed("Delete");
+
+      await waitFor(() => expect(document.body.textContent).toContain(message));
+      expect(document.body.textContent).toContain("Bus");
     });
   });
 

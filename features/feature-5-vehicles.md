@@ -4,7 +4,7 @@
 **Branch pattern:** `feature/5-vehicles`
 **Status:** Draft
 **Created:** 2026-10-20
-**Input:** Signed-in admin users manage vehicles. Vehicles are added/edited with a dialog.
+**Input:** Signed-in admin or area admin users manage vehicles. The list is a table. Create and edit each have their own page.
 **Depends on:** Feature 2 [Areas], Feature 3 [Roles], Feature 4 [Vehicle Types]
 
 ---
@@ -18,7 +18,7 @@
 **So that** users managing vehicle requests can assign a particular vehicle
 
 **Priority:** P1
-**Independent test:** Open the create vehicle dialog, create a vehicle; it appears in the vehicles view
+**Independent test:** Open the create vehicle page, create a vehicle; it appears in the vehicles table
 **Acceptance scenarios:** see ### US-5.1 under Acceptance Criteria
 
 ### US-5.2: View vehicles
@@ -34,11 +34,11 @@
 ### US-5.3: Manage vehicle rows
 
 **As a** signed-in admin or area admin user
-**I want** each vehicle row to have **edit** and **delete** actions
+**I want** each vehicle row to have **view** and **delete** actions
 **So that** I can manage vehicles from the vehicles view
 
 **Priority:** P1
-**Independent test:** Each vehicle row exposes edit and delete icon actions 
+**Independent test:** Each vehicle row exposes view and delete icon actions 
 **Acceptance scenarios:** see ### US-5.3 under Acceptance Criteria
 
 ### US-5.4: Edit and delete vehicles
@@ -48,7 +48,7 @@
 **So that** I can keep vehicles up to date
 
 **Priority:** P2
-**Independent test:** Edit and delete vehicles from row actions; the vehicles view updates
+**Independent test:** Edit a vehicle from its page and delete it from the table; the vehicles table updates
 **Acceptance scenarios:** see ### US-5.4 under Acceptance Criteria
 
 ### US-5.5: Signed-in admin or area admin user access only
@@ -58,7 +58,7 @@
 **So that** Unauthorized persons cannot tamper with the data
 
 **Priority:** P2
-**Independent test:** Unauthorized access to `/vehicles` is redirected to `/login`; unauthorized API requests or requests without `admin` or `area_admin` role receive errors; signed in user without `admin` or `area_admin` role is redirected to `/home`; `area_admin` role only receives data corresponding to the area admin's area
+**Independent test:** Unauthorized access to `/vehicles`, `/vehicles/new`, and `vehicles/:id` are redirected to `/login`; unauthorized API requests or requests without `admin` or `area_admin` role receive errors; signed in user without `admin` or `area_admin` role is redirected to `/home`; `area_admin` role only receives data corresponding to the area admin's area
 **Acceptance scenarios:** see ### US-5.5 under Acceptance Criteria
 
 ### US-5.6: Areas with vehicles cannot be deleted
@@ -119,7 +119,9 @@
 
 ## Assumptions
 
-- Vehicles use **dialog-based** workflows (no split sidebar / main panel).
+- The vehicle list is a table. Create is the page `/vehicles/new`. Edit is the page `/vehicles/:id`. Delete uses a confirmation dialog. There is no split sidebar/main panel.
+- Request and response JSON uses camelCase (`areaId`, `purchasedAt`), matching the rest of the API. The examples in this spec use the column names.
+- Area admins can read vehicle types (`GET /api/vehicle-types`) so the vehicle form can list them. Creating, editing, and deleting vehicle types stays admin-only (Feature 4).
 
 ## Edge Cases
 
@@ -166,8 +168,8 @@
 ## Success Criteria
 
 - **SC-001**: Every Gherkin scenario has at least one automated test before merge.
-- **SC-002**: Signed-in admin user can create, view, edit, and delete vehicles on one screen.
-- **SC-003**: Signed-in area admin user can create, view, edit, and delete vehicles corresponding to their area on one screen.
+- **SC-002**: Signed-in admin user can view and delete vehicles from the table, create a vehicle on `/vehicles/new`, and edit a vehicle on `/vehicles/:id`.
+- **SC-003**: Signed-in area admin user can view and delete vehicles for their areas from the table, create a vehicle for one of those areas on `/vehicles/new`, and edit one of those vehicles on `/vehicles/:id`.
 - **SC-004**: `npm test` passes for vehicles API and vehicles view behavior.
 
 ---
@@ -247,29 +249,49 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 ### [View: Vehicles] — route name `vehicles`
 
-**Single Vue view** (`Vehicles.vue`) — no sidebar / main-panel split.
+**Vehicles.vue** (`/vehicles`) — no sidebar / main-panel split.
 
 - Heading: **Vehicle Management**
-- Primary action: **+ New Vehicle** opens a `<v-dialog>` with **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate** (optional), **License Plate Expiration Date** (optional), and **Status** plus **Create** / **Cancel**.
-    - Area <v-select> shows the area names but submits the area id.
-    - Area shows all areas for admins, only areas that the area admin is admin of for area admins.
-    - Vehicle type <v-select> shows the vehicle type names but submits the vehicle type id.
-    - **VIN**/**Serial** is a computed property for label corresponding to `identifier`. If the identifier is `VIN`, the label is **VIN**. If the identifier is `Serial`, the label is **Serial**. When no vehicle type is selected yet, the label is **VIN**.
-    - **Status** is a <v-select> with `active` and `retired`.
-- Display vehicles as cards modeled in the same style as existing management views. Each row shows the make, model, and color with a chip that shows red, yellow, or green based on whether the status is `retired`, `active` with an existing license plate expiration date that is less than the current date, or `active` for other scenarios.
-- **Edit** icon opens a `<v-dialog>` pre-filled with the current **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate** (optional), **License Plate Expiration Date** (optional), and **Status**; **Save** / **Cancel**.
-    - Area <v-select> shows the area names but submits the area id.
-    - Area shows all areas for admins, only areas that the area admin is admin of for area admins.
-    - Vehicle type <v-select> shows the vehicle type names but submits the vehicle type id.
-    - **VIN**/**Serial** is a computed property for label corresponding to `identifier`. If the identifier is `VIN`, the label is **VIN**. If the identifier is `Serial`, the label is **Serial**. When no vehicle type is selected yet, the label is **VIN**.
-    - **Status** is a <v-select> with `active` and `retired`.
-- **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
-- Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit vehicle**, **Delete vehicle**).
-- **Empty state:** **"No vehicles yet. Create your first vehicle."** when there are no vehicles.
+- Primary action: **+ New Vehicle** opens `/vehicles/new`.
+- Display vehicles in a `<v-data-table>` (10 per page), matching the users table. Columns are **Make**, **Model**, **Color**, **Status**, and **Actions**. Those five columns are equal width, so **Status** sits evenly between **Color** and **Actions**.
+- The status cell is a chip: red when `retired`; yellow when `active` and there is no license plate expiration date, or the date is before today; green when `active` and the license plate expiration date is today or later. The yellow chip is bright sunny yellow (`#FFE500`) with dark text.
+- Make is text. The **Edit vehicle** icon (`mdi-pencil`) opens `/vehicles/:id`.
+- **Delete vehicle** opens a confirmation `<ConfirmModal>` from `components/common`.
+- Icon-only row actions use `size="small"`, `variant="text"`, and `aria-label`s **Edit vehicle** and **Delete vehicle**.
+- **Empty state:** **"No vehicles yet. Create your first vehicle."**
 - **Loading state:** skeleton or progress indicator while vehicles are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
+- **App chrome:** the list route has `meta.nav: "Vehicles"` and `meta.roles: ["admin", "area_admin"]`, so the **Vehicles** link shows for admins and area admins and is hidden for everyone else. Create and edit do not add a nav link.
 
-**Implementation note:** one route/view for vehicles; delete dialog is a reusable component in `components/common` folder; create and edit dialogs should be components stored in a dedicated components/vehicles folder and modeled after existing create and edit dialogs in `components/` folders.
+### [View: New vehicle] — route name `vehicleCreate` (`/vehicles/new`)
+
+**VehicleForm.vue**. Register this route before `/vehicles/:id`.
+
+- Heading: **New vehicle**
+- Empty fields: **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate** (optional), **License Plate Expiration Date** (optional), and **Status**, plus **Create** / **Cancel**.
+- **Year** is a number input. Its arrows increment and decrement the value. It accepts at most 4 characters.
+- **Cancel** returns to `/vehicles` without saving.
+- Area `<v-select>` shows area names and submits the area id. Admins see every area. Area admins see only their areas.
+- Vehicle type `<v-select>` shows vehicle type names and submits the vehicle type id.
+- **VIN**/**Serial** labels the identifier field. `VIN` shows **VIN**. `Serial` shows **Serial**. With no vehicle type selected, the label is **VIN**.
+- **Status** is a `<v-select>` with `active` and `retired`.
+- **Create** submits `POST /api/vehicles`. On `201`, go to `/vehicles`.
+- Same loading and error states as the list.
+
+### [View: Edit vehicle] — route name `vehicleDetails` (`/vehicles/:id`)
+
+**VehicleForm.vue**, same fields as the create page, pre-filled from `GET /api/vehicles/:vehicleId`.
+
+- Heading: the vehicle's make and model.
+- **Year** uses the same number input as the create page.
+- **Save** and **Cancel** are buttons on this page. **Save** submits `PUT /api/vehicles/:vehicleId`. On success, go to `/vehicles`. **Save** shows **Saving…** while that request is in progress.
+- **Cancel** returns to `/vehicles` without saving. It does not call the API.
+- If **Save** fails, the message is shown directly above **Save** and **Cancel**.
+- Area, vehicle type, VIN/Serial label, and status behave the same as on the create page.
+- An area admin opening a vehicle outside their areas is redirected to `/home`.
+- Same loading and error states as the list.
+
+**Implementation note:** three routes. The table is `Vehicles.vue`. Create and edit share `VehicleForm.vue`. Delete uses the shared confirm dialog. The **Vehicles** nav link is only on the list route.
 
 ---
 
@@ -319,19 +341,25 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in as admin on the vehicles view
 - **When** I click **+ New Vehicle**
-- **Then** a dialog opens with **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
+- **Then** I am on `/vehicles/new` and I see **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
 
 #### Scenario: Area admin user creates a vehicle
 
 - **Given** I am signed in as area admin on the vehicles view
 - **When** I click **+ New Vehicle**
-- **Then** a dialog opens with **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
+- **Then** I am on `/vehicles/new` and I see **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
 - **And** The **Area** dropdown only lists the areas that the area admin user is the area admin of
+
+#### Scenario: Year input accepts at most four characters
+
+- **Given** I am signed in as admin on the new vehicle page
+- **When** I enter `12345` in **Year**
+- **Then** **Year** is a number input and shows `1234`
 
 #### Scenario: Admin user saves vehicle
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with all valid values
+- **When** I submit the create page with all valid values
 - **Then** the API returns `201` with that vehicle
 - **And** The new vehicle appears in the vehicles list
 
@@ -346,67 +374,67 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user creates vehicle with missing area
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without an area
+- **When** I submit the create page without an area
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing vehicle type
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a vehicle type
+- **When** I submit the create page without a vehicle type
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing university id
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a university id
+- **When** I submit the create page without a university id
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing identifier
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without an identifier
+- **When** I submit the create page without an identifier
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing make
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a make
+- **When** I submit the create page without a make
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing model
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a model
+- **When** I submit the create page without a model
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing year
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a year
+- **When** I submit the create page without a year
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing purchase date
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a purchase date
+- **When** I submit the create page without a purchase date
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing color
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a color
+- **When** I submit the create page without a color
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing passenger capacity
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a passenger capacity
+- **When** I submit the create page without a passenger capacity
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with missing status
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog without a status
+- **When** I submit the create page without a status
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user requests to create a vehicle with a missing area id
@@ -472,37 +500,37 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user creates vehicle with a whitespace only university id
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with university id ` `
+- **When** I submit the create page with university id ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with a whitespace only make
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with make ` `
+- **When** I submit the create page with make ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with a whitespace only model
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with model ` `
+- **When** I submit the create page with model ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with a whitespace only identifier
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with identifier ` `
+- **When** I submit the create page with identifier ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with a whitespace only color
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with color ` `
+- **When** I submit the create page with color ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user creates vehicle with a whitespace only license plate
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with license plate ` `
+- **When** I submit the create page with license plate ` `
 - **Then** the vehicle is saved with license plate as null
 - **And** { license_plate: null } appears in the response
 
@@ -602,52 +630,52 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user creates vehicle with university id longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with a vehicle university id longer than 255 characters
+- **When** I submit the create page with a vehicle university id longer than 255 characters
 - **Then** validation blocks the request and I see a `University id too long.` message
 
 #### Scenario: Admin user creates vehicle with make longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with a vehicle make longer than 255 characters
+- **When** I submit the create page with a vehicle make longer than 255 characters
 - **Then** validation blocks the request and I see a `Make too long.` message
 
 #### Scenario: Admin user creates vehicle with model longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with a vehicle model longer than 255 characters
+- **When** I submit the create page with a vehicle model longer than 255 characters
 - **Then** validation blocks the request and I see a `Model too long.` message
 
 #### Scenario: Admin user creates vehicle with serial identifier longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** There exists a vehicle type with id `1` and identifier `Serial`
-- **When** I submit the create dialog with vehicle type id `1` and a vehicle identifier longer than 255 characters
+- **When** I submit the create page with vehicle type id `1` and a vehicle identifier longer than 255 characters
 - **Then** validation blocks the request and I see a `Serial number too long.` message
 
 #### Scenario: Admin user creates vehicle with VIN identifier less than 17 characters
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** There exists a vehicle type with id `1` and identifier `VIN`
-- **When** I submit the create dialog with vehicle type id `1` and a vehicle identifier less than 17 characters
+- **When** I submit the create page with vehicle type id `1` and a vehicle identifier less than 17 characters
 - **Then** validation blocks the request and I see a `VIN must be 17 characters.` message
 
 #### Scenario: Admin user creates vehicle with VIN identifier more than 17 characters
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** There exists a vehicle type with id `1` and identifier `VIN`
-- **When** I submit the create dialog with vehicle type id `1` and a vehicle identifier more than 17 characters
+- **When** I submit the create page with vehicle type id `1` and a vehicle identifier more than 17 characters
 - **Then** validation blocks the request and I see a `VIN must be 17 characters.` message
 
 #### Scenario: Admin user creates vehicle with color longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with a vehicle color longer than 255 characters
+- **When** I submit the create page with a vehicle color longer than 255 characters
 - **Then** validation blocks the request and I see a `Color too long.` message
 
 #### Scenario: Admin user creates vehicle with license plate longer than 8 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the create dialog with a vehicle license plate longer than 8 characters
+- **When** I submit the create page with a vehicle license plate longer than 8 characters
 - **Then** validation blocks the request and I see a `License plate too long.` message
 
 #### Scenario: Admin user requests to create a vehicle with university id longer than 255 characters
@@ -705,21 +733,21 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** A vehicle with university id `123456` exists
-- **When** I submit the create dialog with university id `123456`
+- **When** I submit the create page with university id `123456`
 - **Then** validation blocks the request and I see a `University id already taken.` message
 
 #### Scenario: Admin user creates a vehicle with a non-unique identifier
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** A vehicle with identifier `123456` exists
-- **When** I submit the create dialog with identifier `123456`
+- **When** I submit the create page with identifier `123456`
 - **Then** validation blocks the request and I see a `Identifier already taken.` message
 
 #### Scenario: Admin user creates a vehicle with a non-unique license plate
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** A vehicle with license plate `123456` exists
-- **When** I submit the create dialog with license plate `123456`
+- **When** I submit the create page with license plate `123456`
 - **Then** validation blocks the request and I see a `License plate already taken.` message
 
 #### Scenario: Admin user requests to create a vehicle with a non-unique university id
@@ -813,18 +841,19 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **Given** I am signed in as admin and at least one vehicle exists
 - **When** I view the vehicle list
 - **Then** each row shows **Edit vehicle** and **Delete vehicle** actions
+- **And** the make is text, not a link
 
 #### Scenario: Vehicle rows with green chip
 
 - **Given** I am signed in as admin and at least one vehicle exists
 - **When** I view the vehicle list
-- **Then** each row with status `active` that has a license plate expiration date today or after has a green chip
+- **Then** each row with status `active` and a license plate expiration date today or after has a green chip
 
 #### Scenario: Vehicle rows with yellow chip
 
 - **Given** I am signed in as admin and at least one vehicle exists
 - **When** I view the vehicle list
-- **Then** each row with status `active` that has a no license plate expiration date or a license plate expiration date before today has a yellow chip
+- **Then** each row with status `active` that has no license plate expiration date, or a license plate expiration date before today, has a yellow chip
 
 #### Scenario: Vehicle rows with red chip
 
@@ -836,24 +865,31 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 ### US-5.4 — Edit and delete vehicles
 
-#### Scenario: Admin user opens vehicle edit dialog
+#### Scenario: Admin user opens the vehicle page
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I open the edit dialog
-- **Then** a dialog opens with **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
+- **When** I open that vehicle
+- **Then** I am on `/vehicles/:id` and I see **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
 
-#### Scenario: Area admin user opens vehicle edit dialog
+#### Scenario: Area admin user opens the vehicle page
 
 - **Given** I am signed in as area admin on the vehicles view
-- **When** I open the edit dialog
-- **Then** a dialog opens with **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
+- **When** I open that vehicle
+- **Then** I am on `/vehicles/:id` and I see **Area**, **Vehicle Type**, **University Id**, **VIN**/**Serial**, **Make**, **Model**, **Year**, **Color**, **Passenger Capacity**, **Purchase Date**, **License Plate**, **License Plate Expiration Date**, and **Status**
 - **And** the **Area** select only shows the areas which I am the area admin of
+
+#### Scenario: Admin user cancels vehicle edits
+
+- **Given** I am signed in as admin on a vehicle page
+- **When** I change the color and click **Cancel**
+- **Then** I am on `/vehicles`
+- **And** the API is not called
 
 #### Scenario: Admin user edits a vehicle area
 
 - **Given** I am signed in as admin and a vehicle with area_id `1` exists
 - **And** There exists an area `Maintenance` with id `2`
-- **When** I change the area to `Maintenance` and submit
+- **When** I change the area to `Maintenance` and click **Save**
 - **Then** the API returns `200` with the updated vehicle
 - **And** `{ area_id: 2 }` is in the response
 
@@ -861,7 +897,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in as admin and a vehicle with vehicle_type_id `1` and a 17-character identifier exists
 - **And** There exists a vehicle type `Bus` with identifier `VIN` and id `2`
-- **When** I change the vehicle type to `Bus` and submit
+- **When** I change the vehicle type to `Bus` and click **Save**
 - **Then** the API returns `200` with the updated vehicle
 - **And** `{ vehicle_type_id: 2 }` is in the response
 
@@ -869,7 +905,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in as admin and a vehicle with vehicle_type_id `1` and an identifier other than 17 characters exists
 - **And** There exists a vehicle type `Bus` with identifier `VIN` and id `2`
-- **When** I change the vehicle type to `Bus` and submit
+- **When** I change the vehicle type to `Bus` and click **Save**
 - **Then** I see an error `VIN must be 17 characters.`
 - **And** the vehicle is not updated
 
@@ -892,144 +928,144 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user edits a vehicle university id
 
 - **Given** I am signed in as admin and a vehicle with university_id `123456` exists
-- **When** I change the university id to `987654` and submit
+- **When** I change the university id to `987654` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ university_id: '987654' }` is in the response
 
 #### Scenario: Admin user edits a vehicle make
 
 - **Given** I am signed in as admin and a vehicle with make `Toyota` exists
-- **When** I change the make to `Honda` and submit
+- **When** I change the make to `Honda` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ make: 'Honda' }` is in the response
 
 #### Scenario: Admin user edits a vehicle model
 
 - **Given** I am signed in as admin and a vehicle with model `Sienna` exists
-- **When** I change the model to `Accord` and submit
+- **When** I change the model to `Accord` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ model: 'Accord' }` is in the response
 
 #### Scenario: Admin user edits a vehicle year
 
 - **Given** I am signed in as admin and a vehicle with year `2015` exists
-- **When** I change the year to `2016` and submit
+- **When** I change the year to `2016` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ year: 2016 }` is in the response
 
 #### Scenario: Admin user edits a vehicle identifier
 
 - **Given** I am signed in as admin and a vehicle with identifier `1HGCM82633A004352` exists
-- **When** I change the identifier to `1HGCM82633A004353` and submit
+- **When** I change the identifier to `1HGCM82633A004353` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ identifier: '1HGCM82633A004353' }` is in the response
 
 #### Scenario: Admin user edits a vehicle purchase date
 
 - **Given** I am signed in as admin and a vehicle with purchase date `2026-09-13` exists
-- **When** I change the purchase date to `2026-09-14` and submit
+- **When** I change the purchase date to `2026-09-14` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ purchased_at: '2026-09-14' }` is in the response
 
 #### Scenario: Admin user edits a vehicle color
 
 - **Given** I am signed in as admin and a vehicle with color `gray` exists
-- **When** I change the color to `white` and submit
+- **When** I change the color to `white` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ color: 'white' }` is in the response
 
 #### Scenario: Admin user edits a vehicle passenger capacity
 
 - **Given** I am signed in as admin and a vehicle with passenger capacity `7` exists
-- **When** I change the passenger capacity to `8` and submit
+- **When** I change the passenger capacity to `8` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ passenger_capacity: '8' }` is in the response
 
 #### Scenario: Admin user edits a vehicle license plate
 
 - **Given** I am signed in as admin and a vehicle with license plate `ABC123` exists
-- **When** I change the license plate to `DEF456` and submit
+- **When** I change the license plate to `DEF456` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ license_plate: 'DEF456' }` is in the response
 
 #### Scenario: Admin user edits a vehicle license plate expiration date
 
 - **Given** I am signed in as admin and a vehicle with license plate expiration date `2026-09-13` exists
-- **When** I change the license plate expiration date to `2026-09-14` and submit
+- **When** I change the license plate expiration date to `2026-09-14` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ license_plate_expiration_date: '2026-09-14' }` is in the response
 
 #### Scenario: Admin user edits a vehicle status
 
 - **Given** I am signed in as admin and a vehicle with status `active` exists
-- **When** I change the status to `retired` and submit
+- **When** I change the status to `retired` and click **Save**
 - **Then** the API returns `200` with the updated vehicle 
 - **And** `{ status: 'retired' }` is in the response
 
 #### Scenario: Admin user edits a vehicle to have a missing area
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without an area
+- **When** I submit the vehicle page without an area
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing vehicle type
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a vehicle type
+- **When** I submit the vehicle page without a vehicle type
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing university id
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a university id
+- **When** I submit the vehicle page without a university id
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing identifier
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without an identifier
+- **When** I submit the vehicle page without an identifier
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing make
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a make
+- **When** I submit the vehicle page without a make
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing model
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a model
+- **When** I submit the vehicle page without a model
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing year
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a year
+- **When** I submit the vehicle page without a year
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing purchase date
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a purchase date
+- **When** I submit the vehicle page without a purchase date
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing color
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a color
+- **When** I submit the vehicle page without a color
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing passenger capacity
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a passenger capacity
+- **When** I submit the vehicle page without a passenger capacity
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a missing status
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog without a status
+- **When** I submit the vehicle page without a status
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user requests to edit a vehicle to have a missing area id
@@ -1105,37 +1141,37 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user edits a vehicle to have a whitespace only university id
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with university id ` `
+- **When** I submit the vehicle page with university id ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a whitespace only make
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with make ` `
+- **When** I submit the vehicle page with make ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a whitespace only model
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with model ` `
+- **When** I submit the vehicle page with model ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a whitespace only identifier
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with identifier ` `
+- **When** I submit the vehicle page with identifier ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a whitespace only color
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with color ` `
+- **When** I submit the vehicle page with color ` `
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle to have a whitespace only license plate
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with license plate ` `
+- **When** I submit the vehicle page with license plate ` `
 - **Then** the vehicle is saved with license plate as null
 - **And** { license_plate: null } appears in the response
 
@@ -1250,52 +1286,52 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Admin user edits a vehicle to have a university id longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with a vehicle university id longer than 255 characters
+- **When** I submit the vehicle page with a vehicle university id longer than 255 characters
 - **Then** validation blocks the request and I see a `University id too long.` message
 
 #### Scenario: Admin user edits a vehicle to have a make longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with a vehicle make longer than 255 characters
+- **When** I submit the vehicle page with a vehicle make longer than 255 characters
 - **Then** validation blocks the request and I see a `Make too long.` message
 
 #### Scenario: Admin user edits a vehicle to have a model longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with a vehicle model longer than 255 characters
+- **When** I submit the vehicle page with a vehicle model longer than 255 characters
 - **Then** validation blocks the request and I see a `Model too long.` message
 
 #### Scenario: Admin user edits a vehicle to have a serial identifier longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** There exists a vehicle type with id `1` and identifier `Serial`
-- **When** I submit the edit dialog with vehicle type id `1` and a vehicle identifier longer than 255 characters
+- **When** I submit the vehicle page with vehicle type id `1` and a vehicle identifier longer than 255 characters
 - **Then** validation blocks the request and I see a `Serial number too long.` message
 
 #### Scenario: Admin user edits a vehicle to have a VIN identifier less than 17 characters
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** There exists a vehicle type with id `1` and identifier `VIN`
-- **When** I submit the edit dialog with vehicle type id `1` and a vehicle identifier less than 17 characters
+- **When** I submit the vehicle page with vehicle type id `1` and a vehicle identifier less than 17 characters
 - **Then** validation blocks the request and I see a `VIN must be 17 characters.` message
 
 #### Scenario: Admin user edits a vehicle to have a VIN identifier more than 17 characters
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** There exists a vehicle type with id `1` and identifier `VIN`
-- **When** I submit the edit dialog with vehicle type id `1` and a vehicle identifier more than 17 characters
+- **When** I submit the vehicle page with vehicle type id `1` and a vehicle identifier more than 17 characters
 - **Then** validation blocks the request and I see a `VIN must be 17 characters.` message
 
 #### Scenario: Admin user edits a vehicle to have a color longer than 255 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with a vehicle color longer than 255 characters
+- **When** I submit the vehicle page with a vehicle color longer than 255 characters
 - **Then** validation blocks the request and I see a `Color too long.` message
 
 #### Scenario: Admin user edits a vehicle to have a license plate longer than 8 characters
 
 - **Given** I am signed in as admin on the vehicles view
-- **When** I submit the edit dialog with a vehicle license plate longer than 8 characters
+- **When** I submit the vehicle page with a vehicle license plate longer than 8 characters
 - **Then** validation blocks the request and I see a `License plate too long.` message
 
 #### Scenario: Admin user requests to edit a vehicle to have a university id longer than 255 characters
@@ -1361,21 +1397,21 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** A vehicle with university id `123456` exists
-- **When** I submit the edit dialog with university id `123456`
+- **When** I submit the vehicle page with university id `123456`
 - **Then** validation blocks the request and I see a `University id already taken.` message
 
 #### Scenario: Admin user edits a vehicle to have a non-unique identifier
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** A vehicle with identifier `123456` exists
-- **When** I submit the edit dialog with identifier `123456`
+- **When** I submit the vehicle page with identifier `123456`
 - **Then** validation blocks the request and I see a `Identifier already taken.` message
 
 #### Scenario: Admin user edits a vehicle to have a non-unique license plate
 
 - **Given** I am signed in as admin on the vehicles view
 - **And** A vehicle with license plate `123456` exists
-- **When** I submit the edit dialog with license plate `123456`
+- **When** I submit the vehicle page with license plate `123456`
 - **Then** validation blocks the request and I see a `License plate already taken.` message
 
 #### Scenario: Admin user requests to edit a vehicle to have a non-unique university id
@@ -1478,9 +1514,49 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 ### US-5.5: Signed-in admin user access only
 
+#### Scenario: Signed-in admin user sees nav link
+
+- **Given** I have admin role
+- **When** I am logged in
+- **Then** I see a nav link for vehicles
+
+#### Scenario: Signed-in area admin user sees nav link
+
+- **Given** I have area admin role
+- **When** I am logged in
+- **Then** I see a nav link for vehicles
+
+#### Scenario: Signed-in admin user clicks on nav link
+
+- **Given** I am signed in as admin
+- **When** I click on the nav link for vehicles
+- **Then** I am redirected to `/vehicles`
+
+#### Scenario: Signed-in area admin user clicks on nav link
+
+- **Given** I am signed in as area admin
+- **When** I click on the nav link for vehicles
+- **Then** I am redirected to `/vehicles`
+
+#### Scenario: Signed-in user without admin or area admin role does not see nav link
+
+- **Given** I do not have admin or area admin role
+- **When** I am logged in
+- **Then** I do not see a nav link for vehicles
+
 #### Scenario: Un-signed-in user accesses vehicles page
 - **Given** I am not signed in
 - **When** I navigate to `/vehicles` by URL
+- **Then** I am redirected to `/login`
+
+#### Scenario: Un-signed-in user accesses the new vehicle page
+- **Given** I am not signed in
+- **When** I navigate to `/vehicles/new` by URL
+- **Then** I am redirected to `/login`
+
+#### Scenario: Un-signed-in user accesses a vehicle page
+- **Given** I am not signed in
+- **When** I navigate to `/vehicles/1` by URL
 - **Then** I am redirected to `/login`
 
 #### Scenario: Unauthenticated API request to vehicles
@@ -1515,6 +1591,24 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **Given** I am signed in
 - **And** I do not have roles `admin` or `area admin`
 - **When** I navigate to `/vehicles` by URL
+- **Then** I am redirected to `/home`
+
+#### Scenario: Signed-in user without admin or area admin role accesses the new vehicle page
+- **Given** I am signed in
+- **And** I do not have roles `admin` or `area admin`
+- **When** I navigate to `/vehicles/new` by URL
+- **Then** I am redirected to `/home`
+
+#### Scenario: Signed-in user without admin or area admin role accesses a vehicle page
+- **Given** I am signed in
+- **And** I do not have roles `admin` or `area admin`
+- **When** I navigate to `/vehicles/1` by URL
+- **Then** I am redirected to `/home`
+
+#### Scenario: Area admin user accesses a vehicle outside their areas
+- **Given** I am signed in as area admin for area id `1`
+- **And** A vehicle with id `2` belongs to area id `2`
+- **When** I navigate to `/vehicles/2` by URL
 - **Then** I am redirected to `/home`
 
 #### Scenario: Signed-in user without admin or area admin role API request to vehicles
@@ -1630,20 +1724,21 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 |-------|----------|-----------|-----------|
 | US-5.1 | Admin user creates a vehicle | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle` |
 | US-5.1 | Area admin user creates a vehicle | `frontend/tests/Vehicles.test.js` | `Area admin user creates a vehicle` |
+| US-5.1 | Year input accepts at most four characters | `frontend/tests/VehicleForm.test.js` | `Year input accepts at most four characters` |
 | US-5.1 | Admin user saves vehicle | `backend/tests/vehicles.test.js` | `Admin user saves vehicle` |
-| US-5.1 | Admin user saves vehicle | `frontend/tests/Vehicles.test.js` | `Admin user saves vehicle` |
-| US-5.1 | Admin user selects vehicle type to be one with a serial number on create | `frontend/tests/Vehicles.test.js` | `Admin user selects vehicle type to be one with a serial number on create` |
-| US-5.1 | Admin user creates vehicle with missing area | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing area` |
-| US-5.1 | Admin user creates vehicle with missing vehicle type | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing vehicle type` |
-| US-5.1 | Admin user creates vehicle with missing university id | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing university id` |
-| US-5.1 | Admin user creates vehicle with missing identifier | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing identifier` |
-| US-5.1 | Admin user creates vehicle with missing make | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing make` |
-| US-5.1 | Admin user creates vehicle with missing model | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing model` |
-| US-5.1 | Admin user creates vehicle with missing year | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing year` |
-| US-5.1 | Admin user creates vehicle with missing purchase date | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing purchase date` |
-| US-5.1 | Admin user creates vehicle with missing color | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing color` |
-| US-5.1 | Admin user creates vehicle with missing passenger capacity | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing passenger capacity` |
-| US-5.1 | Admin user creates vehicle with missing status | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with missing status` |
+| US-5.1 | Admin user saves vehicle | `frontend/tests/VehicleForm.test.js` | `Admin user saves vehicle` |
+| US-5.1 | Admin user selects vehicle type to be one with a serial number on create | `frontend/tests/VehicleForm.test.js` | `Admin user selects vehicle type to be one with a serial number on create` |
+| US-5.1 | Admin user creates vehicle with missing area | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing area` |
+| US-5.1 | Admin user creates vehicle with missing vehicle type | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing vehicle type` |
+| US-5.1 | Admin user creates vehicle with missing university id | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing university id` |
+| US-5.1 | Admin user creates vehicle with missing identifier | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing identifier` |
+| US-5.1 | Admin user creates vehicle with missing make | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing make` |
+| US-5.1 | Admin user creates vehicle with missing model | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing model` |
+| US-5.1 | Admin user creates vehicle with missing year | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing year` |
+| US-5.1 | Admin user creates vehicle with missing purchase date | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing purchase date` |
+| US-5.1 | Admin user creates vehicle with missing color | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing color` |
+| US-5.1 | Admin user creates vehicle with missing passenger capacity | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing passenger capacity` |
+| US-5.1 | Admin user creates vehicle with missing status | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with missing status` |
 | US-5.1 | Admin user requests to create a vehicle with a missing area id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing area id` |
 | US-5.1 | Admin user requests to create a vehicle with a missing vehicle type id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing vehicle type id` |
 | US-5.1 | Admin user requests to create a vehicle with a missing make | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing make` |
@@ -1654,13 +1749,13 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.1 | Admin user requests to create a vehicle with a missing color | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing color` |
 | US-5.1 | Admin user requests to create a vehicle with a missing passenger capacity | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing passenger capacity` |
 | US-5.1 | Admin user requests to create a vehicle with a missing status | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a missing status` |
-| US-5.1 | Admin user creates vehicle with a whitespace only university id | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only university id` |
-| US-5.1 | Admin user creates vehicle with a whitespace only make | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only make` |
-| US-5.1 | Admin user creates vehicle with a whitespace only model | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only model` |
-| US-5.1 | Admin user creates vehicle with a whitespace only identifier | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only identifier` |
-| US-5.1 | Admin user creates vehicle with a whitespace only color | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only color` |
+| US-5.1 | Admin user creates vehicle with a whitespace only university id | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with a whitespace only university id` |
+| US-5.1 | Admin user creates vehicle with a whitespace only make | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with a whitespace only make` |
+| US-5.1 | Admin user creates vehicle with a whitespace only model | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with a whitespace only model` |
+| US-5.1 | Admin user creates vehicle with a whitespace only identifier | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with a whitespace only identifier` |
+| US-5.1 | Admin user creates vehicle with a whitespace only color | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with a whitespace only color` |
 | US-5.1 | Admin user creates vehicle with a whitespace only license plate | `backend/tests/vehicles.test.js` | `Admin user creates vehicle with a whitespace only license plate` |
-| US-5.1 | Admin user creates vehicle with a whitespace only license plate | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with a whitespace only license plate` |
+| US-5.1 | Admin user creates vehicle with a whitespace only license plate | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with a whitespace only license plate` |
 | US-5.1 | Admin user requests to create a vehicle with a whitespace-only university id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only university id` |
 | US-5.1 | Admin user requests to create a vehicle with a whitespace-only make | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only make` |
 | US-5.1 | Admin user requests to create a vehicle with a whitespace-only model | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a whitespace-only model` |
@@ -1676,14 +1771,14 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.1 | Admin user requests to create a vehicle with a non-date value for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-date value for license plate expiration date` |
 | US-5.1 | Admin user requests to create a vehicle with a bad date format for purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a bad date format for purchase date` |
 | US-5.1 | Admin user requests to create a vehicle with a bad date format for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a bad date format for license plate expiration date` |
-| US-5.1 | Admin user creates vehicle with university id longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with university id longer than 255 characters` |
-| US-5.1 | Admin user creates vehicle with make longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with make longer than 255 characters` |
-| US-5.1 | Admin user creates vehicle with model longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with model longer than 255 characters` |
-| US-5.1 | Admin user creates vehicle with serial identifier longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with serial identifier longer than 255 characters` |
-| US-5.1 | Admin user creates vehicle with VIN identifier less than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with VIN identifier less than 17 characters` |
-| US-5.1 | Admin user creates vehicle with VIN identifier more than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with VIN identifier more than 17 characters` |
-| US-5.1 | Admin user creates vehicle with color longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with color longer than 255 characters` |
-| US-5.1 | Admin user creates vehicle with license plate longer than 8 characters | `frontend/tests/Vehicles.test.js` | `Admin user creates vehicle with license plate longer than 8 characters` |
+| US-5.1 | Admin user creates vehicle with university id longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with university id longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with make longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with make longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with model longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with model longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with serial identifier longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with serial identifier longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with VIN identifier less than 17 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with VIN identifier less than 17 characters` |
+| US-5.1 | Admin user creates vehicle with VIN identifier more than 17 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with VIN identifier more than 17 characters` |
+| US-5.1 | Admin user creates vehicle with color longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with color longer than 255 characters` |
+| US-5.1 | Admin user creates vehicle with license plate longer than 8 characters | `frontend/tests/VehicleForm.test.js` | `Admin user creates vehicle with license plate longer than 8 characters` |
 | US-5.1 | Admin user requests to create a vehicle with university id longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with university id longer than 255 characters` |
 | US-5.1 | Admin user requests to create a vehicle with make longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with make longer than 255 characters` |
 | US-5.1 | Admin user requests to create a vehicle with model longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with model longer than 255 characters` |
@@ -1692,9 +1787,9 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.1 | Admin user requests to create a vehicle with VIN identifier more than 17 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with VIN identifier more than 17 characters` |
 | US-5.1 | Admin user requests to create a vehicle with color longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with color longer than 255 characters` |
 | US-5.1 | Admin user requests to create a vehicle with license plate longer than 8 characters | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with license plate longer than 8 characters` |
-| US-5.1 | Admin user creates a vehicle with a non-unique university id | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle with a non-unique university id` |
-| US-5.1 | Admin user creates a vehicle with a non-unique identifier | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle with a non-unique identifier` |
-| US-5.1 | Admin user creates a vehicle with a non-unique license plate | `frontend/tests/Vehicles.test.js` | `Admin user creates a vehicle with a non-unique license plate` |
+| US-5.1 | Admin user creates a vehicle with a non-unique university id | `frontend/tests/VehicleForm.test.js` | `Admin user creates a vehicle with a non-unique university id` |
+| US-5.1 | Admin user creates a vehicle with a non-unique identifier | `frontend/tests/VehicleForm.test.js` | `Admin user creates a vehicle with a non-unique identifier` |
+| US-5.1 | Admin user creates a vehicle with a non-unique license plate | `frontend/tests/VehicleForm.test.js` | `Admin user creates a vehicle with a non-unique license plate` |
 | US-5.1 | Admin user requests to create a vehicle with a non-unique university id | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-unique university id` |
 | US-5.1 | Admin user requests to create a vehicle with a non-unique identifier | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-unique identifier` |
 | US-5.1 | Admin user requests to create a vehicle with a non-unique license plate | `backend/tests/vehicles.test.js` | `Admin user requests to create a vehicle with a non-unique license plate` |
@@ -1711,48 +1806,49 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.3 | Vehicle rows with green chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with green chip` |
 | US-5.3 | Vehicle rows with yellow chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with yellow chip` |
 | US-5.3 | Vehicle rows with red chip | `frontend/tests/Vehicles.test.js` | `Vehicle rows with red chip` |
-| US-5.4 | Admin user opens vehicle edit dialog | `frontend/tests/Vehicles.test.js` | `Admin user opens vehicle edit dialog` |
-| US-5.4 | Area admin user opens vehicle edit dialog | `frontend/tests/Vehicles.test.js` | `Area admin user opens vehicle edit dialog` |
+| US-5.4 | Admin user opens the vehicle page | `frontend/tests/Vehicles.test.js` | `Admin user opens the vehicle page` |
+| US-5.4 | Area admin user opens the vehicle page | `frontend/tests/Vehicles.test.js` | `Area admin user opens the vehicle page` |
+| US-5.4 | Admin user cancels vehicle edits | `frontend/tests/VehicleForm.test.js` | `Admin user cancels vehicle edits` |
 | US-5.4 | Admin user edits a vehicle area | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle area` |
-| US-5.4 | Admin user edits a vehicle area | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle area` |
+| US-5.4 | Admin user edits a vehicle area | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle area` |
 | US-5.4 | Admin user edits a vehicle type with identifier of 17 characters | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle type with identifier of 17 characters` |
-| US-5.4 | Admin user edits a vehicle type with identifier of 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle type with identifier of 17 characters` |
-| US-5.4 | Admin user edits a vehicle type with identifier other than 17 characters while current vehicle type has identifier Serial | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle type with identifier other than 17 characters while current vehicle type has identifier Serial` |
-| US-5.4 | Admin user selects vehicle type to be one with a VIN number | `frontend/tests/Vehicles.test.js` | `Admin user selects vehicle type to be one with a VIN number` |
-| US-5.4 | Admin user selects vehicle type to be one with a serial number on edit | `frontend/tests/Vehicles.test.js` | `Admin user selects vehicle type to be one with a serial number on edit` |
+| US-5.4 | Admin user edits a vehicle type with identifier of 17 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle type with identifier of 17 characters` |
+| US-5.4 | Admin user edits a vehicle type with identifier other than 17 characters while current vehicle type has identifier Serial | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle type with identifier other than 17 characters while current vehicle type has identifier Serial` |
+| US-5.4 | Admin user selects vehicle type to be one with a VIN number | `frontend/tests/VehicleForm.test.js` | `Admin user selects vehicle type to be one with a VIN number` |
+| US-5.4 | Admin user selects vehicle type to be one with a serial number on edit | `frontend/tests/VehicleForm.test.js` | `Admin user selects vehicle type to be one with a serial number on edit` |
 | US-5.4 | Admin user edits a vehicle university id | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle university id` |
-| US-5.4 | Admin user edits a vehicle university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle university id` |
+| US-5.4 | Admin user edits a vehicle university id | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle university id` |
 | US-5.4 | Admin user edits a vehicle make | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle make` |
-| US-5.4 | Admin user edits a vehicle make | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle make` |
+| US-5.4 | Admin user edits a vehicle make | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle make` |
 | US-5.4 | Admin user edits a vehicle model | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle model` |
-| US-5.4 | Admin user edits a vehicle model | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle model` |
+| US-5.4 | Admin user edits a vehicle model | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle model` |
 | US-5.4 | Admin user edits a vehicle year | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle year` |
-| US-5.4 | Admin user edits a vehicle year | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle year` |
+| US-5.4 | Admin user edits a vehicle year | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle year` |
 | US-5.4 | Admin user edits a vehicle identifier | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle identifier` |
-| US-5.4 | Admin user edits a vehicle identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle identifier` |
+| US-5.4 | Admin user edits a vehicle identifier | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle identifier` |
 | US-5.4 | Admin user edits a vehicle purchase date | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle purchase date` |
-| US-5.4 | Admin user edits a vehicle purchase date | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle purchase date` |
+| US-5.4 | Admin user edits a vehicle purchase date | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle purchase date` |
 | US-5.4 | Admin user edits a vehicle color | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle color` |
-| US-5.4 | Admin user edits a vehicle color | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle color` |
+| US-5.4 | Admin user edits a vehicle color | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle color` |
 | US-5.4 | Admin user edits a vehicle passenger capacity | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle passenger capacity` |
-| US-5.4 | Admin user edits a vehicle passenger capacity | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle passenger capacity` |
+| US-5.4 | Admin user edits a vehicle passenger capacity | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle passenger capacity` |
 | US-5.4 | Admin user edits a vehicle license plate | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle license plate` |
-| US-5.4 | Admin user edits a vehicle license plate | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle license plate` |
+| US-5.4 | Admin user edits a vehicle license plate | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle license plate` |
 | US-5.4 | Admin user edits a vehicle license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle license plate expiration date` |
-| US-5.4 | Admin user edits a vehicle license plate expiration date | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle license plate expiration date` |
+| US-5.4 | Admin user edits a vehicle license plate expiration date | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle license plate expiration date` |
 | US-5.4 | Admin user edits a vehicle status | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle status` |
-| US-5.4 | Admin user edits a vehicle status | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle status` |
-| US-5.4 | Admin user edits a vehicle to have a missing area | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing area` |
-| US-5.4 | Admin user edits a vehicle to have a missing vehicle type | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing vehicle type` |
-| US-5.4 | Admin user edits a vehicle to have a missing university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing university id` |
-| US-5.4 | Admin user edits a vehicle to have a missing identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing identifier` |
-| US-5.4 | Admin user edits a vehicle to have a missing make | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing make` |
-| US-5.4 | Admin user edits a vehicle to have a missing model | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing model` |
-| US-5.4 | Admin user edits a vehicle to have a missing year | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing year` |
-| US-5.4 | Admin user edits a vehicle to have a missing purchase date | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing purchase date` |
-| US-5.4 | Admin user edits a vehicle to have a missing color | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing color` |
-| US-5.4 | Admin user edits a vehicle to have a missing passenger capacity | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing passenger capacity` |
-| US-5.4 | Admin user edits a vehicle to have a missing status | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a missing status` |
+| US-5.4 | Admin user edits a vehicle status | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle status` |
+| US-5.4 | Admin user edits a vehicle to have a missing area | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing area` |
+| US-5.4 | Admin user edits a vehicle to have a missing vehicle type | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing vehicle type` |
+| US-5.4 | Admin user edits a vehicle to have a missing university id | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing university id` |
+| US-5.4 | Admin user edits a vehicle to have a missing identifier | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing identifier` |
+| US-5.4 | Admin user edits a vehicle to have a missing make | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing make` |
+| US-5.4 | Admin user edits a vehicle to have a missing model | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing model` |
+| US-5.4 | Admin user edits a vehicle to have a missing year | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing year` |
+| US-5.4 | Admin user edits a vehicle to have a missing purchase date | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing purchase date` |
+| US-5.4 | Admin user edits a vehicle to have a missing color | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing color` |
+| US-5.4 | Admin user edits a vehicle to have a missing passenger capacity | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing passenger capacity` |
+| US-5.4 | Admin user edits a vehicle to have a missing status | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a missing status` |
 | US-5.4 | Admin user requests to edit a vehicle to have a missing area id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing area id` |
 | US-5.4 | Admin user requests to edit a vehicle to have a missing vehicle type id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing vehicle type id` |
 | US-5.4 | Admin user requests to edit a vehicle to have a missing make | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing make` |
@@ -1763,13 +1859,13 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.4 | Admin user requests to edit a vehicle to have a missing color | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing color` |
 | US-5.4 | Admin user requests to edit a vehicle to have a missing passenger capacity | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing passenger capacity` |
 | US-5.4 | Admin user requests to edit a vehicle to have a missing status | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a missing status` |
-| US-5.4 | Admin user edits a vehicle to have a whitespace only university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only university id` |
-| US-5.4 | Admin user edits a vehicle to have a whitespace only make | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only make` |
-| US-5.4 | Admin user edits a vehicle to have a whitespace only model | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only model` |
-| US-5.4 | Admin user edits a vehicle to have a whitespace only identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only identifier` |
-| US-5.4 | Admin user edits a vehicle to have a whitespace only color | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only color` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only university id | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a whitespace only university id` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only make | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a whitespace only make` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only model | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a whitespace only model` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only identifier | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a whitespace only identifier` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only color | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a whitespace only color` |
 | US-5.4 | Admin user edits a vehicle to have a whitespace only license plate | `backend/tests/vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only license plate` |
-| US-5.4 | Admin user edits a vehicle to have a whitespace only license plate | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a whitespace only license plate` |
+| US-5.4 | Admin user edits a vehicle to have a whitespace only license plate | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a whitespace only license plate` |
 | US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only university id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only university id` |
 | US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only make | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only make` |
 | US-5.4 | Admin user requests to edit a vehicle to have a whitespace-only model | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a whitespace-only model` |
@@ -1785,14 +1881,14 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.4 | Admin user requests to edit a vehicle to have a non-date value for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-date value for license plate expiration date` |
 | US-5.4 | Admin user requests to edit a vehicle to have a bad date format for purchase date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a bad date format for purchase date` |
 | US-5.4 | Admin user requests to edit a vehicle to have a bad date format for license plate expiration date | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a bad date format for license plate expiration date` |
-| US-5.4 | Admin user edits a vehicle to have a university id longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a university id longer than 255 characters` |
-| US-5.4 | Admin user edits a vehicle to have a make longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a make longer than 255 characters` |
-| US-5.4 | Admin user edits a vehicle to have a model longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a model longer than 255 characters` |
-| US-5.4 | Admin user edits a vehicle to have a serial identifier longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a serial identifier longer than 255 characters` |
-| US-5.4 | Admin user edits a vehicle to have a VIN identifier less than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a VIN identifier less than 17 characters` |
-| US-5.4 | Admin user edits a vehicle to have a VIN identifier more than 17 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a VIN identifier more than 17 characters` |
-| US-5.4 | Admin user edits a vehicle to have a color longer than 255 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a color longer than 255 characters` |
-| US-5.4 | Admin user edits a vehicle to have a license plate longer than 8 characters | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a license plate longer than 8 characters` |
+| US-5.4 | Admin user edits a vehicle to have a university id longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a university id longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a make longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a make longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a model longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a model longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a serial identifier longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a serial identifier longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a VIN identifier less than 17 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a VIN identifier less than 17 characters` |
+| US-5.4 | Admin user edits a vehicle to have a VIN identifier more than 17 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a VIN identifier more than 17 characters` |
+| US-5.4 | Admin user edits a vehicle to have a color longer than 255 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a color longer than 255 characters` |
+| US-5.4 | Admin user edits a vehicle to have a license plate longer than 8 characters | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a license plate longer than 8 characters` |
 | US-5.4 | Admin user requests to edit a vehicle to have a university id longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a university id longer than 255 characters` |
 | US-5.4 | Admin user requests to edit a vehicle to have a make longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a make longer than 255 characters` |
 | US-5.4 | Admin user requests to edit a vehicle to have a model longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a model longer than 255 characters` |
@@ -1801,9 +1897,9 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.4 | Admin user requests to edit a vehicle to have a VIN identifier more than 17 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a VIN identifier more than 17 characters` |
 | US-5.4 | Admin user requests to edit a vehicle to have a color longer than 255 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a color longer than 255 characters` |
 | US-5.4 | Admin user requests to edit a vehicle to have a license plate longer than 8 characters | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a license plate longer than 8 characters` |
-| US-5.4 | Admin user edits a vehicle to have a non-unique university id | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a non-unique university id` |
-| US-5.4 | Admin user edits a vehicle to have a non-unique identifier | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a non-unique identifier` |
-| US-5.4 | Admin user edits a vehicle to have a non-unique license plate | `frontend/tests/Vehicles.test.js` | `Admin user edits a vehicle to have a non-unique license plate` |
+| US-5.4 | Admin user edits a vehicle to have a non-unique university id | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a non-unique university id` |
+| US-5.4 | Admin user edits a vehicle to have a non-unique identifier | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a non-unique identifier` |
+| US-5.4 | Admin user edits a vehicle to have a non-unique license plate | `frontend/tests/VehicleForm.test.js` | `Admin user edits a vehicle to have a non-unique license plate` |
 | US-5.4 | Admin user requests to edit a vehicle to have a non-unique university id | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-unique university id` |
 | US-5.4 | Admin user requests to edit a vehicle to have a non-unique identifier | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-unique identifier` |
 | US-5.4 | Admin user requests to edit a vehicle to have a non-unique license plate | `backend/tests/vehicles.test.js` | `Admin user requests to edit a vehicle to have a non-unique license plate` |
@@ -1819,13 +1915,23 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-5.4 | Admin user updates a vehicle with an invalid vehicleId | `backend/tests/vehicles.test.js` | `Admin user updates a vehicle with an invalid vehicleId` |
 | US-5.4 | Admin user deletes a vehicle that does not exist | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle that does not exist` |
 | US-5.4 | Admin user deletes a vehicle with an invalid vehicleId | `backend/tests/vehicles.test.js` | `Admin user deletes a vehicle with an invalid vehicleId` |
+| US-5.5 | Signed-in admin user sees nav link | `frontend/tests/Vehicles.test.js` | `Signed-in admin user sees nav link` |
+| US-5.5 | Signed-in area admin user sees nav link | `frontend/tests/Vehicles.test.js` | `Signed-in area admin user sees nav link` |
+| US-5.5 | Signed-in admin user clicks on nav link | `frontend/tests/Vehicles.test.js` | `Signed-in admin user clicks on nav link` |
+| US-5.5 | Signed-in area admin user clicks on nav link | `frontend/tests/Vehicles.test.js` | `Signed-in area admin user clicks on nav link` |
+| US-5.5 | Signed-in user without admin or area admin role does not see nav link | `frontend/tests/Vehicles.test.js` | `Signed-in user without admin or area admin role does not see nav link` |
 | US-5.5 | Un-signed-in user accesses vehicles page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses vehicles page` |
+| US-5.5 | Un-signed-in user accesses the new vehicle page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses the new vehicle page` |
+| US-5.5 | Un-signed-in user accesses a vehicle page | `frontend/tests/Vehicles.test.js` | `Un-signed-in user accesses a vehicle page` |
 | US-5.5 | Unauthenticated API request to vehicles | `backend/tests/vehicles.test.js` | `Unauthenticated API request to vehicles` |
 | US-5.5 | Unauthenticated API request to a particular vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to a particular vehicle` |
 | US-5.5 | Unauthenticated API request to create a vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to create a vehicle` |
 | US-5.5 | Unauthenticated API request to update a vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to update a vehicle` |
 | US-5.5 | Unauthenticated API request to delete a vehicle | `backend/tests/vehicles.test.js` | `Unauthenticated API request to delete a vehicle` |
 | US-5.5 | Signed-in user without admin or area admin role accesses vehicles page | `frontend/tests/Vehicles.test.js` | `Signed-in user without admin or area admin role accesses vehicles page` |
+| US-5.5 | Signed-in user without admin or area admin role accesses the new vehicle page | `frontend/tests/Vehicles.test.js` | `Signed-in user without admin or area admin role accesses the new vehicle page` |
+| US-5.5 | Signed-in user without admin or area admin role accesses a vehicle page | `frontend/tests/Vehicles.test.js` | `Signed-in user without admin or area admin role accesses a vehicle page` |
+| US-5.5 | Area admin user accesses a vehicle outside their areas | `frontend/tests/Vehicles.test.js` | `Area admin user accesses a vehicle outside their areas` |
 | US-5.5 | Signed-in user without admin or area admin role API request to vehicles | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to vehicles` |
 | US-5.5 | Signed-in user without admin or area admin role API request to a particular vehicle | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to a particular vehicle` |
 | US-5.5 | Signed-in user without admin or area admin role API request to create a vehicle | `backend/tests/vehicles.test.js` | `Signed-in user without admin or area admin role API request to create a vehicle` |
@@ -1861,13 +1967,13 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-027** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-004)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-027** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-004)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

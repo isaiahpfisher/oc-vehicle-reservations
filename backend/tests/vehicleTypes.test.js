@@ -399,3 +399,32 @@ describe("Feature 4 — Vehicle Type Management", () => {
     });
   });
 });
+
+describe("Feature 5 — vehicle types with vehicles", () => {
+  it("Signed-in user API request to delete a vehicle type that has a vehicle", async () => {
+    const headers = await signIn();
+    const created = await createType(headers);
+    const area = await db.area.create({ name: "Athletics", logo: "" });
+    await db.vehicle.create({
+      areaId: area.id,
+      vehicleTypeId: created.body.id,
+      universityId: "ABCD12345EFG",
+      make: "Toyota",
+      model: "Sienna",
+      year: 2015,
+      identifier: "1HGCM82633A004352",
+      purchasedAt: "2018-01-01",
+      color: "gray",
+      passengerCapacity: 8,
+      status: "active",
+    });
+
+    const response = await request(app).delete(`/api/vehicle-types/${created.body.id}`).set(headers);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      message: "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first.",
+    });
+    expect(await db.vehicleType.count({ where: { id: created.body.id } })).toBe(1);
+  });
+});
