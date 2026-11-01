@@ -40,10 +40,17 @@ function extractRelationOid(block, relationName) {
   return block.match(pattern)?.[1] ?? null;
 }
 
+/** Multi-value relation, e.g. <Relation name="Owners"><Asset idref="Member:1" /><Asset idref="Member:2" /></Relation> */
+function extractRelationOids(block, relationName) {
+  const pattern = new RegExp(`<Relation\\s+name=["']${escapeRegExp(relationName)}["']\\s*>([\\s\\S]*?)</Relation>`, "i");
+  const relation = block.match(pattern)?.[1] ?? "";
+  return [...relation.matchAll(/\bidref=["']([^"']+)["']/gi)].map((match) => match[1]);
+}
+
 /**
  * @param {string} xmlText REST XML response body
  * @param {string} assetType e.g. "Story", "Test", "Epic"
- * @returns {{ oid: string, name: string, reference: string, parent: string | null, super: string | null }[]}
+ * @returns {{ oid: string, name: string, reference: string, parent: string | null, super: string | null, statusName: string, owners: string[], assetState: string }[]}
  */
 export function parseRestAssetList(xmlText, assetType) {
   const assets = [];
@@ -69,6 +76,9 @@ export function parseRestAssetList(xmlText, assetType) {
       reference: extractAttributeValue(body, "Reference"),
       parent: extractRelationOid(body, "Parent"),
       super: extractRelationOid(body, "Super"),
+      statusName: extractAttributeValue(body, "Status.Name"),
+      owners: extractRelationOids(body, "Owners"),
+      assetState: extractAttributeValue(body, "AssetState"),
     });
   }
 
