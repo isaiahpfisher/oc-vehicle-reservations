@@ -4,7 +4,7 @@ const dbConfig = {
   HOST: process.env.DB_HOST || "localhost",
   USER: process.env.DB_USER || "root",
   PASSWORD: process.env.DB_PW || "",
-  DB: process.env.DB_NAME || "courses-db",
+  DB: process.env.DB_NAME || "vehicles-db",
   dialect: "mysql",
   timezone: process.env.DB_TIMEZONE || "America/Chicago",
   pool: {
