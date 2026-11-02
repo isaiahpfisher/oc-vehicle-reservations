@@ -65,7 +65,6 @@ erDiagram
       string phone_number
       string license_state
       date license_expiration_date
-      boolean has_cdl
       timestamp approved_at optional
       enum status "pending, approved, denied, revoked, former"
     }

@@ -14,7 +14,7 @@
 ### US-7.1: Create drivers
 
 **As a** signed-in admin or area admin user
-**I want to** create a driver with an optional user, first name, last name, phone number, license state, license expiration date, CDL flag, and status.
+**I want to** create a driver with an optional user, first name, last name, phone number, license state, license expiration date, and status.
 **So that** users requesting vehicles can select a particular driver
 
 **Priority:** P1
@@ -81,13 +81,12 @@
 - **FR-012**: `approved_at` is set by the server and client-supplied values MUST be ignored. It MUST be set to the current time whenever `status` changes to `approved` from any other status (or a driver is created as `approved`)
 - **FR-013**: `status` MUST be selected from existing enum of `pending`, `approved`, `denied`, `revoked`, and `former`. Empty status is saved as `pending`.
 - **FR-014**: `user_id` MUST be unique.
-- **FR-015**: `GET /api/drivers/selectable` MUST require a valid session with no role requirement. It MUST return only `id`, `firstName`, `lastName`, and `hasCdl`, for drivers with status `approved` and a license expiration date of today or later.
+- **FR-015**: `GET /api/drivers/selectable` MUST require a valid session with no role requirement. It MUST return only `id`, `firstName`, and `lastName`, for drivers with status `approved` and a license expiration date of today or later.
 - **FR-016**: `GET /api/drivers/available-users` MUST return `id`, `firstName`, `lastName`, and `email` for users not linked to a driver. With `?driverId=`, it MUST also include that driver's linked user.
-- **FR-017**: `has_cdl` MUST be a boolean. If omitted, it is saved as `false`.
-- **FR-018**: Deleting a user MUST keep any linked driver and set its `user_id` to null.
-- **FR-019**: Request bodies use camelCase and MUST also accept snake_case aliases, matching the vehicles API.
-- **FR-020**: A past `license_expiration_date` MUST be accepted, so that existing drivers with expired licenses can be recorded.
-- **FR-021**: `GET /api/users/:id` MUST include `driver`, with the linked driver's `status`, `licenseState`, `licenseExpirationDate`, and `phoneNumber`, or `null` if there is no linked driver.
+- **FR-017**: Deleting a user MUST keep any linked driver and set its `user_id` to null.
+- **FR-018**: Request bodies use camelCase and MUST also accept snake_case aliases, matching the vehicles API.
+- **FR-019**: A past `license_expiration_date` MUST be accepted, so that existing drivers with expired licenses can be recorded.
+- **FR-020**: `GET /api/users/:id` MUST include `driver`, with the linked driver's `status`, `licenseState`, `licenseExpirationDate`, and `phoneNumber`, or `null` if there is no linked driver.
 
 ---
 
@@ -109,7 +108,6 @@
 - License state not an existing state abbreviation → client block and/or `400`.
 - Empty or invalid license expiration date → client block and/or `400`.
 - Past license expiration date → accepted; the drivers view highlights it.
-- `has_cdl` that is not a boolean → `400`.
 - Empty status → save status as `pending`.
 - Status other than `pending`, `approved`, `denied`, `revoked`, or `former` → `400`.
 - Deleting a user linked to a driver → driver is kept with `user_id` set to null.
@@ -161,7 +159,6 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
   "phoneNumber": "(405)425-1234",
   "licenseState": "OK",
   "licenseExpirationDate": "2027-09-01",
-  "hasCdl": false,
   "status": "pending"
 }
 ```
@@ -177,7 +174,6 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
   "phoneNumber": "(405)425-1234",
   "licenseState": "OK",
   "licenseExpirationDate": "2027-09-01",
-  "hasCdl": false,
   "status": "pending",
   "approvedAt": null,
   "createdAt": "2026-07-02T12:00:00.000Z",
@@ -209,7 +205,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - Register `/drivers/new` before `/drivers/:id`
 - Heading: **New Driver** or first name and last name of driver if editing
 - Primary action: **Save** (and cancel) return to `Drivers.vue`
-- Main Content: form with fields for the columns on the drivers table (excluding `approved_at` and timestamps), including a **CDL** checkbox for `has_cdl`
+- Main Content: form with fields for the columns on the drivers table (excluding `approved_at` and timestamps)
 - Follow UI patterns from elsewhere
 
 ### [Card: Driver] — on `UserDetails.vue` (`/users/:id`)
@@ -239,7 +235,6 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | `phone_number`            | STRING     | Required; trimmed; must be in format `(xxx)xxx-xxxx`                                  |
 | `license_state`           | STRING     | Required; one of the state abbreviations                                              |
 | `license_expiration_date` | DATEONLY   | Required; must be in format `yyyy-mm-dd`                                              |
-| `has_cdl`                 | BOOLEAN    | Required; defaults to `false`                                                         |
 | `approved_at`             | DATE       | May be null; set by the server (FR-012)                                               |
 | `status`                  | ENUM       | Required; `pending`, `approved`, `denied`, `revoked`, `former`; defaults to `pending` |
 | `createdAt`               | DATE       | Sequelize timestamps                                                                  |
@@ -291,12 +286,6 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **Given** I am signed in as admin or an area_admin on the drivers view
 - **When** I have filled out the driver form with approved status and submitted
 - **Then** the approved_at timestamp is set accordingly
-
-#### Scenario: CDL flag is saved
-
-- **Given** I am signed in as admin or an area_admin on the driver form
-- **When** I check **CDL** and click `Save`
-- **Then** the driver is saved with `hasCdl` set to `true`
 
 #### Scenario: Invalid phone number is rejected
 
@@ -430,7 +419,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** I am signed in without an `admin` or `area_admin` role
 - **When** I send `GET /api/drivers/selectable`
-- **Then** I receive only `id`, `firstName`, `lastName`, and `hasCdl` for approved drivers with unexpired licenses
+- **Then** I receive only `id`, `firstName`, and `lastName` for approved drivers with unexpired licenses
 
 #### Scenario: Area admin fetches available users
 
@@ -450,7 +439,6 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-7.1 | Linked users are saved for drivers                     | `backend/tests/drivers.test.js`      | `Linked users are saved for drivers`                     |
 | US-7.1 | Cannot submit without required fields                  | `backend/tests/drivers.test.js`      | `Cannot submit without required fields`                  |
 | US-7.1 | Approved timestamp on create                           | `backend/tests/drivers.test.js`      | `Approved timestamp on create`                           |
-| US-7.1 | CDL flag is saved                                      | `frontend/tests/DriverForm.test.js`  | `CDL flag is saved`                                      |
 | US-7.1 | Invalid phone number is rejected                       | `backend/tests/drivers.test.js`      | `Invalid phone number is rejected`                       |
 | US-7.1 | Duplicate linked user is rejected                      | `backend/tests/drivers.test.js`      | `Duplicate linked user is rejected`                      |
 | US-7.1 | Past license expiration date is accepted               | `backend/tests/drivers.test.js`      | `Past license expiration date is accepted`               |
@@ -514,4 +502,4 @@ Do not implement behavior not in this spec.
 
 ## Delivered to later features
 
-- Drivers are available for vehicle requests through `GET /api/drivers/selectable`, including `hasCdl` for CDL vehicle checks
+- Drivers are available for vehicle requests through `GET /api/drivers/selectable`
