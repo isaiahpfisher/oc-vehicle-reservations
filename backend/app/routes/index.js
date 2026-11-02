@@ -5,6 +5,7 @@ import areaRoutes from "./area.routes.js";
 import vehicleTypeRoutes from "./vehicleType.routes.js";
 import serviceTypeRoutes from "./serviceType.routes.js";
 import destinationRoutes from "./destination.routes.js";
+import vehicleRoutes from "./vehicle.routes.js";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use("/areas", areaRoutes);
 router.use("/vehicle-types", vehicleTypeRoutes);
 router.use("/service-types", serviceTypeRoutes);
 router.use("/destinations", destinationRoutes);
+router.use("/vehicles", vehicleRoutes);
 
 export default router;
