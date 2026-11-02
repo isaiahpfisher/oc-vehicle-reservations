@@ -52,6 +52,12 @@ const router = createRouter({
       meta: { nav: "Vehicle Types", icon: "mdi-car-outline", roles: ["admin"] },
     },
     {
+      path: "/destinations",
+      name: "destinations",
+      component: () => import("./views/Destinations.vue"),
+      meta: { nav: "Destinations", icon: "mdi-map-marker-outline", roles: ["admin", "area_admin"] },
+    },
+    {
       path: "/vehicles",
       name: "vehicles",
       component: () => import("./views/Vehicles.vue"),

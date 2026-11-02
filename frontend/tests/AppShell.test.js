@@ -66,11 +66,14 @@ describe("App shell (ui-style-system.mdc)", () => {
     const content = sidebar.querySelector(".v-navigation-drawer__content");
     expect(content.textContent).toContain("OC");
     // Feature 5 adds Vehicles for admin and area admin. Feature 12 adds Service Types.
+    // Feature 6 (US-6.5) adds Destinations for admin and area admin.
+    // Feature 12 (US-12.5) adds Service Types for admin, area admin, and maintenance.
     expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
       "Home",
       "Users",
       "Areas",
       "Vehicle Types",
+      "Destinations",
       "Vehicles",
       "Service Types",
     ]);

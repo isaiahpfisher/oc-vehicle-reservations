@@ -57,10 +57,13 @@ export const authenticate = async (req, res, next) => {
 
 /** Authenticate, then pass if the user holds any listed role (admin always passes); otherwise 403. */
 export const authorizeRoles = (...roles) => {
+  const roleKey = [...roles].sort().join(",");
   const message =
-    roles.length === 1 && ROLE_REQUIRED_MESSAGES[roles[0]]
-      ? ROLE_REQUIRED_MESSAGES[roles[0]]
-      : `One of these roles is required: ${roles.join(", ")}.`;
+    roleKey === "admin,area_admin"
+      ? "Admin or area admin role required."
+      : roles.length === 1 && ROLE_REQUIRED_MESSAGES[roles[0]]
+        ? ROLE_REQUIRED_MESSAGES[roles[0]]
+        : `One of these roles is required: ${roles.join(", ")}.`;
 
   return (req, res, next) =>
     authenticate(req, res, () => {
