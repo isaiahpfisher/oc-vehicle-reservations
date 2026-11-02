@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 6 adds `destinations`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -73,9 +73,28 @@ Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissi
 
 The JSON body uses `service_frequency_days` and `service_frequency_miles`.
 
+## `destinations`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `name` | STRING | Required, trimmed, max 255. Not unique. |
+| `address_line_1` | STRING | Required, trimmed, max 255 |
+| `address_line_2` | STRING | Trimmed. Null when empty. Max 255 |
+| `city` | STRING | Required, trimmed, max 255 |
+| `state` | STRING | Required, trimmed, max 255 |
+| `zip_code` | STRING | Trimmed. Null when empty. Max 255 |
+| `is_saved` | BOOLEAN | Required. `true` means available. `false` means not available. |
+| `miles_from_campus` | INTEGER | Null when empty. Whole number of 0 or more when present. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, and `miles_from_campus`. There is no `area_id`.
+
 ## Associations
 
 - A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
 - A user has many roles. A role belongs to one user. Deleting the user deletes their roles.
 - An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
 - Service types have no associations.
+- Destinations have no associations.

@@ -1,7 +1,7 @@
 # Behavior & Rules Reference
 
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, and Feature 12 service type rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 6 destination rules, and Feature 12 service type rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -64,6 +64,19 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Users list | Admin-only table at `/users`: name, email, role chips (`Admin`, `Maintenance`, `Area Admin — <area>`), 10 per page, name search (case-insensitive) and role filter; changing either returns to page 1. | Feature 3, US-3.1–3.3 |
 | User details | `/users/:id`: header with name, email, role chips, and member-since date; **Access** card with checkboxes (System roles; Area admin of, one per area) and its own Save/Cancel that stay on the page; **Driver** card and **Requests** / **Issue reports** / **Maintenance** (maintenance users only) tabs show "Coming soon" until Features 7–13; **Account** card deletes the user. On your own page, Admin and Delete are disabled. | Feature 3, US-3.4, US-3.5 |
 | Delete user | Confirm dialog naming the user, from the users list or the details page; disabled for the admin's own account. | Feature 3, US-3.5 |
+
+## Destinations
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Only admins and area admins manage destinations | Every `/api/destinations` route uses `authorizeRoles("admin", "area_admin")`. A missing token is `401`. A signed-in user without one of those roles is `403` `{ "message": "Admin or area admin role required." }`. `/destinations` has `meta.nav: "Destinations"` and `meta.roles: ["admin", "area_admin"]`, so those roles see the **Destinations** link and everyone else does not. Other signed-in users who open the URL are redirected home. An unsigned visit redirects to `/login`. | Feature 6, FR-001, US-6.5 |
+| Destinations are global | There is no `area_id`. An area admin reads, creates, edits, and deletes every destination. | Feature 6, FR-002 |
+| Required text is trimmed and at most 255 characters | `name`, `address_line_1`, `city`, and `state` are required. Empty or whitespace-only values return `400` with `Missing name.`, `Missing address line 1.`, `Missing city.`, or `Missing state.`. A longer value returns `Name too long.`, `Address line 1 too long.`, `City too long.`, or `State too long.`. Names are not unique. | Feature 6, FR-005–FR-008, FR-011–FR-014 |
+| Optional text is stored as null when blank | `address_line_2` and `zip_code` are trimmed. Blank becomes `null`. A value longer than 255 characters returns `Address line 2 too long.` or `ZIP code too long.`. | Feature 6, FR-009, FR-010, FR-015, FR-016 |
+| `is_saved` is a required boolean | `true` means available (Official). `false` means not available (Unofficial). Missing returns `{ "message": "Missing is_saved." }`. Any other value returns `{ "message": "is_saved must be true or false." }`. The create dialog starts with Official on. The edit dialog can turn it on or off. Both values stay on the admin list. Selecting a destination is a later feature. | Feature 6, FR-017, FR-019, FR-020 |
+| Miles from campus is optional | Empty is stored as `null`. A negative or non-integer value returns `{ "message": "Miles from campus must be a whole number of 0 or more." }`. This feature does not call a maps API. | Feature 6, FR-018 |
+| Delete removes the destination | `DELETE` returns `200` and does not check for other rows that point at the destination. | Feature 6, Assumptions |
+| Destinations are managed on one screen | `/destinations` heading is **Destination Management**. The list is a table of 10 rows per page with **Name**, **City**, **State**, and an **Official** or **Unofficial** chip. Create and edit use dialogs. Row icon buttons use `size="small"` and `variant="text"` with aria-labels **Edit destination** and **Delete destination**. Delete uses the shared confirmation dialog. Empty list copy is **No destinations yet. Create your first destination.** | Feature 6, Screen Requirements |
 
 ## Service types
 

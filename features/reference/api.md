@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 6 destination routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -29,7 +29,7 @@ Exported from `backend/app/authorization/authorization.js`. Admins pass every ro
 | `authenticateAdmin` | `admin` | `403` `{ "message": "Admin role required." }` |
 | `authenticateMaintenance` | `maintenance` or `admin` | `403` `{ "message": "Maintenance role required." }` |
 | `authenticateAreaAdmin` | `area_admin` of any area, or `admin` | `403` `{ "message": "Area admin role required." }` |
-| `authorizeRoles(...roles)` | Any listed role, or `admin` | `403` `{ "message": "One of these roles is required: <roles>." }` |
+| `authorizeRoles(...roles)` | Any listed role, or `admin` | `403`. One listed role uses its role message (`Admin role required.`, `Area admin role required.`, or `Maintenance role required.`). `authorizeRoles("admin", "area_admin")` uses `{ "message": "Admin or area admin role required." }`. Any other combination uses `{ "message": "One of these roles is required: <roles>." }`. |
 
 `canAccessArea(req.user, areaId)` is true for admins and area admins of that area; area-scoped controllers use it.
 
@@ -130,6 +130,42 @@ Success body: `{ "id", "name", "service_frequency_days", "service_frequency_mile
 | A provided frequency is not a positive whole number | `400` | `{ "message": "Invalid service_frequency_days." }` or `{ "message": "Invalid service_frequency_miles." }` |
 | `serviceTypeId` is not an integer | `400` | `{ "message": "Invalid service type id." }` |
 | Service type id does not exist | `404` | `{ "message": "Service type with id=… not found." }` |
+
+## Destinations
+
+Every route requires a Bearer token and `admin` or `area_admin` (`authorizeRoles("admin", "area_admin")`). Admins pass that check. Destinations are global: the body has no `area_id`, and an area admin can read and change every destination.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/destinations` | Admin or area admin | `200` array of destinations, ordered by `name`. |
+| `GET` | `/api/destinations/:destinationId` | Admin or area admin | `200` with one destination. |
+| `POST` | `/api/destinations` | Admin or area admin | `201` with the created destination. Body is `{ "name": "Pops", "address_line_1": "660 OK-66", "address_line_2": null, "city": "Arcadia", "state": "OK", "zip_code": "73007", "is_saved": true, "miles_from_campus": 22 }`. |
+| `PUT` | `/api/destinations/:destinationId` | Admin or area admin | `200` with the updated destination. Body is the same shape as create. Required fields must be sent again. |
+| `DELETE` | `/api/destinations/:destinationId` | Admin or area admin | `200` `{ "message": "Destination deleted successfully." }`. The destination row is removed. |
+
+Success body: `{ "id", "name", "address_line_1", "address_line_2", "city", "state", "zip_code", "is_saved", "miles_from_campus", "createdAt", "updatedAt" }`.
+
+`name`, `address_line_1`, `city`, and `state` are trimmed and required. `address_line_2` and `zip_code` are trimmed and stored as `null` when blank. Names are not unique. `is_saved` must be boolean `true` (available) or `false` (not available). `miles_from_campus` is `null` when omitted or blank, or a whole number of 0 or more.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| Missing or whitespace-only `address_line_1` | `400` | `{ "message": "Missing address line 1." }` |
+| Missing or whitespace-only `city` | `400` | `{ "message": "Missing city." }` |
+| Missing or whitespace-only `state` | `400` | `{ "message": "Missing state." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `address_line_1` longer than 255 characters after trim | `400` | `{ "message": "Address line 1 too long." }` |
+| `address_line_2` longer than 255 characters after trim | `400` | `{ "message": "Address line 2 too long." }` |
+| `city` longer than 255 characters after trim | `400` | `{ "message": "City too long." }` |
+| `state` longer than 255 characters after trim | `400` | `{ "message": "State too long." }` |
+| `zip_code` longer than 255 characters after trim | `400` | `{ "message": "ZIP code too long." }` |
+| `is_saved` missing | `400` | `{ "message": "Missing is_saved." }` |
+| `is_saved` is not boolean `true` or `false` | `400` | `{ "message": "is_saved must be true or false." }` |
+| `miles_from_campus` is negative or not a whole number | `400` | `{ "message": "Miles from campus must be a whole number of 0 or more." }` |
+| `destinationId` is not an integer | `400` | `{ "message": "Invalid destination id." }` |
+| Destination id does not exist | `404` | `{ "message": "Destination with id=… not found." }` |
 
 ## Conventions
 
