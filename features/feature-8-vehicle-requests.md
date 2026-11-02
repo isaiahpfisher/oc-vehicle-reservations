@@ -130,6 +130,7 @@
 - Destination is listed twice in a row on a trip -> 400 bad request
 - A driver is not approved or has an expired license -> 400 bad request
 - A driver's license expires during a trip -> 400 bad request
+- Deleting a driver attached to any vehicle request (`DELETE /api/drivers/:driverId` from Feature 7) -> 400 bad request
 
 ## Success Criteria
 
@@ -551,6 +552,16 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **When** I add, remove, or reorder its destinations and save
 - **Then** `estimated_miles` is recalculated for the new route
 - **And** the updated estimate is shown on the request view
+
+---
+
+### Feature 7 follow-up — Driver deletion guard
+
+#### Scenario: Cannot delete driver with requests
+
+- **Given** I am signed in as admin or an area_admin on the drivers view
+- **When** I try to delete a driver that is attached to any vehicle requests
+- **Then** the API returns `400` with a helpful message explaining why I can't delete them and suggesting changing their status to `former`
 
 ---
 
