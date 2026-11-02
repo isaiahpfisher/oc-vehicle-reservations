@@ -1,5 +1,6 @@
 import logger from "../config/logger.js";
 import { requiredText } from "../helpers/fields.js";
+import { milesFromCampus } from "../helpers/mileage.js";
 import { autocomplete, placeAddress, placesEnabled } from "../helpers/places.js";
 
 const exports = {};
@@ -51,6 +52,23 @@ exports.findOne = async (req, res) => {
 
   try {
     return res.send(await placeAddress(req.params.placeId, req.query.sessionToken));
+  } catch (err) {
+    return failed(res, err);
+  }
+};
+
+/** FR-010: fills in a destination's miles from campus on the destination form. */
+exports.milesFromCampus = async (req, res) => {
+  if (!PLACE_ID.test(req.params.placeId)) {
+    return res.status(400).send({ message: "Invalid place id." });
+  }
+
+  if (!placesEnabled()) {
+    return unavailable(res);
+  }
+
+  try {
+    return res.send({ milesFromCampus: await milesFromCampus(req.params.placeId) });
   } catch (err) {
     return failed(res, err);
   }

@@ -7,6 +7,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import App from "../src/App.vue";
 import router from "../src/router.js";
 import areaServices from "../src/services/areaServices.js";
+import destinationServices from "../src/services/destinationServices.js";
 import requestServices from "../src/services/requestServices.js";
 import placeServices from "../src/services/placeServices.js";
 import { calendarTitle, toDateInput } from "../src/models/requests.js";
@@ -29,8 +30,11 @@ vi.mock("../src/services/requestServices.js", () => ({
     updateRequest: vi.fn(),
     getVehicleOptions: vi.fn(),
     getDrivers: vi.fn(),
-    getDestinations: vi.fn(),
   },
+}));
+
+vi.mock("../src/services/destinationServices.js", () => ({
+  default: { getSelectableDestinations: vi.fn() },
 }));
 
 vi.mock("../src/services/placeServices.js", () => ({
@@ -42,8 +46,8 @@ const admin = { ...requester, userId: 9, firstName: "Ada", lastName: "Admin", ro
 
 const athletics = { id: 1, name: "Athletics" };
 const music = { id: 2, name: "Music" };
-const dana = { id: 1, firstName: "Dana", lastName: "Reyes", licenseExpirationDate: "2035-01-01", hasCdl: false };
-const sam = { id: 2, firstName: "Sam", lastName: "Okafor", licenseExpirationDate: "2035-01-01", hasCdl: true };
+const dana = { id: 1, firstName: "Dana", lastName: "Reyes" };
+const sam = { id: 2, firstName: "Sam", lastName: "Okafor" };
 const okc = { id: 1, name: "Paycom Center", city: "Oklahoma City", state: "OK", isSaved: true };
 const tulsa = { id: 2, name: "BOK Center", city: "Tulsa", state: "OK", isSaved: true };
 const van = { id: 5, universityId: "VAN-101", year: 2022, make: "Ford", model: "Transit", passengerCapacity: 8, vehicleType: { name: "Van" } };
@@ -174,7 +178,7 @@ beforeEach(async () => {
   vi.resetAllMocks();
   areaServices.getAreas.mockResolvedValue({ data: [athletics, music] });
   requestServices.getDrivers.mockResolvedValue({ data: [dana, sam] });
-  requestServices.getDestinations.mockResolvedValue({ data: [okc, tulsa] });
+  destinationServices.getSelectableDestinations.mockResolvedValue({ data: [okc, tulsa] });
   requestServices.getMyRequests.mockResolvedValue({ data: [] });
   requestServices.getRequests.mockResolvedValue({ data: [] });
   await router.push("/login");
@@ -244,6 +248,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       await addSavedDestination(tulsa);
       await click("Custom address");
       await field("Place name").setValue("Grandma's House");
+      await field("Street address").setValue("1 Main St");
       await field("City").setValue("Guthrie");
       await field("State").setValue("OK");
       byTest("add-custom-destination").click();
@@ -256,7 +261,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(requestServices.createRequest.mock.calls[0][0].destinations).toEqual([
         { id: okc.id },
         { id: tulsa.id },
-        { name: "Grandma's House", addressLine1: "", addressLine2: "", city: "Guthrie", state: "OK", zipCode: "" },
+        { name: "Grandma's House", addressLine1: "1 Main St", addressLine2: "", city: "Guthrie", state: "OK", zipCode: "" },
       ]);
     });
 
@@ -359,7 +364,6 @@ describe("Feature 8 — Vehicle Request Management", () => {
       await waitFor(() => expect(menuItems()).toHaveLength(2));
       expect(menuItems()[0]).toContain("Dana Reyes");
       expect(menuItems()[1]).toContain("Sam Okafor");
-      expect(menuItems()[1]).toContain("CDL");
 
       await openMenu(
         wrapper.findAllComponents({ name: "VAutocomplete" }).find((c) => c.props("placeholder") === "Add a saved destination"),
@@ -624,7 +628,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin assigns vehicles to a request", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest({ status: "awaiting_vehicle" }) });
       requestServices.getVehicleOptions.mockResolvedValue({
-        data: [{ vehicle: van, cdlOk: true, conflictingRequestIds: [], outOfService: false, milesUntilService: null }],
+        data: [{ vehicle: van, conflictingRequestIds: [], outOfService: false, milesUntilService: null }],
       });
       requestServices.updateRequest.mockResolvedValue({ data: tripRequest({ status: "reserved", vehicles: [van] }) });
       await mountAppAt("/requests/1", admin);
@@ -651,14 +655,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(byTest("vehicles").querySelector('[data-test="capacity-warning"]')).not.toBeNull();
     });
 
-    it("hides reserved and CDL-only vehicles until the admin clears those filters", async () => {
+    it("hides reserved vehicles until the admin clears that filter", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
       requestServices.getVehicleOptions.mockResolvedValue({
         data: [
-          { vehicle: van, cdlOk: true, conflictingRequestIds: [4], outOfService: false, milesUntilService: null },
+          { vehicle: van, conflictingRequestIds: [4], outOfService: false, milesUntilService: null },
           {
             vehicle: { ...van, id: 6, universityId: "BUS-1", vehicleType: { name: "Bus" } },
-            cdlOk: false,
             conflictingRequestIds: [],
             outOfService: false,
             milesUntilService: null,
@@ -671,15 +674,14 @@ describe("Feature 8 — Vehicle Request Management", () => {
       byTest("assign-vehicles").click();
       await settle();
 
-      await waitFor(() => expect(document.body.textContent).toContain("2 hidden by filters"));
-      expect(document.body.querySelectorAll('[data-test="vehicle-option"]')).toHaveLength(0);
+      await waitFor(() => expect(document.body.textContent).toContain("1 hidden by filters"));
+      expect(document.body.querySelectorAll('[data-test="vehicle-option"]')).toHaveLength(1);
 
       await click("Available on these dates");
-      await click("Drivable by these drivers");
       await waitFor(() => expect(document.body.querySelectorAll('[data-test="vehicle-option"]')).toHaveLength(2));
       expect(document.body.textContent).toContain("Reserved");
       expect(document.body.textContent).not.toContain("#4");
-      expect(document.body.textContent).toContain("Needs CDL driver");
+      expect(document.body.textContent).not.toContain("CDL");
     });
   });
 

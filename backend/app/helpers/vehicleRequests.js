@@ -7,12 +7,24 @@ export const requestInclude = () => [
   { model: db.area, as: "area", attributes: ["id", "name"] },
   { model: db.user, as: "user", attributes: ["id", "firstName", "lastName", "email"] },
   { model: db.user, as: "approver", attributes: ["id", "firstName", "lastName"] },
-  { model: db.vehicleRequestDriver, as: "requestDrivers", include: [{ model: db.driver, as: "driver" }] },
+  {
+    model: db.vehicleRequestDriver,
+    as: "requestDrivers",
+    // Feature 7, FR-015: a driver's license and phone details are for admins, so requests show names only.
+    include: [{ model: db.driver, as: "driver", attributes: ["id", "firstName", "lastName"] }],
+  },
   { model: db.vehicleRequestDestination, as: "stops", include: [{ model: db.destination, as: "destination" }] },
   {
     model: db.vehicleRequestVehicle,
     as: "requestVehicles",
-    include: [{ model: db.vehicle, as: "vehicle", include: [{ model: db.vehicleType, as: "vehicleType" }] }],
+    include: [
+      {
+        model: db.vehicle,
+        as: "vehicle",
+        attributes: ["id", "universityId", "make", "model", "year", "color", "passengerCapacity", "licensePlate"],
+        include: [{ model: db.vehicleType, as: "vehicleType", attributes: ["id", "name"] }],
+      },
+    ],
   },
 ];
 

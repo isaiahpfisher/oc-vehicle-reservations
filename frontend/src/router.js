@@ -65,6 +65,47 @@ const router = createRouter({
       meta: { nav: "Areas", icon: "mdi-map-marker-outline", roles: ["admin"] },
     },
     {
+      path: "/vehicle-types",
+      name: "vehicle-types",
+      component: () => import("./views/VehicleTypes.vue"),
+      meta: { nav: "Vehicle Types", icon: "mdi-car-outline", roles: ["admin"] },
+    },
+    {
+      path: "/destinations",
+      name: "destinations",
+      component: () => import("./views/Destinations.vue"),
+      meta: { nav: "Destinations", icon: "mdi-map-marker-outline", roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/vehicles",
+      name: "vehicles",
+      component: () => import("./views/Vehicles.vue"),
+      meta: { nav: "Vehicles", icon: "mdi-car-multiple", roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/vehicles/new",
+      name: "vehicleCreate",
+      component: () => import("./views/VehicleForm.vue"),
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/vehicles/:id",
+      name: "vehicleDetails",
+      component: () => import("./views/VehicleForm.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/service-types",
+      name: "service-types",
+      component: () => import("./views/ServiceTypes.vue"),
+      meta: {
+        nav: "Service Types",
+        icon: "mdi-wrench-outline",
+        roles: ["admin", "area_admin", "maintenance"],
+      },
+    },
+    {
       path: "/:pathMatch(.*)*",
       redirect: { name: "home" },
     },

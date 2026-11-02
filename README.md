@@ -74,7 +74,7 @@ Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Dev
 
 The seed also adds staff and students across six areas (Admissions, Athletics, Facilities, Music, Student Life, Theatre); see `backend/scripts/seed.mjs`.
 
-It also replaces all vehicle requests with about 16 samples across every area and status, dated around the day you seed (`requester@oc.edu` owns several). Until Features 4–7 merge, it adds the interim vehicle types, vehicles, drivers, and destinations those requests use.
+It also replaces vehicle types, vehicles, destinations, and vehicle requests with samples so requests can be tried end to end: about 16 requests across every area and status, dated around the day you seed (`requester@oc.edu` owns several). Sample drivers are interim until Feature 7 merges. With `GOOGLE_MAPS_API_KEY` set, seeding makes one billed Google Routes call per sample request.
 
 ## Branching
 

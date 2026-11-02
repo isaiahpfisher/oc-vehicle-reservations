@@ -1,10 +1,9 @@
 /**
- * Feature 8 — Vehicle Request Management (INTERIM seed data)
+ * Feature 8 — Vehicle Request Management (sample data for Features 4–7)
  * Spec: features/feature-8-vehicle-requests.md → Assumptions
- * INTERIM(features 4–7): delete this file when those features replace the interim seed blocks.
  */
 import db from "../app/models/index.js";
-import { INTERIM_DESTINATIONS, INTERIM_DRIVERS, INTERIM_VEHICLES, seed } from "../scripts/seed.mjs";
+import { SEED_DESTINATIONS, INTERIM_DRIVERS, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 beforeEach(async () => {
@@ -15,20 +14,20 @@ afterAll(async () => {
   await db.sequelize.close();
 });
 
-describe("Feature 8 — Vehicle Request Management seed data (INTERIM)", () => {
+describe("Feature 8 — Vehicle Request Management sample data", () => {
   it("Seed adds sample vehicles, drivers, and destinations and replaces old requests", async () => {
     const result = await seed();
     expect(result.exitCode).toBe(0);
-    expect(result.message).toContain(`Added interim sample data: ${INTERIM_VEHICLES.length} vehicles`);
+    expect(result.message).toContain(`Added sample data: ${SEED_VEHICLES.length} vehicles`);
 
-    expect(await db.vehicle.count()).toBe(INTERIM_VEHICLES.length);
+    expect(await db.vehicle.count()).toBe(SEED_VEHICLES.length);
     expect(await db.driver.count()).toBe(INTERIM_DRIVERS.length);
-    expect(await db.destination.count()).toBe(INTERIM_DESTINATIONS.length);
+    expect(await db.destination.count()).toBe(SEED_DESTINATIONS.length);
 
     // Vehicles land in their named area; drivers link to seeded accounts by email.
     const bus = await db.vehicle.findOne({ where: { universityId: "ATH-B01" }, include: ["area", "vehicleType"] });
     expect(bus.area.name).toBe("Athletics");
-    expect(bus.vehicleType.requiresCdl).toBe(true);
+    expect(bus.vehicleType.name).toBe("Bus");
     const marcus = await db.driver.findOne({ where: { lastName: "Bell" } });
     const marcusUser = await db.user.findOne({ where: { email: "marcus.bell@oc.edu" } });
     expect(marcus.userId).toBe(marcusUser.id);
@@ -49,7 +48,7 @@ describe("Feature 8 — Vehicle Request Management seed data (INTERIM)", () => {
 
     expect((await seed({ keep: ["me@eagles.oc.edu"] })).exitCode).toBe(0);
     expect(await db.vehicleRequest.findOne({ where: { purpose: "Old trip" } })).toBeNull();
-    expect(await db.vehicle.count()).toBe(INTERIM_VEHICLES.length);
+    expect(await db.vehicle.count()).toBe(SEED_VEHICLES.length);
     expect(await db.driver.count()).toBe(INTERIM_DRIVERS.length);
   });
 });

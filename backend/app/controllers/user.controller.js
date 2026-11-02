@@ -133,6 +133,11 @@ exports.remove = async (req, res) => {
       return notFound(res, userId);
     }
 
+    // Feature 8: requests are never deleted, so a user who made requests stays.
+    if ((await db.vehicleRequest.count({ where: { userId } })) > 0) {
+      return res.status(400).send({ message: "User has vehicle requests and can't be deleted." });
+    }
+
     await user.destroy();
     return res.status(204).send();
   } catch (err) {

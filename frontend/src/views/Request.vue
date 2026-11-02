@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
+import destinationServices from "../services/destinationServices.js";
 import requestServices from "../services/requestServices.js";
 import Utils from "../config/utils.js";
 import { useRoles } from "../composables/useRoles.js";
@@ -209,7 +210,7 @@ const load = async () => {
     const [areaRes, driverRes, destinationRes, requestRes] = await Promise.all([
       areaServices.getAreas(),
       requestServices.getDrivers(),
-      requestServices.getDestinations(),
+      destinationServices.getSelectableDestinations(),
       isCreate.value ? null : requestServices.getRequest(props.requestId),
     ]);
     areas.value = areaRes.data;

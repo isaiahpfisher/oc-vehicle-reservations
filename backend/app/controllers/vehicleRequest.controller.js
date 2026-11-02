@@ -19,6 +19,9 @@ const RELEASED_STATUSES = ["cancelled", "denied"];
 /** Fields a requester fills in. Changing any of them on an approved request resets it to pending. */
 const EDITABLE_FIELDS = ["areaId", "purpose", "startAt", "endAt", "allDay", "numberOfPeople", "drivers", "destinations"];
 const NEW_DESTINATION_FIELDS = ["name", "addressLine1", "addressLine2", "city", "state", "zipCode"];
+/** The same required fields and 255-character limit as Feature 6's destinations API. */
+const NEW_DESTINATION_REQUIRED = { name: "name", addressLine1: "address line 1", city: "city", state: "state" };
+const DESTINATION_FIELD_LIMIT = 255;
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
@@ -121,9 +124,10 @@ const resolveDrivers = async (value, endAt) => {
 
 /**
  * Each stop is `{ id }` for an existing destination or address fields for a new one.
- * New destinations are built here and saved with the request.
+ * New destinations are built here and saved with the request as unofficial (`isSaved: false`), for an admin to review.
+ * Feature 6, FR-017: an unofficial destination isn't available, unless this request already had it (`currentStops`).
  */
-const resolveStops = async (value) => {
+const resolveStops = async (value, currentStops = []) => {
   if (!Array.isArray(value) || !value.length) {
     throw httpError(400, "Missing destinations.");
   }
@@ -150,16 +154,29 @@ const resolveStops = async (value) => {
         throw httpError(400, `Destination with id=${stop.id} not found.`);
       }
 
+      if (!destination.isSaved && !currentStops.some(({ id }) => id === destination.id)) {
+        throw httpError(400, `${destination.name} isn't available as a destination.`);
+      }
+
       return destination;
     }
 
     const fields = Object.fromEntries(NEW_DESTINATION_FIELDS.map((key) => [key, String(stop[key] ?? "").trim()]));
-    const missing = ["name", "city", "state"].find((key) => !fields[key]);
+    const missing = Object.keys(NEW_DESTINATION_REQUIRED).find((key) => !fields[key]);
     if (missing) {
-      throw httpError(400, `Destination ${i + 1} is missing ${missing}.`);
+      throw httpError(400, `Destination ${i + 1} is missing ${NEW_DESTINATION_REQUIRED[missing]}.`);
     }
 
-    return db.destination.build(fields);
+    if (Object.values(fields).some((text) => text.length > DESTINATION_FIELD_LIMIT)) {
+      throw httpError(400, `Destination ${i + 1} has a value longer than ${DESTINATION_FIELD_LIMIT} characters.`);
+    }
+
+    return db.destination.build({
+      ...fields,
+      addressLine2: fields.addressLine2 || null,
+      zipCode: fields.zipCode || null,
+      isSaved: false,
+    });
   });
 
   const key = (stop) => formatAddress(stop).toLowerCase();
@@ -219,7 +236,7 @@ const resolveFields = async (body, current = {}) => {
       numberOfPeople: numberOfPeople,
     },
     driverIds: await resolveDrivers(value("drivers"), endAt),
-    stops: await resolveStops(value("destinations")),
+    stops: await resolveStops(value("destinations"), current.destinations),
   };
 };
 
@@ -469,13 +486,11 @@ exports.vehicleOptions = async (req, res) => {
       })
     ).filter((other) => tripEnd(other) > start);
 
-    const hasCdlDriver = request.requestDrivers.some(({ driver }) => driver.hasCdl);
     const service = await getServiceStatuses(vehicles);
 
     return res.send(
       vehicles.map((vehicle) => ({
         vehicle,
-        cdlOk: !vehicle.vehicleType.requiresCdl || hasCdlDriver,
         conflictingRequestIds: overlapping
           .filter((other) => other.requestVehicles.some(({ vehicleId }) => vehicleId === vehicle.id))
           .map(({ id }) => id),

@@ -13,7 +13,7 @@ const props = defineProps({
 });
 
 const selected = ref([]);
-const onlyShow = ref(["available", "cdl"]);
+const onlyShow = ref(["available"]);
 const saving = ref(false);
 const saveError = ref("");
 
@@ -41,7 +41,6 @@ const serviceDue = (option) =>
 
 const isHidden = (option) =>
   (onlyShow.value.includes("available") && (option.conflictingRequestIds.length > 0 || option.outOfService)) ||
-  (onlyShow.value.includes("cdl") && !option.cdlOk) ||
   (onlyShow.value.includes("service") && serviceDue(option));
 
 // Selected vehicles stay listed even when a filter would hide them.
@@ -90,7 +89,6 @@ const submit = async () => {
         <span class="text-body-medium text-medium-emphasis mr-1">Show only</span>
         <v-chip-group v-model="onlyShow" multiple filter column selected-class="text-primary" class="py-0">
           <v-chip value="available" variant="outlined">Available on these dates</v-chip>
-          <v-chip value="cdl" variant="outlined">Drivable by these drivers</v-chip>
           <v-chip value="service" variant="outlined">Not due for service</v-chip>
         </v-chip-group>
       </div>
@@ -138,7 +136,6 @@ const submit = async () => {
                   Reserved
                 </v-chip>
                 <v-chip v-if="option.outOfService" size="small" color="error" variant="tonal" label>Out of service</v-chip>
-                <v-chip v-if="!option.cdlOk" size="small" color="warning" variant="tonal" label>Needs CDL driver</v-chip>
                 <v-chip v-if="serviceDue(option)" size="small" color="warning" variant="tonal" label>Service due</v-chip>
               </div>
             </template>

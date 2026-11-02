@@ -1,6 +1,6 @@
 /**
  * Feature 3 — FR-016: replace users, sessions, roles, and areas with development seed data.
- * Feature 8 adds sample vehicle requests, plus INTERIM vehicles, drivers, and destinations until Features 4–7 merge.
+ * Feature 8 adds sample vehicle types, vehicles, destinations, and vehicle requests, plus INTERIM drivers until Feature 7 merges.
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...]
  */
 import path from "path";
@@ -58,32 +58,41 @@ export const SEED_USERS = [
   { firstName: "Abigail", lastName: "Reed", email: "abigail.reed@oc.edu", roles: [] },
 ];
 
-/*
- * INTERIM(features 4–7): sample vehicle types, vehicles, drivers, and destinations so vehicle requests (Feature 8)
- * can be tried before those features exist. Each feature replaces its block here with its own seed data.
- * Drivers cover every status, an expired license, one expiring soon, CDL holders, and a driver with no account.
- */
-export const INTERIM_VEHICLE_TYPES = [
-  { name: "Car", identifier: "VIN", requiresCdl: false },
-  { name: "Truck", identifier: "VIN", requiresCdl: false },
-  { name: "Van", identifier: "VIN", requiresCdl: false },
-  { name: "Minibus", identifier: "VIN", requiresCdl: false },
-  { name: "Bus", identifier: "VIN", requiresCdl: true },
-  { name: "Golf Cart", identifier: "serial", requiresCdl: false },
+/* Feature 8: sample rows for Features 4–7, so vehicle requests can be tried end to end. */
+export const SEED_VEHICLE_TYPES = [
+  { name: "Car", identifier: "VIN" },
+  { name: "Truck", identifier: "VIN" },
+  { name: "Van", identifier: "VIN" },
+  { name: "Minibus", identifier: "VIN" },
+  { name: "Bus", identifier: "VIN" },
+  { name: "Golf Cart", identifier: "Serial" },
 ];
 
-const vehicle = (area, universityId, type, make, model, year, passengerCapacity, status = "active") => ({
-  area,
-  universityId,
-  type,
-  make,
-  model,
-  year,
-  passengerCapacity,
-  status,
-});
+const COLORS = ["White", "Silver", "Black", "Blue", "Maroon"];
 
-export const INTERIM_VEHICLES = [
+/** Fills in the fields Feature 5 requires: a 17-character VIN (or a serial number for golf carts), a plate, and a purchase date. */
+const vehicle = (area, universityId, type, make, model, year, passengerCapacity, status = "active") => {
+  const code = universityId.replace("-", "");
+  const isGolfCart = type === "Golf Cart";
+
+  return {
+    area,
+    universityId,
+    type,
+    make,
+    model,
+    year,
+    passengerCapacity,
+    status,
+    identifier: isGolfCart ? `SN-${code}` : `1OCSEED${code}`.padEnd(17, "0"),
+    purchasedAt: `${year}-06-15`,
+    color: COLORS[universityId.charCodeAt(0) % COLORS.length],
+    licensePlate: isGolfCart ? null : code,
+    licensePlateExpirationDate: isGolfCart ? null : "2028-06-30",
+  };
+};
+
+export const SEED_VEHICLES = [
   vehicle("Athletics", "ATH-V01", "Van", "Ford", "Transit 350", 2022, 15),
   vehicle("Athletics", "ATH-V02", "Van", "Ford", "Transit 350", 2021, 15),
   vehicle("Athletics", "ATH-V03", "Van", "Chevrolet", "Express 3500", 2012, 12, "retired"),
@@ -106,20 +115,25 @@ export const INTERIM_VEHICLES = [
   vehicle("Facilities", "FAC-G02", "Golf Cart", "Club Car", "Carryall 502", 2022, 2),
 ];
 
+/*
+ * INTERIM(feature-7): Feature 7's seed data replaces this. Covers every status, an expired license, and a driver with no
+ * account. Feature 7's `former` status is included too.
+ */
 export const INTERIM_DRIVERS = [
-  { firstName: "Riley", lastName: "Requester", email: "requester@oc.edu", licenseExpirationDate: "2029-03-15", status: "approved" },
-  { firstName: "Taylor", lastName: "Athletics", email: "areaadmin@oc.edu", licenseExpirationDate: "2031-01-31", status: "approved", hasCdl: true },
-  { firstName: "Marcus", lastName: "Bell", email: "marcus.bell@oc.edu", licenseExpirationDate: "2028-09-30", status: "approved", hasCdl: true },
-  { firstName: "Elena", lastName: "Ruiz", email: "elena.ruiz@oc.edu", licenseExpirationDate: "2027-02-28", status: "approved" },
-  { firstName: "Tom", lastName: "Garrison", email: "tom.garrison@oc.edu", licenseExpirationDate: "2030-12-31", status: "approved", hasCdl: true },
-  { firstName: "Noah", lastName: "Patel", email: "noah.patel@oc.edu", licenseExpirationDate: "2032-04-30", status: "approved" },
-  { firstName: "Grace", lastName: "Kim", email: "grace.kim@oc.edu", licenseExpirationDate: "2031-07-31", status: "approved" },
-  { firstName: "Laura", lastName: "Simmons", email: "laura.simmons@oc.edu", licenseExpirationDate: "2026-11-15", status: "approved" },
-  { firstName: "Hannah", lastName: "Lee", email: "hannah.lee@oc.edu", licenseExpirationDate: "2026-09-30", status: "approved" },
-  { firstName: "Jacob", lastName: "Miller", email: "jacob.miller@oc.edu", licenseExpirationDate: "2029-05-01", status: "pending" },
-  { firstName: "Ethan", lastName: "Brooks", email: "ethan.brooks@oc.edu", licenseExpirationDate: "2030-01-01", status: "denied" },
-  { firstName: "Sophia", lastName: "Nguyen", email: "sophia.nguyen@oc.edu", licenseExpirationDate: "2029-08-01", status: "revoked" },
-  { firstName: "Frank", lastName: "Delgado", email: null, licenseExpirationDate: "2029-10-31", status: "approved", hasCdl: true },
+  { firstName: "Riley", lastName: "Requester", email: "requester@oc.edu", phoneNumber: "(405)555-0001", licenseState: "OK", licenseExpirationDate: "2029-03-15", status: "approved" },
+  { firstName: "Taylor", lastName: "Athletics", email: "areaadmin@oc.edu", phoneNumber: "(405)555-0002", licenseState: "OK", licenseExpirationDate: "2031-01-31", status: "approved" },
+  { firstName: "Marcus", lastName: "Bell", email: "marcus.bell@oc.edu", phoneNumber: "(405)555-0003", licenseState: "OK", licenseExpirationDate: "2028-09-30", status: "approved" },
+  { firstName: "Elena", lastName: "Ruiz", email: "elena.ruiz@oc.edu", phoneNumber: "(405)555-0004", licenseState: "OK", licenseExpirationDate: "2027-02-28", status: "approved" },
+  { firstName: "Tom", lastName: "Garrison", email: "tom.garrison@oc.edu", phoneNumber: "(405)555-0005", licenseState: "OK", licenseExpirationDate: "2030-12-31", status: "approved" },
+  { firstName: "Noah", lastName: "Patel", email: "noah.patel@oc.edu", phoneNumber: "(405)555-0006", licenseState: "OK", licenseExpirationDate: "2032-04-30", status: "approved" },
+  { firstName: "Grace", lastName: "Kim", email: "grace.kim@oc.edu", phoneNumber: "(405)555-0007", licenseState: "OK", licenseExpirationDate: "2031-07-31", status: "approved" },
+  { firstName: "Laura", lastName: "Simmons", email: "laura.simmons@oc.edu", phoneNumber: "(405)555-0008", licenseState: "OK", licenseExpirationDate: "2026-11-15", status: "approved" },
+  { firstName: "Hannah", lastName: "Lee", email: "hannah.lee@oc.edu", phoneNumber: "(405)555-0009", licenseState: "OK", licenseExpirationDate: "2026-09-30", status: "approved" },
+  { firstName: "Jacob", lastName: "Miller", email: "jacob.miller@oc.edu", phoneNumber: "(405)555-0010", licenseState: "OK", licenseExpirationDate: "2029-05-01", status: "pending" },
+  { firstName: "Ethan", lastName: "Brooks", email: "ethan.brooks@oc.edu", phoneNumber: "(405)555-0011", licenseState: "OK", licenseExpirationDate: "2030-01-01", status: "denied" },
+  { firstName: "Sophia", lastName: "Nguyen", email: "sophia.nguyen@oc.edu", phoneNumber: "(405)555-0012", licenseState: "OK", licenseExpirationDate: "2029-08-01", status: "revoked" },
+  { firstName: "Wes", lastName: "Hart", email: null, phoneNumber: "(405)555-0014", licenseState: "OK", licenseExpirationDate: "2030-03-31", status: "former" },
+  { firstName: "Frank", lastName: "Delgado", email: null, phoneNumber: "(405)555-0013", licenseState: "OK", licenseExpirationDate: "2029-10-31", status: "approved" },
 ];
 
 const destination = (name, addressLine1, city, state, zipCode, milesFromCampus, isSaved = true) => ({
@@ -133,7 +147,7 @@ const destination = (name, addressLine1, city, state, zipCode, milesFromCampus, 
 });
 
 /** Miles from campus are approximate driving distances. The last stop is an unsaved, custom-entered one. */
-export const INTERIM_DESTINATIONS = [
+export const SEED_DESTINATIONS = [
   destination("Oklahoma State Capitol", "2300 N Lincoln Blvd", "Oklahoma City", "OK", "73105", 12),
   destination("Paycom Center", "100 W Reno Ave", "Oklahoma City", "OK", "73102", 16),
   destination("Southern Nazarene University", "6729 NW 39th Expy", "Bethany", "OK", "73008", 18),
@@ -152,34 +166,40 @@ export const INTERIM_DESTINATIONS = [
   destination("First Baptist Church Guthrie", "202 E Oklahoma Ave", "Guthrie", "OK", "73044", null, false),
 ];
 
-/** INTERIM(features 4–7): replace the interim tables with the sample rows above. Requests are already cleared. */
-const seedInterimTables = async ({ areaIds, transaction }) => {
-  for (const model of [db.vehicle, db.vehicleType, db.driver, db.destination]) {
+/** Requests point at everything else, and vehicles at areas (Feature 5 restricts that), so these go before users and areas. */
+const clearSampleTables = async (transaction) => {
+  for (const model of [db.vehicleRequest, db.vehicle, db.vehicleType, db.driver, db.destination]) {
     await model.destroy({ where: {}, transaction });
   }
+};
 
-  const types = await db.vehicleType.bulkCreate(INTERIM_VEHICLE_TYPES, { transaction });
+const seedSampleTables = async ({ areaIds, transaction }) => {
+  const types = await db.vehicleType.bulkCreate(SEED_VEHICLE_TYPES, { transaction });
   const typeIds = Object.fromEntries(types.map((type) => [type.name, type.id]));
 
   await db.vehicle.bulkCreate(
-    INTERIM_VEHICLES.map(({ area, type, ...fields }) => ({ ...fields, areaId: areaIds[area], vehicleTypeId: typeIds[type] })),
+    SEED_VEHICLES.map(({ area, type, ...fields }) => ({ ...fields, areaId: areaIds[area], vehicleTypeId: typeIds[type] })),
     { transaction },
   );
 
   const users = await db.user.findAll({ where: { email: INTERIM_DRIVERS.map(({ email }) => email).filter(Boolean) }, transaction });
   const userIds = Object.fromEntries(users.map((user) => [user.email, user.id]));
   await db.driver.bulkCreate(
-    INTERIM_DRIVERS.map(({ email, ...fields }) => ({ ...fields, userId: userIds[email] ?? null })),
+    INTERIM_DRIVERS.map(({ email, ...fields }) => ({
+      ...fields,
+      userId: userIds[email] ?? null,
+      approvedAt: fields.status === "approved" ? new Date() : null,
+    })),
     { transaction },
   );
 
-  await db.destination.bulkCreate(INTERIM_DESTINATIONS, { transaction });
+  await db.destination.bulkCreate(SEED_DESTINATIONS, { transaction });
 };
 
 /*
  * Feature 8: sample vehicle requests across every area and status. Days are offsets from the day you seed, so there is
  * always recent, current, and upcoming activity. `time` is [startHour, endHour] for a timed trip; omit it for all-day.
- * Drivers, destinations, and vehicles come from the INTERIM lists above (and must follow the API's rules: approved drivers
+ * Drivers, destinations, and vehicles come from the lists above (and must follow the API's rules: approved drivers
  * licensed through the trip, vehicles from the request's area, no vehicle on two overlapping active trips).
  */
 export const SEED_REQUESTS = [
@@ -343,8 +363,7 @@ export const seed = async ({ keep = [] } = {}) => {
     const keptUsers = await db.user.findAll({ where: { email: keepEmails }, transaction });
     const notKept = { [Op.notIn]: keptUsers.map((user) => user.id).concat(0) };
 
-    // INTERIM(features 4–7): vehicle requests point at the users and areas replaced below, so clear them first.
-    await db.vehicleRequest.destroy({ where: {}, transaction });
+    await clearSampleTables(transaction);
 
     await db.role.destroy({ where: { [Op.or]: [{ userId: notKept }, { areaId: { [Op.ne]: null } }] }, transaction });
     await db.session.destroy({ where: { userId: notKept }, transaction });
@@ -366,7 +385,7 @@ export const seed = async ({ keep = [] } = {}) => {
       );
     }
 
-    await seedInterimTables({ areaIds, transaction });
+    await seedSampleTables({ areaIds, transaction });
     await seedRequests({ areaIds, transaction });
 
     return keptUsers.map((user) => user.email);
@@ -377,8 +396,7 @@ export const seed = async ({ keep = [] } = {}) => {
     exitCode: 0,
     message: [
       `Seeded ${SEED_AREAS.length} areas and ${SEED_USERS.length} users.`,
-      // INTERIM(features 4–7)
-      `Added interim sample data: ${INTERIM_VEHICLES.length} vehicles, ${INTERIM_DRIVERS.length} drivers, ${INTERIM_DESTINATIONS.length} destinations.`,
+      `Added sample data: ${SEED_VEHICLES.length} vehicles, ${INTERIM_DRIVERS.length} drivers, ${SEED_DESTINATIONS.length} destinations.`,
       `Added ${SEED_REQUESTS.length} vehicle requests.`,
       kept.length ? `Kept: ${kept.join(", ")}.` : "",
       missing.length ? `Not found (nothing kept): ${missing.join(", ")}.` : "",

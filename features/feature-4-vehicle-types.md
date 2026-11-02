@@ -2,9 +2,9 @@
 
 **Feature ID:** 4
 **Branch pattern:** `feature/4-vehicle-types`
-**Status:** Draft
+**Status:** Ready
 **Created:** 2026-10-19
-**Input:** Signed-in admin users manage vehicle types. Vehicle types are added/edited with a dialog.
+**Input:** Signed-in admin users manage vehicle types. Vehicle types are added with a dialog and edited in the table row.
 **Depends on:** Feature 3 [Roles]
 
 ---
@@ -71,20 +71,20 @@
 - **FR-002**: `name` MUST be trimmed before save. An empty vehicle type name MUST be rejected.
 - **FR-003**: A vehicle type MUST store `name` and `identifier`. `id` is assigned by the database.
 - **FR-004**: `name` MUST be unique (not case-sensitive). Creating a vehicle type with a name identical to an existing name MUST be rejected. Updating a vehicle type to have a different name that is also identical to an existing name MUST be rejected.
-- **FR-005**: `identifier` MUST be one of `VIN` or `serial`. An empty identifier MUST be rejected.
+- **FR-005**: `identifier` MUST be one of `VIN` or `Serial`. An empty identifier MUST be rejected.
 
 ---
 
 ## Assumptions
 
-- Vehicle types use **dialog-based** workflows (no split sidebar / main panel).
+- Creating a vehicle type uses a dialog. Editing a vehicle type happens in the table row. There is no split sidebar / main panel.
 - Delete removes the vehicle type row. No other table references `vehicleTypes` yet, so this feature does not block a delete.
 
 ## Edge Cases
 
 - Empty or whitespace-only vehicle type name → client block and/or `400`.
 - Vehicle type name longer than 255 characters → `400`.
-- Vehicle type identifier other than `VIN` or `serial` → `400`.
+- Vehicle type identifier other than `VIN` or `Serial` → `400`.
 - Unauthenticated vehicle types screen → redirect. 
 - Authenticated vehicle types screen without `admin` role → redirect. 
 - Unauthenticated API request → `401`.
@@ -142,7 +142,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 **Error response:** `{ "message": "Human-readable explanation." }` with appropriate HTTP status.
 **Not found:** `404`.
-**Unauthorized** (lacking `admin` role): `401`.
+**Forbidden** (lacking `admin` role): `403` with `{ message: "Admin role required." }`.
 
 ---
 
@@ -155,16 +155,17 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - Heading: **Vehicle Type Management**
 - Primary action: **+ New Vehicle Type** opens a `<v-dialog>` with **Name** and **Identifier**, plus **Create** / **Cancel**.
     - Identifier is a <v-select>.
-- Display vehicle types as rows. Each row shows the **name**.
-- **Edit** icon opens a `<v-dialog>` pre-filled with the current name and identifier; **Save** / **Cancel**.
+- Display vehicle types in a `<v-data-table>` (10 per page). Columns are **Name** and **Identifier**. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
+- **Edit** icon turns that row into inline fields pre-filled with the current name and identifier; **Save** / **Cancel**. Cancel restores the row without saving.
     - Identifier is a <v-select>.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit vehicle type**, **Delete vehicle type**).
 - **Empty state:** **"No vehicle types yet. Create your first vehicle type."** when there are no vehicle types.
 - **Loading state:** skeleton or progress indicator while vehicle types are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
+- **App chrome:** the route has `meta.nav: "Vehicle Types"` and `meta.roles: ["admin"]`, so the Vehicle Types link shows for admins and is hidden for everyone else
 
-**Implementation note:** one route/view for vehicle types; delete dialog is a reusable component in `components/common` folder; create and edit dialogs should be components stored in a dedicated components/vehicleTypes folder and modeled after existing create and edit dialogs in `components/` folders.
+**Implementation note:** one route/view for vehicle types; delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/vehicleTypes`, modeled after existing create dialogs. Edit stays in the table row.
 
 ---
 
@@ -182,7 +183,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 |-------|------|-------|
 | `id` | INTEGER PK | Auto-increment |
 | `name` | STRING | Required; trimmed; unique; not case-sensitive; max 255 |
-| `identifier` | ENUM | Required; `VIN` or `serial` |
+| `identifier` | ENUM | Required; `VIN` or `Serial` |
 | `createdAt` | DATE | Sequelize timestamps |
 | `updatedAt` | DATE | Sequelize timestamps |
 
@@ -245,7 +246,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - **When** I request `POST /api/vehicle-types` with `{ name: " " }`
 - **Then** the API returns `400` with `{ message: "Missing name." }`
 
-#### Scenario: Admin user requests to create a vehicle type with an identifier other than `VIN` or `serial`
+#### Scenario: Admin user requests to create a vehicle type with an identifier other than `VIN` or `Serial`
 
 - **Given** I am signed in as admin
 - **When** I request `POST /api/vehicle-types` with `{ identifier: " asdflje" }`
@@ -299,7 +300,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin and vehicle types exist 
 - **When** I open the vehicle types view
-- **Then** each row shows the vehicle type name 
+- **Then** each row shows the vehicle type name and identifier 
 
 #### Scenario: Vehicle types empty state
 
@@ -324,29 +325,29 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 #### Scenario: Admin user edits a vehicle type name
 
 - **Given** I am signed in as admin and a vehicle type named `Bus` exists
-- **When** I change the name to `Golf Cart` and submit
+- **When** I change the name in that row to `Golf Cart` and click **Save**
 - **Then** the API returns `200` with the updated vehicle type
 - **And** the list shows `Golf Cart`
 
 #### Scenario: Admin user edits a vehicle type identifier
 
 - **Given** I am signed in as admin and a vehicle type named `Bus` with identifier `VIN` exists
-- **When** I change the identifier to `serial` and submit
+- **When** I change the identifier in that row to `Serial` and click **Save**
 - **Then** the API returns `200` with the updated vehicle type
-- **And** `serial` is in the response
+- **And** `Serial` is in the response
 
 #### Scenario: Admin user edits a vehicle type to have a missing name
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog without a name
+- **When** I clear the name in that row and click **Save**
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a vehicle type to have a missing identifier
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog without an identifier
+- **When** I clear the identifier in that row and click **Save**
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a missing name
@@ -367,7 +368,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog with name ` `
+- **When** I change the name in that row to ` ` and click **Save**
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a whitespace-only name
@@ -377,7 +378,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - **When** I request `PUT /api/vehicle-types/1` with `{ name: " " }`
 - **Then** the API returns `400` with `{ message: "Missing name." }`
 
-#### Scenario: Admin user requests to edit a vehicle type to have an identifier other than `VIN` or `serial`
+#### Scenario: Admin user requests to edit a vehicle type to have an identifier other than `VIN` or `Serial`
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** A vehicle type with identifier `VIN` exists with id `1`
@@ -388,7 +389,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** I am editing an existing vehicle type
-- **When** I submit the edit dialog with a vehicle type name longer than 255 characters
+- **When** I change the name in that row to longer than 255 characters and click **Save**
 - **Then** validation blocks the request and I see a `Name too long.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a name longer than 255 characters
@@ -402,8 +403,8 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 - **Given** I am signed in as admin on the vehicle types view
 - **And** Vehicle types with names `Bus` and `Golf Cart` exist
-- **And** I edit `Golf Cart` to have name `Bus`
-- **When** I submit the edit dialog
+- **And** I change the name in the `Golf Cart` row to `Bus`
+- **When** I click **Save**
 - **Then** validation blocks the request and I see a `Name already taken.` message
 
 #### Scenario: Admin user requests to update a vehicle type to have a non-unique name 
@@ -419,7 +420,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - **Given** I am signed in as admin on the vehicle types view
 - **And** A vehicle type with name `Bus` exists
 - **And** Another vehicle type exists with name `Golf Cart`
-- **When** I submit the edit dialog for `Golf Cart` with name `bus`
+- **When** I change the name in the `Golf Cart` row to `bus` and click **Save**
 - **Then** validation blocks the request and I see a `Name already taken.` message
 
 #### Scenario: Admin user requests to edit a vehicle type to have a non-unique name that is not case-sensitive
@@ -464,6 +465,21 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 
 ### US-4.5: Signed-in admin user access only
 
+#### Scenario: Signed-in admin user sees nav link
+- **Given** I have admin role
+- **When** I am logged in
+- **Then** I see a nav link for vehicle types
+
+#### Scenario: Signed-in admin user clicks on nav link
+- **Given** I am signed in as admin
+- **When** I click on the nav link for vehicle types
+- **Then** I am redirected to `/vehicle-types`
+
+#### Scenario: Signed-in user without admin role does not see nav link
+- **Given** I do not have admin role
+- **When** I am logged in
+- **Then** I do not see a nav link for vehicle types
+
 #### Scenario: Un-signed-in user accesses vehicle types page
 - **Given** I am not signed in
 - **When** I navigate to `/vehicle-types` by URL
@@ -507,34 +523,34 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 - **Given** I am signed in
 - **And** I do not have role `admin`
 - **When** I request `GET /api/vehicle-types`
-- **Then** the API returns `401` with `{ message: "Admin role required." }`
+- **Then** the API returns `403` with `{ message: "Admin role required." }`
 
 #### Scenario: Signed-in user without admin role API request to a particular vehicle type
 - **Given** I am signed in
 - **And** I do not have role `admin`
 - **And** A vehicle type with id `1` exists
 - **When** I request `GET /api/vehicle-types/1`
-- **Then** the API returns `401` with `{ message: "Admin role required." }`
+- **Then** the API returns `403` with `{ message: "Admin role required." }`
 
 #### Scenario: Signed-in user without admin role API request to create a vehicle type
 - **Given** I am signed in
 - **And** I do not have role `admin`
 - **When** I request `POST /api/vehicle-types` with a valid body
-- **Then** the API returns `401` with `{ message: "Admin role required." }`
+- **Then** the API returns `403` with `{ message: "Admin role required." }`
 
 #### Scenario: Signed-in user without admin role API request to update a vehicle type
 - **Given** I am signed in
 - **And** I do not have role `admin`
 - **And** A vehicle type with id `1` exists
 - **When** I request `PUT /api/vehicle-types/1` with a valid body
-- **Then** the API returns `401` with `{ message: "Admin role required." }`
+- **Then** the API returns `403` with `{ message: "Admin role required." }`
 
 #### Scenario: Signed-in user without admin role API request to delete a vehicle type
 - **Given** I am signed in
 - **And** I do not have role `admin`
 - **And** A vehicle type with id `1` exists
 - **When** I request `DELETE /api/vehicle-types/1`
-- **Then** the API returns `401` with `{ message: "Admin role required." }`
+- **Then** the API returns `403` with `{ message: "Admin role required." }`
 
 ---
 
@@ -551,7 +567,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 | US-4.1 | Admin user requests to create a vehicle type with a missing identifier | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with a missing identifier` |
 | US-4.1 | Admin user creates vehicle type with a whitespace-only name | `frontend/tests/VehicleTypes.test.js` | `Admin user creates vehicle type with a whitespace-only name` |
 | US-4.1 | Admin user requests to create a vehicle type with a whitespace-only name | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with a whitespace-only name` |
-| US-4.1 | Admin user requests to create a vehicle type with an identifier other than VIN or serial | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with an identifier other than VIN or serial` |
+| US-4.1 | Admin user requests to create a vehicle type with an identifier other than VIN or Serial | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with an identifier other than VIN or Serial` |
 | US-4.1 | Admin user creates vehicle type with name longer than 255 characters | `frontend/tests/VehicleTypes.test.js` | `Admin user creates vehicle type with name longer than 255 characters` |
 | US-4.1 | Admin user requests to create a vehicle type with name longer than 255 characters | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with name longer than 255 characters` |
 | US-4.1 | Admin user creates a vehicle type with a non-unique name | `frontend/tests/VehicleTypes.test.js` | `Admin user creates a vehicle type with a non-unique name` |
@@ -571,7 +587,7 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 | US-4.4 | Admin user requests to edit a vehicle type to have a missing identifier | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have a missing identifier` |
 | US-4.4 | Admin user edits a vehicle type to have a whitespace-only name | `frontend/tests/VehicleTypes.test.js` | `Admin user edits a vehicle type to have a whitespace-only name` |
 | US-4.4 | Admin user requests to edit a vehicle type to have a whitespace-only name | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have a whitespace-only name` |
-| US-4.4 | Admin user requests to edit a vehicle type to have an identifier other than VIN or serial | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have an identifier other than VIN or serial` |
+| US-4.4 | Admin user requests to edit a vehicle type to have an identifier other than VIN or Serial | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have an identifier other than VIN or Serial` |
 | US-4.4 | Admin user edits a vehicle type to have a name longer than 255 characters | `frontend/tests/VehicleTypes.test.js` | `Admin user edits a vehicle type to have a name longer than 255 characters` |
 | US-4.4 | Admin user requests to edit a vehicle type to have a name longer than 255 characters | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have a name longer than 255 characters` |
 | US-4.4 | Admin user updates a vehicle type to have a non-unique name | `frontend/tests/VehicleTypes.test.js` | `Admin user updates a vehicle type to have a non-unique name` |
@@ -584,6 +600,9 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 | US-4.4 | Admin user updates a vehicle type with an invalid vehicleTypeId | `backend/tests/vehicleTypes.test.js` | `Admin user updates a vehicle type with an invalid vehicleTypeId` |
 | US-4.4 | Admin user deletes a vehicle type that does not exist | `backend/tests/vehicleTypes.test.js` | `Admin user deletes a vehicle type that does not exist` |
 | US-4.4 | Admin user deletes a vehicle type with an invalid vehicleTypeId | `backend/tests/vehicleTypes.test.js` | `Admin user deletes a vehicle type with an invalid vehicleTypeId` |
+| US-4.5 | Signed-in admin user sees nav link | `frontend/tests/VehicleTypes.test.js` | `Signed-in admin user sees nav link` |
+| US-4.5 | Signed-in admin user clicks on nav link | `frontend/tests/VehicleTypes.test.js` | `Signed-in admin user clicks on nav link` |
+| US-4.5 | Signed-in user without admin role does not see nav link | `frontend/tests/VehicleTypes.test.js` | `Signed-in user without admin role does not see nav link` |
 | US-4.5 | Un-signed-in user accesses vehicle types page | `frontend/tests/VehicleTypes.test.js` | `Un-signed-in user accesses vehicle types page` |
 | US-4.5 | Unauthenticated API request to vehicle types | `backend/tests/vehicleTypes.test.js` | `Unauthenticated API request to vehicle types` |
 | US-4.5 | Unauthenticated API request to a particular vehicle type | `backend/tests/vehicleTypes.test.js` | `Unauthenticated API request to a particular vehicle type` |
@@ -597,15 +616,33 @@ Any signed in admin user may create, edit, delete, or read the list of vehicle t
 | US-4.5 | Signed-in user without admin role API request to update a vehicle type | `backend/tests/vehicleTypes.test.js` | `Signed-in user without admin role API request to update a vehicle type` |
 | US-4.5 | Signed-in user without admin role API request to delete a vehicle type | `backend/tests/vehicleTypes.test.js` | `Signed-in user without admin role API request to delete a vehicle type` |
 
+## Agent implementation request
+
+Copy when asking Cursor to implement this feature (`@` this file):
+
+```text
+Implement Feature 4 from @features/feature-4-vehicle-types.md on branch `feature/4-vehicle-types`.
+
+Follow layer order in @features/framework.md (models → routes → backend tests → frontend → frontend tests).
+Map every Gherkin scenario in the Test Coverage Map; run `npm test` before finishing.
+If API routes, payloads, schema, or product rules changed per this spec, update @features/reference/api.md, @features/reference/data-model.md, and/or @features/reference/behavior.md in the same PR to match shipped code.
+Complete Definition of Done and the merge checklist in @features/framework.md.
+Do not implement behavior not in this spec.
+```
+
+**Reference updates for this feature:** `features/reference/data-model.md`, `features/reference/api.md`, `features/reference/behavior.md`
+
+---
+
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-005** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-005** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

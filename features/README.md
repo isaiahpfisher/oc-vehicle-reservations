@@ -18,9 +18,9 @@ No application code may be written unless it maps to a requirement in one of the
 |----|------|--------|------------|
 | 1 | [feature-1-user-authentication-session-management.md](./feature-1-user-authentication-session-management.md) | `feature/1-user-authentication-session-management` | — |
 | 2 | [feature-2-area-management.md](./feature-2-area-management.md) | `feature/2-area-management` | Feature 1 (auth) |
-| 3 | [feature-3-user-role-management.md](./feature-3-user-role-management.md) | `feature/3-user-role-management` | Feature 1 (auth), Feature 2 (areas) |
-| 4 | [feature-4-vehicle-types.md](./feature-4-vehicle-types.md) | `feature/4-vehicle-types` | Feature 3 (roles) |
-| 8 | [feature-8-vehicle-requests.md](./feature-8-vehicle-requests.md) | `feature/8-vehicle-requests` | Features 1–7 |
+| 4 | [feature-4-faculty-management.md](./feature-4-faculty-management.md) | `feature/4-faculty-management` | Feature 1 (auth) |
+| 6 | [feature-6-destinations.md](./feature-6-destinations.md) | `feature/6-destinations` | Feature 3 (roles) |
+| 7 | [feature-7-course-listing.md](./feature-7-course-listing.md) | `feature/7-course-listing` | Feature 1 (auth), Feature 2 (semesters), Feature 3 (courses), Feature 5 (sections), Feature 6 (enrollments) |
 
 New features: follow [framework.md](./framework.md#feature-spec-template) — **Status**, **Input**, **FR-00N**, **SC-00N**, **Key Entities**, Gherkin, **Agent implementation request**, **Definition of Done**.
 

@@ -1,4 +1,3 @@
-// INTERIM(feature-5): minimal vehicle so Feature 8 can assign vehicles. Replace with Feature 5's model when it merges.
 export default (sequelize, Sequelize) => {
   const Vehicle = sequelize.define("vehicle", {
     areaId: {
@@ -26,14 +25,35 @@ export default (sequelize, Sequelize) => {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
+    identifier: {
+      type: Sequelize.STRING,
+      allowNull: false,
+      unique: true,
+    },
+    purchasedAt: {
+      type: Sequelize.DATEONLY,
+      allowNull: false,
+    },
+    color: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
     passengerCapacity: {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
+    licensePlate: {
+      type: Sequelize.STRING,
+      allowNull: true,
+      unique: true,
+    },
+    licensePlateExpirationDate: {
+      type: Sequelize.DATEONLY,
+      allowNull: true,
+    },
     status: {
       type: Sequelize.ENUM("active", "retired"),
       allowNull: false,
-      defaultValue: "active",
     },
   });
 

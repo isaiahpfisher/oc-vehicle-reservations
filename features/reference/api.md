@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, and Feature 8 vehicle request routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 12 service type routes, and Feature 8 vehicle request routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -29,7 +29,7 @@ Exported from `backend/app/authorization/authorization.js`. Admins pass every ro
 | `authenticateAdmin` | `admin` | `403` `{ "message": "Admin role required." }` |
 | `authenticateMaintenance` | `maintenance` or `admin` | `403` `{ "message": "Maintenance role required." }` |
 | `authenticateAreaAdmin` | `area_admin` of any area, or `admin` | `403` `{ "message": "Area admin role required." }` |
-| `authorizeRoles(...roles)` | Any listed role, or `admin` | `403` `{ "message": "One of these roles is required: <roles>." }` |
+| `authorizeRoles(...roles)` | Any listed role, or `admin` | `403`. One listed role uses its role message (`Admin role required.`, `Area admin role required.`, or `Maintenance role required.`). `authorizeRoles("admin", "area_admin")` uses `{ "message": "Admin or area admin role required." }`. Any other combination uses `{ "message": "One of these roles is required: <roles>." }`. |
 
 `canAccessArea(req.user, areaId)` is true for admins and area admins of that area; area-scoped controllers use it.
 
@@ -64,7 +64,7 @@ User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, 
 | `GET` | `/api/areas/:areaId` | Bearer | `200` with one area. |
 | `POST` | `/api/areas` | Admin | `201` with the created area. Body is `{ "name": "Athletics", "logo": "https://example.com/logo.png" }`. Omitted `logo` is stored as `""`. |
 | `PUT` | `/api/areas/:areaId` | Admin | `200` with the updated area. A field omitted from the body keeps its stored value. |
-| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it. |
+| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it. An area that still has vehicles is `400`. |
 
 Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 
@@ -78,6 +78,133 @@ Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 | Non-empty `logo` is not an `http` or `https` URL | `400` | `{ "message": "Invalid logo URL." }` |
 | `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
 | Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
+| Area still has vehicles | `400` | `{ "message": "Area has vehicles. Delete vehicles or reassign them to a different area first." }` |
+
+## Vehicle types
+
+Creating, editing, and deleting vehicle types requires `admin`. Reading them also allows `area_admin` so the vehicle form can list types (Feature 5). A signed-in user with neither role still gets `403` `{ "message": "Admin role required." }`.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/vehicle-types` | Admin or area admin | `200` array of vehicle types, ordered by `name`. |
+| `GET` | `/api/vehicle-types/:vehicleTypeId` | Admin or area admin | `200` with one vehicle type. |
+| `POST` | `/api/vehicle-types` | Admin | `201` with the created vehicle type. Body is `{ "name": "Bus", "identifier": "VIN" }`. |
+| `PUT` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200` with the updated vehicle type. A field omitted from the body keeps its stored value. |
+| `DELETE` | `/api/vehicle-types/:vehicleTypeId` | Admin | `200`. The vehicle type row is removed. A type that still has vehicles is `400`. |
+
+Success body: `{ "id", "name", "identifier", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` | `403` | `{ "message": "Admin role required." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `name` matches another vehicle type, ignoring case | `400` | `{ "message": "Name already taken." }` |
+| Missing `identifier` | `400` | `{ "message": "Missing identifier." }` |
+| `identifier` is not `VIN` or `Serial` | `400` | `{ "message": "Unknown identifier." }` |
+| `vehicleTypeId` is not an integer | `400` | `{ "message": "Invalid vehicle type id." }` |
+| Vehicle type id does not exist | `404` | `{ "message": "Vehicle type with id=… not found." }` |
+| Vehicle type still has vehicles | `400` | `{ "message": "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first." }` |
+
+## Vehicles
+
+Every vehicle route requires a Bearer token and `admin` or `area_admin`. Admins pass. Area admins only see and change vehicles in areas they administer. JSON keys are camelCase.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/vehicles` | Admin or area admin | `200` array. Admins receive every vehicle. Area admins receive vehicles whose `areaId` is one of their areas. Ordered by make, then model. |
+| `GET` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with one vehicle. An area admin asking for another area's vehicle is `403`. |
+| `POST` | `/api/vehicles` | Admin or area admin | `201` with the created vehicle. An area admin can only set `areaId` to an area they administer. |
+| `PUT` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with the updated vehicle. A field omitted from the body keeps its stored value. An area admin cannot edit a vehicle outside their areas, or move one into an area they do not administer. |
+| `DELETE` | `/api/vehicles/:vehicleId` | Admin or area admin | `200`. The vehicle row is removed. An area admin cannot delete a vehicle outside their areas. |
+
+Create body: `{ "areaId", "vehicleTypeId", "universityId", "make", "model", "year", "identifier", "purchasedAt", "color", "passengerCapacity", "licensePlate", "licensePlateExpirationDate", "status" }`. A blank license plate or expiration date is stored as `null`. The same keys are accepted with underscores (`area_id`, `purchased_at`).
+
+Success body: `{ "id", "areaId", "vehicleTypeId", "universityId", "make", "model", "year", "identifier", "purchasedAt", "color", "passengerCapacity", "licensePlate", "licensePlateExpirationDate", "status", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Area admin acts on another area | `403` | `{ "message": "Not authorized for the specified area." }` |
+| Missing or whitespace-only required text | `400` | `{ "message": "Missing university id." }` (and the same shape for make, model, identifier, and color) |
+| Missing area, vehicle type, year, purchase date, passenger capacity, or status | `400` | `{ "message": "Missing area id." }` and the matching message for that field |
+| Unknown area or vehicle type | `400` | `{ "message": "Area does not exist." }` or `{ "message": "Vehicle type does not exist." }` |
+| Text longer than 255 characters | `400` | `{ "message": "University id too long." }` (make, model, and color use the same shape) |
+| Serial identifier longer than 255 characters | `400` | `{ "message": "Serial number too long." }` |
+| VIN identifier not exactly 17 characters | `400` | `{ "message": "VIN must be 17 characters." }` |
+| Duplicate university id, identifier, or license plate | `400` | `{ "message": "University id already taken." }` (identifier and license plate use the same shape) |
+| Year is not an integer, or is outside 1950 through next year | `400` | `{ "message": "Year must be an integer." }` or `{ "message": "Year must be between 1950 and the year after this year." }` |
+| Passenger capacity is not an integer, or is outside 1 through 300 | `400` | `{ "message": "Passenger capacity must be an integer." }` or `{ "message": "Passenger capacity must be between 1 and 300." }` |
+| Purchase date is not numerical, not `yyyy-mm-dd`, or outside 1950-01-01 through today | `400` | `{ "message": "Purchase date must be a numerical date." }`, `{ "message": "Purchase date must be in format 'yyyy-mm-dd'." }`, or `{ "message": "Purchase date must be between 1950 and the current date." }` |
+| Expiration date is not numerical or not `yyyy-mm-dd` | `400` | `{ "message": "License plate expiration date must be a numerical date." }` or `{ "message": "License plate expiration date must be in format 'yyyy-mm-dd'." }` |
+| License plate longer than 8 characters | `400` | `{ "message": "License plate too long." }` |
+| Status is not `active` or `retired` | `400` | `{ "message": "Invalid status." }` |
+| `:vehicleId` is not an integer | `400` | `{ "message": "Invalid vehicle id." }` |
+| Vehicle id does not exist | `404` | `{ "message": "Vehicle with id=… not found." }` |
+
+## Service types
+
+Every route requires a Bearer token and `admin`, `area_admin`, or `maintenance` (`authorizeRoles("admin", "area_admin", "maintenance")`). Admins pass that check.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/service-types` | Admin, area admin, or maintenance | `200` array of service types, ordered by `name`. |
+| `GET` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with one service type. |
+| `POST` | `/api/service-types` | Admin, area admin, or maintenance | `201` with the created service type. Body is `{ "name": "Oil Change", "service_frequency_days": 500, "service_frequency_miles": 5000 }`. Either frequency may be `null`. `name` is trimmed before save. |
+| `PUT` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with the updated service type. Body is the same shape as create. |
+| `DELETE` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200`. The service type row is removed. |
+
+Success body: `{ "id", "name", "service_frequency_days", "service_frequency_miles", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin`, `area_admin`, or `maintenance` | `403` | `{ "message": "One of these roles is required: admin, area_admin, maintenance." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `name` matches another service type, ignoring case | `400` | `{ "message": "Name already taken." }` |
+| Both frequencies omitted or blank | `400` | `{ "message": "Missing service_frequency_days or service_frequency_miles." }` |
+| A provided frequency is not a positive whole number | `400` | `{ "message": "Invalid service_frequency_days." }` or `{ "message": "Invalid service_frequency_miles." }` |
+| `serviceTypeId` is not an integer | `400` | `{ "message": "Invalid service type id." }` |
+| Service type id does not exist | `404` | `{ "message": "Service type with id=… not found." }` |
+
+## Destinations
+
+Every route requires a Bearer token and `admin` or `area_admin` (`authorizeRoles("admin", "area_admin")`). Admins pass that check. Destinations are global: the body has no `area_id`, and an area admin can read and change every destination.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/destinations` | Admin or area admin | `200` array of destinations, ordered by `name`. |
+| `GET` | `/api/destinations/:destinationId` | Admin or area admin | `200` with one destination. |
+| `POST` | `/api/destinations` | Admin or area admin | `201` with the created destination. Body is `{ "name": "Pops", "address_line_1": "660 OK-66", "address_line_2": null, "city": "Arcadia", "state": "OK", "zip_code": "73007", "is_saved": true, "miles_from_campus": 22 }`. |
+| `PUT` | `/api/destinations/:destinationId` | Admin or area admin | `200` with the updated destination. Body is the same shape as create. Required fields must be sent again. |
+| `DELETE` | `/api/destinations/:destinationId` | Admin or area admin | `200` `{ "message": "Destination deleted successfully." }`. The destination row is removed. |
+
+Success body: `{ "id", "name", "address_line_1", "address_line_2", "city", "state", "zip_code", "is_saved", "miles_from_campus", "createdAt", "updatedAt" }`.
+
+`name`, `address_line_1`, `city`, and `state` are trimmed and required. `address_line_2` and `zip_code` are trimmed and stored as `null` when blank. Names are not unique. `is_saved` must be boolean `true` (available) or `false` (not available). `miles_from_campus` is `null` when omitted or blank, or a whole number of 0 or more.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Missing or whitespace-only `name` | `400` | `{ "message": "Missing name." }` |
+| Missing or whitespace-only `address_line_1` | `400` | `{ "message": "Missing address line 1." }` |
+| Missing or whitespace-only `city` | `400` | `{ "message": "Missing city." }` |
+| Missing or whitespace-only `state` | `400` | `{ "message": "Missing state." }` |
+| `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
+| `address_line_1` longer than 255 characters after trim | `400` | `{ "message": "Address line 1 too long." }` |
+| `address_line_2` longer than 255 characters after trim | `400` | `{ "message": "Address line 2 too long." }` |
+| `city` longer than 255 characters after trim | `400` | `{ "message": "City too long." }` |
+| `state` longer than 255 characters after trim | `400` | `{ "message": "State too long." }` |
+| `zip_code` longer than 255 characters after trim | `400` | `{ "message": "ZIP code too long." }` |
+| `is_saved` missing | `400` | `{ "message": "Missing is_saved." }` |
+| `is_saved` is not boolean `true` or `false` | `400` | `{ "message": "is_saved must be true or false." }` |
+| `miles_from_campus` is negative or not a whole number | `400` | `{ "message": "Miles from campus must be a whole number of 0 or more." }` |
+| `destinationId` is not an integer | `400` | `{ "message": "Invalid destination id." }` |
+| Destination id does not exist | `404` | `{ "message": "Destination with id=… not found." }` |
 
 ## Conventions
 
@@ -94,7 +221,7 @@ Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 | `POST` | `/api/requests` | Bearer | `201` with the created request, owned by the signed-in user |
 | `GET` | `/api/requests/:requestId` | Bearer | `200` if the user owns it or manages its area |
 | `PUT` | `/api/requests/:requestId` | Bearer | `200` with the updated request. Omitted fields keep their stored values. |
-| `GET` | `/api/requests/:requestId/vehicle-options` | `authenticateAreaAdmin` | `200` array of `{ vehicle, cdlOk, conflictingRequestIds, outOfService, milesUntilService }` for the request's area |
+| `GET` | `/api/requests/:requestId/vehicle-options` | `authenticateAreaAdmin` | `200` array of `{ vehicle, conflictingRequestIds, outOfService, milesUntilService }` for the request's area |
 
 Body fields: `areaId`, `purpose`, `startAt`, `endAt`, `allDay`, `numberOfPeople`, `drivers` (array of driver ids), `destinations` (ordered array of `{ id }` for saved destinations or `{ name, addressLine1, addressLine2, city, state, zipCode }` for new ones). `PUT` also takes `status` and `vehicles` (array of vehicle ids, managers only).
 
@@ -121,6 +248,7 @@ Proxies Google Places so the key stays on the server. Any signed-in user. Pass t
 | ------ | -------- | ---- | ------- |
 | `GET` | `/api/places/autocomplete?input=…&sessionToken=…` | Bearer | `200` array of `{ placeId, name, description }`, biased toward campus, US only |
 | `GET` | `/api/places/:placeId?sessionToken=…` | Bearer | `200` `{ addressLine1, addressLine2, city, state, zipCode }` |
+| `GET` | `/api/places/:placeId/miles-from-campus` | `admin` or `area_admin` | `200` `{ milesFromCampus }`: one-way driven miles from campus (Google Routes; billed per call) |
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -129,6 +257,17 @@ Proxies Google Places so the key stays on the server. Any signed-in user. Pass t
 | `GOOGLE_MAPS_API_KEY` not set | `503` | `Address search isn't available.` |
 | Google request failed | `502` | `Address search failed.` |
 
-### Interim endpoints (Features 6 and 7)
+### Lists for the request form
 
-`GET /api/drivers` (approved, unexpired) and `GET /api/destinations` (saved) feed the request form until Drivers and Destinations merge. Any signed-in user. See `backend/app/routes/interim.routes.js`.
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/destinations/selectable` | Bearer | `200` array of official destinations (`isSaved: true`) by name: `{ id, name, addressLine1, addressLine2, city, state, zipCode, milesFromCampus }` |
+| `GET` | `/api/drivers/selectable` | Bearer | `200` array of `{ id, firstName, lastName }` for approved drivers with a current license. **Interim:** Feature 7's contract (its FR-015), served by `backend/app/routes/interim.routes.js` until Feature 7 merges |
+
+In a request, `drivers` carries `{ id, firstName, lastName }` only, and `vehicles` omits the VIN or serial number.
+
+A stop in `destinations` is `{ id }` or `{ name, addressLine1, addressLine2, city, state, zipCode }`. A new stop requires `name`, `addressLine1`, `city`, and `state` (at most 255 characters each) and is saved unofficial (`isSaved: false`). `{ id }` of an unofficial destination returns `400` unless the request already has it.
+
+### Delete guards
+
+Requests are never deleted, so these return `400` while a request points at the row: `DELETE /api/destinations/:id`, `/api/vehicles/:id`, `/api/areas/:id`, and `/api/users/:id` (for the user who made the request). Deleting a user who only approved a request clears `approverId`.

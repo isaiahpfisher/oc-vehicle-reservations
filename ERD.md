@@ -59,14 +59,14 @@ erDiagram
 
     DRIVER {
       int id PK
-      int user_id FK "optional"
+      int user_id FK "optional" "unique"
       string first_name
       string last_name
       string phone_number
       string license_state
       date license_expiration_date
-      timestamp approved_at
-      enum status "pending, approved, denied, revoked"
+      timestamp approved_at optional
+      enum status "pending, approved, denied, revoked, former"
     }
 
     DESTINATION {
@@ -90,7 +90,7 @@ erDiagram
     VEHICLE_TYPE {
       int id PK
       string name
-      enum identifier "VIN, serial"
+      enum identifier "VIN, Serial"
     }
 
     VEHICLE_TYPE_INSTRUCTIONS {

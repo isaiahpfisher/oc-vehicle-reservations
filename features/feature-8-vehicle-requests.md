@@ -84,7 +84,7 @@
 ### US-8.8: Assign vehicles to requests
 
 **As a** signed-in admin or area_admin user
-**I want to** assign vehicles to requests, with helpful filters for meeting the criteria of the request (number of passengers, if drivers have cdls to drive cdl vehicle types, if the vehicle is already reserved or under maintenance, how many miles until the vehicle needs to be serviced (to compare to estimated miles of trip))
+**I want to** assign vehicles to requests, with helpful filters for meeting the criteria of the request (number of passengers, if the vehicle is already reserved or under maintenance, how many miles until the vehicle needs to be serviced (to compare to estimated miles of trip))
 **So that** I can fulfill vehicle requests
 
 **Priority:** P1
@@ -116,6 +116,7 @@
 - **FR-007**: Estimated mileage will be calculated using Google APIs. Without them (no `GOOGLE_MAPS_API_KEY`, or the request fails), only a trip to a single saved destination is estimated (twice its saved distance from campus); any other trip's mileage is unknown (`null`, shown as "Unknown") rather than an understated guess. An unknown estimate is retried the next time the request is edited.
 - **FR-008**: The custom address dialog offers address search (Google Places Autocomplete), proxied through the backend so the key stays server-side. Searches wait for 3+ characters and a pause in typing, share one session token per address, and end with a Place Details lookup of address fields only (Essentials tier). Picking a result fills the address fields, which stay editable. Without a key, or when Google fails, the fields are filled in by hand as before.
 - **FR-009**: A trip has at most 10 destinations (Google Routes bills more than 10 intermediate stops at a higher tier). The form stops offering more, and the API rejects more with a 400.
+- **FR-010**: The Destination Management form (Feature 6) uses the same address search as FR-008. Picking a result fills the address fields and name (keeping a name already typed), and fills **Miles from campus** with the one-way driving distance from campus through a separate Google Routes lookup limited to admins and area admins. All fields stay editable; without a key, or when Google fails, they are typed in as before. Feature 6's API is unchanged.
 
 ---
 
@@ -126,7 +127,10 @@
 - API payloads use camelCase field names (`areaId`, `startAt`, …) per `api-conventions.mdc`; table columns stay snake_case.
 - Home (route `home`, `/`) is **My Requests**. This replaces Feature 3's welcome page; Feature 3's nav tests were updated to match. The admin list lives at `/requests` and shows in the nav for admins and area admins.
 - On the request page, Trip details, Destinations, and Drivers each save on their own (`ui-style-system.mdc` → Detail page conventions). A new request is one form with one submit.
-- **INTERIM** (until Features 4–7 merge): minimal models for vehicle types (plus `requiresCdl`), vehicles, destinations, and drivers (plus `hasCdl`); read-only `GET /api/drivers` and `GET /api/destinations` for the request form; and sample rows added by `npm run seed`. Each piece is marked `INTERIM(feature-N)` and is removed when that feature merges.
+- Requests use Features 4–6 directly. Any signed-in user can list official destinations through `GET /api/destinations/selectable`; Feature 6's own routes stay limited to admins and area admins.
+- A custom stop follows Feature 6's rules: it needs a street address, and it is saved as an unofficial destination (`is_saved` false) that admins can review. An unofficial destination can't be chosen for a request unless the request already has it.
+- Since requests are never deleted, deleting something a request uses returns `400`: a destination, vehicle, or area, or the user who made the request. This changes Feature 6's "delete doesn't check other rows" and Feature 3's user deletion. Deleting an approver clears `approver_id`.
+- **INTERIM** (until Feature 7 merges; `dev` has its spec only): the `drivers` table from Feature 7's spec, `GET /api/drivers/selectable` (its FR-015), and sample drivers in `npm run seed`. Each piece is marked `INTERIM(feature-7)` and is removed when Feature 7 merges. The **Cannot delete driver with requests** scenario is tested when `DELETE /api/drivers/:driverId` exists; the database already restricts it.
 - **INTERIM** (until Features 9, 11, and 13 merge): every vehicle reports as in service with unknown miles until service (`backend/app/helpers/vehicleService.js`).
 
 ## Edge Cases
@@ -138,6 +142,7 @@
 - More than 10 destinations on a trip -> 400 bad request (FR-009)
 - A driver is not approved or has an expired license -> 400 bad request
 - A driver's license expires during a trip -> 400 bad request
+- Deleting a driver attached to any vehicle request (`DELETE /api/drivers/:driverId` from Feature 7) -> 400 bad request
 
 ## Success Criteria
 
@@ -176,6 +181,9 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 | `PUT`  | `/api/requests/:requestId` | Yes         | Update a request                        |
 | `GET`  | `/api/places/autocomplete` | Yes         | Address suggestions (FR-008)            |
 | `GET`  | `/api/places/:placeId`     | Yes         | Address fields for a suggestion (FR-008) |
+| `GET`  | `/api/places/:placeId/miles-from-campus` | Yes - Admin, Area Admin | One-way miles from campus (FR-010) |
+| `GET`  | `/api/destinations/selectable` | Yes     | Official destinations for the request form |
+| `GET`  | `/api/drivers/selectable`  | Yes         | Selectable drivers (Feature 7, FR-015)  |
 
 **Create request body:**
 
@@ -279,7 +287,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **Driver**: must be approved with an unexpired license to be added to a request.
 - **Vehicle Request Vehicle**: a vehicle an admin assigned to a request (can have multiple)
 - **Vehicle**: an area's vehicle that can be assigned to requests in that area
-- **Vehicle Type**: includes whether a vehicle type requires a CDL to drive (check if driver has cdl)
+- **Vehicle Type**: the kind of vehicle, shown when assigning vehicles. CDL checks were dropped with Feature 7's `has_cdl`.
 - **Area**: the area a request is for, used to route requests to proper area_admins and to limit available vehicles
 - **User**: the requester who owns a request, or the admin who approves it.
 - **Role**: decides what requests are shown to which users
@@ -575,6 +583,16 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **When** I add, remove, or reorder its destinations and save
 - **Then** `estimated_miles` is recalculated for the new route
 - **And** the updated estimate is shown on the request view
+
+---
+
+### Feature 7 follow-up — Driver deletion guard
+
+#### Scenario: Cannot delete driver with requests
+
+- **Given** I am signed in as admin or an area_admin on the drivers view
+- **When** I try to delete a driver that is attached to any vehicle requests
+- **Then** the API returns `400` with a helpful message explaining why I can't delete them and suggesting changing their status to `former`
 
 ---
 

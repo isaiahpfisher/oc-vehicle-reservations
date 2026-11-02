@@ -1,5 +1,3 @@
-// INTERIM(feature-4): minimal vehicle type so Feature 8 can assign vehicles. Replace with Feature 4's model when it merges.
-// `requiresCdl` comes from Feature 8's Key Entities. It is not in the Feature 4 spec yet, so carry it over.
 export default (sequelize, Sequelize) => {
   const VehicleType = sequelize.define("vehicleType", {
     name: {
@@ -8,13 +6,8 @@ export default (sequelize, Sequelize) => {
       unique: true,
     },
     identifier: {
-      type: Sequelize.ENUM("VIN", "serial"),
+      type: Sequelize.ENUM("VIN", "Serial"),
       allowNull: false,
-    },
-    requiresCdl: {
-      type: Sequelize.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
     },
   });
 

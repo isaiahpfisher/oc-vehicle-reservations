@@ -25,14 +25,9 @@ const requestServices = {
     return apiClient.get(`requests/${requestId}/vehicle-options`);
   },
 
-  // INTERIM(feature-7): move to driverServices.js when Drivers merges.
+  // INTERIM(feature-7): move to driverServices.js when Drivers merges. The path is Feature 7's (FR-015).
   getDrivers() {
-    return apiClient.get("drivers");
-  },
-
-  // INTERIM(feature-6): move to destinationServices.js when Destinations merges.
-  getDestinations() {
-    return apiClient.get("destinations");
+    return apiClient.get("drivers/selectable");
   },
 };
 

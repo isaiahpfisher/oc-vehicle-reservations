@@ -143,6 +143,18 @@ exports.remove = async (req, res) => {
       return res.status(404).send({ message: `Area with id=${areaId} not found.` });
     }
 
+    const vehicleCount = await db.vehicle.count({ where: { areaId } });
+    if (vehicleCount > 0) {
+      return res.status(400).send({
+        message: "Area has vehicles. Delete vehicles or reassign them to a different area first.",
+      });
+    }
+
+    // Feature 8: requests are never deleted, so an area with requests stays.
+    if ((await db.vehicleRequest.count({ where: { areaId } })) > 0) {
+      return res.status(400).send({ message: "Area has vehicle requests and can't be deleted." });
+    }
+
     await db.area.destroy({ where: { id: areaId } });
 
     return res.status(200).send({ message: "Area deleted successfully." });

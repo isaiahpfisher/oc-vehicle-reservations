@@ -31,41 +31,53 @@ const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 
 let fx;
 
-/** Areas, drivers, destinations, and vehicles. Their features (2, 5–7) have no create API this suite can use yet. */
+/** Areas, drivers, destinations, and vehicles for each test. */
 const seed = async () => {
   const athletics = await db.area.create({ name: "Athletics" });
   const music = await db.area.create({ name: "Music" });
-  const dana = await db.driver.create({
-    firstName: "Dana",
-    lastName: "Driver",
-    licenseExpirationDate: "2035-01-01",
-    status: "approved",
-  });
-  const sam = await db.driver.create({
-    firstName: "Sam",
-    lastName: "Wheel",
-    licenseExpirationDate: "2035-01-01",
-    status: "approved",
-    hasCdl: true,
-  });
-  const okc = await db.destination.create({ name: "OKC Arena", city: "Oklahoma City", state: "OK", isSaved: true, milesFromCampus: 15 });
-  const tulsa = await db.destination.create({ name: "Tulsa Center", city: "Tulsa", state: "OK", isSaved: true, milesFromCampus: 100 });
+  const driver = (firstName, lastName, overrides = {}) =>
+    db.driver.create({
+      firstName,
+      lastName,
+      phoneNumber: "(405)555-0100",
+      licenseState: "OK",
+      licenseExpirationDate: "2035-01-01",
+      status: "approved",
+      ...overrides,
+    });
+  const destination = (name, city, milesFromCampus, overrides = {}) =>
+    db.destination.create({ name, addressLine1: `1 ${name} Way`, city, state: "OK", isSaved: true, milesFromCampus, ...overrides });
   const van = await db.vehicleType.create({ name: "Van", identifier: "VIN" });
-  const bus = await db.vehicleType.create({ name: "Bus", identifier: "VIN", requiresCdl: true });
-  const vehicle = (overrides) =>
-    db.vehicle.create({ areaId: athletics.id, vehicleTypeId: van.id, make: "Ford", model: "Transit", year: 2022, passengerCapacity: 12, ...overrides });
+  const bus = await db.vehicleType.create({ name: "Bus", identifier: "VIN" });
+  const vehicle = (universityId, overrides = {}) =>
+    db.vehicle.create({
+      areaId: athletics.id,
+      vehicleTypeId: van.id,
+      universityId,
+      make: "Ford",
+      model: "Transit",
+      year: 2022,
+      identifier: universityId.padEnd(17, "0"),
+      purchasedAt: "2022-01-15",
+      color: "White",
+      passengerCapacity: 12,
+      status: "active",
+      ...overrides,
+    });
 
   return {
     athletics,
     music,
-    dana,
-    sam,
-    okc,
-    tulsa,
-    van1: await vehicle({ universityId: "V-1" }),
-    van2: await vehicle({ universityId: "V-2" }),
-    bus1: await vehicle({ universityId: "B-1", vehicleTypeId: bus.id, passengerCapacity: 40 }),
-    musicVan: await vehicle({ universityId: "M-1", areaId: music.id }),
+    driver,
+    destination,
+    dana: await driver("Dana", "Driver"),
+    sam: await driver("Sam", "Wheel"),
+    okc: await destination("OKC Arena", "Oklahoma City", 15),
+    tulsa: await destination("Tulsa Center", "Tulsa", 100),
+    van1: await vehicle("V-1"),
+    van2: await vehicle("V-2"),
+    bus1: await vehicle("B-1", { vehicleTypeId: bus.id, passengerCapacity: 40 }),
+    musicVan: await vehicle("M-1", { areaId: music.id }),
   };
 };
 
@@ -250,15 +262,23 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const response = await create(headers, { destinations: [{ name: "Somewhere", state: "OK" }] });
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "Destination 1 is missing city." });
+      expect(response.body).toEqual({ message: "Destination 1 is missing address line 1." });
+
+      const noCity = await create(headers, { destinations: [{ name: "Somewhere", addressLine1: "1 Main St", state: "OK" }] });
+      expect(noCity.body).toEqual({ message: "Destination 1 is missing city." });
+
+      const tooLong = await create(headers, {
+        destinations: [{ name: "Somewhere", addressLine1: "a".repeat(256), city: "Guthrie", state: "OK" }],
+      });
+      expect(tooLong.status).toBe(400);
       expect(await db.destination.count()).toBe(2);
     });
 
     it("rejects drivers who are not approved or whose license expires", async () => {
       const { headers } = await signIn();
-      const pending = await db.driver.create({ firstName: "Pat", lastName: "Pending", licenseExpirationDate: "2035-01-01" });
-      const expired = await db.driver.create({ firstName: "Ex", lastName: "Pired", licenseExpirationDate: "2020-01-01", status: "approved" });
-      const midTrip = await db.driver.create({ firstName: "Mid", lastName: "Trip", licenseExpirationDate: "2030-12-19", status: "approved" });
+      const pending = await fx.driver("Pat", "Pending", { status: "pending" });
+      const expired = await fx.driver("Ex", "Pired", { licenseExpirationDate: "2020-01-01" });
+      const midTrip = await fx.driver("Mid", "Trip", { licenseExpirationDate: "2030-12-19" });
 
       expect((await create(headers, { drivers: [pending.id] })).body).toEqual({ message: "Pat Pending is not an approved driver." });
       expect((await create(headers, { drivers: [expired.id] })).body).toEqual({ message: "Ex Pired's license has expired." });
@@ -510,7 +530,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(response.body).toEqual({ message: "Vehicles must belong to the request's area." });
     });
 
-    it("flags CDL needs and conflicting reservations on vehicle options", async () => {
+    it("flags conflicting reservations on vehicle options", async () => {
       const requester = await signIn();
       const admin = await signInWithRoles(["admin"], "admin@example.com");
       const first = await create(requester.headers);
@@ -525,13 +545,10 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(Object.keys(forOverlapping).sort()).toEqual(["B-1", "V-1", "V-2"]);
       expect(forOverlapping["V-1"].conflictingRequestIds).toEqual([first.body.id]);
       expect(forOverlapping["V-2"].conflictingRequestIds).toEqual([]);
-      expect(forOverlapping["B-1"]).toMatchObject({ cdlOk: false, outOfService: false, milesUntilService: null });
+      expect(forOverlapping["B-1"]).toMatchObject({ outOfService: false, milesUntilService: null });
       expect(forOverlapping["V-1"].vehicle.passengerCapacity).toBe(12);
 
       expect(byId(await options(later.body.id))["V-1"].conflictingRequestIds).toEqual([]);
-
-      await update(requester.headers, later.body.id, { drivers: [fx.sam.id] });
-      expect(byId(await options(later.body.id))["B-1"].cdlOk).toBe(true);
     });
   });
 
@@ -549,9 +566,9 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(sent).toHaveLength(1);
       expect(sent[0].origin).toEqual(sent[0].destination);
       expect(sent[0].intermediates).toEqual([
-        { address: "OKC Arena, Oklahoma City, OK" },
+        { address: "1 OKC Arena Way, Oklahoma City, OK" },
         { address: "1 Main St, Guthrie, OK, 73044" },
-        { address: "Tulsa Center, Tulsa, OK" },
+        { address: "1 Tulsa Center Way, Tulsa, OK" },
       ]);
     });
 
@@ -565,7 +582,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(response.status).toBe(200);
       expect(response.body.estimatedMiles).toBe(30);
       expect(response.body.destinations.map(({ id }) => id)).toEqual([fx.okc.id]);
-      expect(sent[0].intermediates).toEqual([{ address: "OKC Arena, Oklahoma City, OK" }]);
+      expect(sent[0].intermediates).toEqual([{ address: "1 OKC Arena Way, Oklahoma City, OK" }]);
     });
 
     it("falls back to the saved distance for a single saved stop without Google", async () => {
@@ -578,7 +595,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
     it("leaves mileage unknown without Google when saved distances can't give the route", async () => {
       const { headers } = await signIn();
-      const custom = { name: "Grandma's House", city: "Guthrie", state: "OK" };
+      const custom = { name: "Grandma's House", addressLine1: "1 Main St", city: "Guthrie", state: "OK" };
 
       // Custom stops have no saved distance, and distances from campus don't give the legs between stops.
       for (const destinations of [[custom], [{ id: fx.okc.id }, { id: fx.tulsa.id }]]) {
@@ -612,6 +629,124 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const response = await update(headers, created.body.id, { purpose: "Away game (rescheduled)" });
 
       expect(response.body.estimatedMiles).toBe(200);
+    });
+  });
+
+  describe("Integration with Features 3, 5, and 6", () => {
+    it("offers only official destinations to any signed-in user", async () => {
+      const { headers } = await signIn();
+      await fx.destination("Hidden Stop", "Guthrie", null, { isSaved: false });
+
+      const response = await request(app).get("/api/destinations/selectable").set(headers);
+
+      expect(response.status).toBe(200);
+      expect(response.body.map(({ name }) => name)).toEqual(["OKC Arena", "Tulsa Center"]);
+      expect(response.body[0]).toMatchObject({ addressLine1: "1 OKC Arena Way", city: "Oklahoma City", milesFromCampus: 15 });
+      expect(response.body[0]).not.toHaveProperty("isSaved");
+
+      expect((await request(app).get("/api/destinations/selectable")).status).toBe(401);
+      // Feature 6's own list stays limited to admins and area admins.
+      expect((await request(app).get("/api/destinations").set(headers)).status).toBe(403);
+    });
+
+    it("offers only approved drivers with current licenses, by name only", async () => {
+      const { headers } = await signIn();
+      await fx.driver("Pat", "Pending", { status: "pending" });
+      await fx.driver("Fay", "Former", { status: "former" });
+      await fx.driver("Ex", "Pired", { licenseExpirationDate: "2020-01-01" });
+
+      const response = await request(app).get("/api/drivers/selectable").set(headers);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([
+        { id: fx.dana.id, firstName: "Dana", lastName: "Driver" },
+        { id: fx.sam.id, firstName: "Sam", lastName: "Wheel" },
+      ]);
+      expect((await request(app).get("/api/drivers/selectable")).status).toBe(401);
+    });
+
+    it("does not expose driver or vehicle records to requesters", async () => {
+      const requester = await signIn();
+      const admin = await signInWithRoles(["admin"], "admin@example.com");
+      const created = await create(requester.headers);
+      await update(admin.headers, created.body.id, { vehicles: [fx.van1.id] });
+
+      const { body: seen } = await request(app).get(`/api/requests/${created.body.id}`).set(requester.headers);
+
+      expect(seen.drivers).toEqual([{ id: fx.dana.id, firstName: "Dana", lastName: "Driver" }]);
+      expect(seen.vehicles[0]).toMatchObject({ universityId: "V-1", passengerCapacity: 12, vehicleType: { name: "Van" } });
+      expect(seen.vehicles[0]).not.toHaveProperty("identifier");
+    });
+
+    it("rejects an unofficial destination unless the request already has it", async () => {
+      const { headers } = await signIn();
+      const custom = { name: "Grandma's House", addressLine1: "1 Main St", city: "Guthrie", state: "OK" };
+      const hidden = await fx.destination("Hidden Stop", "Guthrie", null, { isSaved: false });
+
+      const rejected = await create(headers, { destinations: [{ id: hidden.id }] });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body).toEqual({ message: "Hidden Stop isn't available as a destination." });
+
+      // A custom stop is saved unofficial, and stays usable on its own request after an edit.
+      const created = await create(headers, { destinations: [custom] });
+      expect(created.status).toBe(201);
+      const stop = created.body.destinations[0];
+      expect(stop).toMatchObject({ isSaved: false, addressLine2: null, zipCode: null });
+
+      const edited = await update(headers, created.body.id, {
+        destinations: [{ id: stop.id }, { id: fx.okc.id }],
+      });
+      expect(edited.status).toBe(200);
+      expect(edited.body.destinations.map(({ id }) => id)).toEqual([stop.id, fx.okc.id]);
+    });
+
+    it("keeps requests when something they point at would be deleted", async () => {
+      const requester = await signIn();
+      const admin = await signInWithRoles(["admin"], "admin@example.com");
+      const created = await create(requester.headers);
+      await update(admin.headers, created.body.id, { vehicles: [fx.van1.id] });
+      const remove = (path) => request(app).delete(`/api/${path}`).set(admin.headers);
+
+      const destination = await remove(`destinations/${fx.tulsa.id}`);
+      expect(destination.status).toBe(400);
+      expect(destination.body.message).toMatch(/Mark it Unofficial/);
+
+      const vehicle = await remove(`vehicles/${fx.van1.id}`);
+      expect(vehicle.status).toBe(400);
+      expect(vehicle.body.message).toMatch(/retired/);
+
+      // Athletics also has vehicles, so use an area with only a request to reach this guard.
+      const emptyArea = await db.area.create({ name: "Debate" });
+      const debateTrip = await create(requester.headers, { areaId: emptyArea.id, purpose: "Debate meet" });
+      expect(debateTrip.status).toBe(201);
+      const area = await remove(`areas/${emptyArea.id}`);
+      expect(area.status).toBe(400);
+      expect(area.body).toEqual({ message: "Area has vehicle requests and can't be deleted." });
+
+      const user = await remove(`users/${requester.userId}`);
+      expect(user.status).toBe(400);
+      expect(user.body).toEqual({ message: "User has vehicle requests and can't be deleted." });
+
+      // Nothing was removed, and rows no request uses can still go.
+      expect(await db.vehicleRequest.count()).toBe(2);
+      expect(await db.vehicleRequestDestination.count()).toBe(2);
+      expect((await remove(`destinations/${fx.okc.id}`)).status).toBe(200);
+      expect((await remove(`vehicles/${fx.van2.id}`)).status).toBe(200);
+    });
+
+    it("clears the approver, not the request, when an approver is deleted", async () => {
+      const requester = await signIn();
+      const approver = await signInWithRoles(["admin"], "approver@example.com");
+      const admin = await signInWithRoles(["admin"], "admin@example.com");
+      const created = await create(requester.headers);
+      await update(approver.headers, created.body.id, { status: "awaiting_vehicle" });
+
+      const response = await request(app).delete(`/api/users/${approver.userId}`).set(admin.headers);
+
+      expect(response.status).toBe(204);
+      const row = await db.vehicleRequest.findByPk(created.body.id);
+      expect(row.approverId).toBeNull();
+      expect(row.status).toBe("awaiting_vehicle");
     });
   });
 });

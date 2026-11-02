@@ -16,8 +16,8 @@ export const formatAddress = (destination) =>
     .filter(Boolean)
     .join(", ");
 
-/** Round trip campus → stops (in order) → campus, driven, via the Google Routes API. */
-const googleMiles = async (stops) => {
+/** Driven miles for a Routes API request starting on campus. */
+const routeMiles = async (route) => {
   const response = await fetch(ROUTES_URL, {
     method: "POST",
     headers: {
@@ -25,12 +25,7 @@ const googleMiles = async (stops) => {
       "X-Goog-Api-Key": process.env.GOOGLE_MAPS_API_KEY,
       "X-Goog-FieldMask": "routes.distanceMeters",
     },
-    body: JSON.stringify({
-      origin: { address: CAMPUS_ADDRESS },
-      destination: { address: CAMPUS_ADDRESS },
-      intermediates: stops.map((stop) => ({ address: formatAddress(stop) })),
-      travelMode: "DRIVE",
-    }),
+    body: JSON.stringify({ origin: { address: CAMPUS_ADDRESS }, ...route, travelMode: "DRIVE" }),
   });
 
   if (!response.ok) {
@@ -46,6 +41,16 @@ const googleMiles = async (stops) => {
 
   return Math.round(meters / METERS_PER_MILE);
 };
+
+/** Round trip campus → stops (in order) → campus. */
+const googleMiles = (stops) =>
+  routeMiles({
+    destination: { address: CAMPUS_ADDRESS },
+    intermediates: stops.map((stop) => ({ address: formatAddress(stop) })),
+  });
+
+/** One-way driven miles from campus to a Google place, for a destination's `milesFromCampus` (FR-010). */
+export const milesFromCampus = (placeId) => routeMiles({ destination: { placeId } });
 
 /**
  * Fallback from a saved `milesFromCampus`: out and back to a single saved stop.

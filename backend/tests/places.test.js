@@ -1,18 +1,24 @@
 /**
- * Feature 8 — Vehicle Request Management (custom address search, FR-008)
+ * Feature 8 — Vehicle Request Management (address search and destination miles, FR-008, FR-010)
  * Spec: features/feature-8-vehicle-requests.md
  */
 import { jest } from "@jest/globals";
 import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
-import { syncTestDatabase, registerUser } from "./helpers.js";
+import { createArea, createUserWithRoles, syncTestDatabase, registerUser } from "./helpers.js";
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 const SESSION = "0b6f3c1e-3a52-4d3e-9a51-6d1f2c7e8b90";
 
 const signIn = async () => {
   const { body } = await registerUser({ email: "jane@example.com" });
+  return bearer(body.token);
+};
+
+const areaAdminHeaders = async () => {
+  const area = await createArea("Athletics");
+  const { body } = await createUserWithRoles([{ role: "area_admin", areaId: area.id }], { email: "aa@example.com" });
   return bearer(body.token);
 };
 
@@ -135,6 +141,46 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect(response.status).toBe(502);
       expect(response.body).toEqual({ message: "Address search failed." });
+    });
+  });
+
+  describe("FR-010 — Destination miles from campus", () => {
+    it("returns one-way driven miles from campus to a place", async () => {
+      const headers = await areaAdminHeaders();
+      const calls = stubGoogle({ body: { routes: [{ distanceMeters: 160934 }] } });
+
+      const response = await request(app).get("/api/places/abc123/miles-from-campus").set(headers);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ milesFromCampus: 100 });
+      expect(calls).toHaveLength(1);
+      const sent = calls[0].body;
+      expect(sent.destination).toEqual({ placeId: "abc123" });
+      expect(sent.origin.address).toMatch(/Oklahoma Christian/);
+      expect(sent).not.toHaveProperty("intermediates");
+    });
+
+    it("is limited to the roles that manage destinations", async () => {
+      const calls = stubGoogle();
+      const { body: requester } = await registerUser({ email: "requester@example.com" });
+
+      expect((await request(app).get("/api/places/abc123/miles-from-campus")).status).toBe(401);
+      expect((await request(app).get("/api/places/abc123/miles-from-campus").set(bearer(requester.token))).status).toBe(403);
+      expect(calls).toHaveLength(0);
+    });
+
+    it("reports when miles can't be looked up", async () => {
+      const headers = await areaAdminHeaders();
+
+      delete process.env.GOOGLE_MAPS_API_KEY;
+      expect((await request(app).get("/api/places/abc123/miles-from-campus").set(headers)).status).toBe(503);
+
+      stubGoogle({ status: 403, body: { error: { message: "API key not valid." } } });
+      const failed = await request(app).get("/api/places/abc123/miles-from-campus").set(headers);
+      expect(failed.status).toBe(502);
+      expect(failed.body).toEqual({ message: "Address search failed." });
+
+      expect((await request(app).get("/api/places/bad%20id/miles-from-campus").set(headers)).status).toBe(400);
     });
   });
 });
