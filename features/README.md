@@ -20,7 +20,7 @@ No application code may be written unless it maps to a requirement in one of the
 | 2 | [feature-2-area-management.md](./feature-2-area-management.md) | `feature/2-area-management` | Feature 1 (auth) |
 | 4 | [feature-4-faculty-management.md](./feature-4-faculty-management.md) | `feature/4-faculty-management` | Feature 1 (auth) |
 | 6 | [feature-6-destinations.md](./feature-6-destinations.md) | `feature/6-destinations` | Feature 3 (roles) |
-| 7 | [feature-7-course-listing.md](./feature-7-course-listing.md) | `feature/7-course-listing` | Feature 1 (auth), Feature 2 (semesters), Feature 3 (courses), Feature 5 (sections), Feature 6 (enrollments) |
+| 7 | [feature-7-drivers.md](./feature-7-drivers.md) | `feature/7-drivers` | Feature 1 (users), Feature 3 (roles) |
 
 New features: follow [framework.md](./framework.md#feature-spec-template) — **Status**, **Input**, **FR-00N**, **SC-00N**, **Key Entities**, Gherkin, **Agent implementation request**, **Definition of Done**.
 

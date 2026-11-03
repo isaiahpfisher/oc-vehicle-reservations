@@ -58,7 +58,7 @@
 **So that** Unauthorized persons cannot tamper with the data
 
 **Priority:** P2
-**Independent test:** Unauthorized access to `/drivers` is redirected to `/login`; unauthorized API requests or requests without `admin` or `area_admin` role receive errors; signed in user without `admin` or `area_admin` role is redirected to `/home`
+**Independent test:** Unauthorized access to `/drivers` is redirected to `/login`; unauthorized API requests or requests without `admin` or `area_admin` role receive errors; signed in user without `admin` or `area_admin` role is redirected home (`/`)
 **Acceptance scenarios:** see ### US-7.5 under Acceptance Criteria
 
 ---
@@ -75,10 +75,10 @@
 - **FR-006**: `last_name` MUST be trimmed before save. An empty last name MUST be rejected.
 - **FR-007**: `last_name` MUST have max length of 255 characters after trim. Longer strings MUST be rejected.
 - **FR-008**: `phone_number` MUST be trimmed before save. An empty phone number MUST be rejected.
-- **FR-009**: `phone_number` MUST be in format `(xxx)xxx-xxxx`. Other values MUST be rejected.
-- **FR-010**: `license_state` MUST be one of an enum of state abbreviations. The form preselects `OK`. The API MUST reject an empty value.
+- **FR-009**: `phone_number` MUST be in format `xxx-xxx-xxxx`. Other values MUST be rejected.
+- **FR-010**: `license_state` MUST be one of an enum of state abbreviations (the 50 states and `DC`). The form preselects `OK`. The API MUST reject an empty value.
 - **FR-011**: `license_expiration_date` MUST be a valid date in format `yyyy-mm-dd`.
-- **FR-012**: `approved_at` is set by the server and client-supplied values MUST be ignored. It MUST be set to the current time whenever `status` changes to `approved` from any other status (or a driver is created as `approved`)
+- **FR-012**: `approved_at` is set by the server and client-supplied values MUST be ignored. It MUST be set to the current time whenever `status` changes to `approved` from any other status (or a driver is created as `approved`), and set to null whenever `status` changes from `approved` to any other status.
 - **FR-013**: `status` MUST be selected from existing enum of `pending`, `approved`, `denied`, `revoked`, and `former`. Empty status is saved as `pending`.
 - **FR-014**: `user_id` MUST be unique.
 - **FR-015**: `GET /api/drivers/selectable` MUST require a valid session with no role requirement. It MUST return only `id`, `firstName`, and `lastName`, for drivers with status `approved` and a license expiration date of today or later.
@@ -93,6 +93,7 @@
 ## Assumptions
 
 - Drivers use **page-based** create and edit forms (no split sidebar / main panel). Delete uses a confirmation dialog.
+- `PUT` and `DELETE` match the vehicles API: a field left out of a `PUT` keeps its stored value, and `DELETE` returns `200` with a message.
 
 ## Edge Cases
 
@@ -103,7 +104,7 @@
 - Empty or whitespace-only last name → client block and/or `400`.
 - Last name longer than 255 characters → `400`.
 - Empty phone number → client block and/or `400`.
-- Phone number not in format `(xxx)xxx-xxxx` → client block and/or `400`.
+- Phone number not in format `xxx-xxx-xxxx` → client block and/or `400`.
 - Empty license state → client block and/or `400`.
 - License state not an existing state abbreviation → client block and/or `400`.
 - Empty or invalid license expiration date → client block and/or `400`.
@@ -112,7 +113,7 @@
 - Status other than `pending`, `approved`, `denied`, `revoked`, or `former` → `400`.
 - Deleting a user linked to a driver → driver is kept with `user_id` set to null.
 - Unauthenticated drivers screen → redirect to `/login`.
-- Authenticated drivers screen without `admin` or `area_admin` role → redirect to `/home`.
+- Authenticated drivers screen without `admin` or `area_admin` role → redirect home (`/`).
 - Unauthenticated API request → `401`.
 - API request without `admin` or `area_admin` role → `403`, except `GET /api/drivers/selectable`.
 
@@ -156,7 +157,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
   "userId": 1,
   "firstName": "John",
   "lastName": "Doe",
-  "phoneNumber": "(405)425-1234",
+  "phoneNumber": "405-425-1234",
   "licenseState": "OK",
   "licenseExpirationDate": "2027-09-01",
   "status": "pending"
@@ -171,7 +172,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
   "userId": 1,
   "firstName": "John",
   "lastName": "Doe",
-  "phoneNumber": "(405)425-1234",
+  "phoneNumber": "405-425-1234",
   "licenseState": "OK",
   "licenseExpirationDate": "2027-09-01",
   "status": "pending",
@@ -206,6 +207,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - Heading: **New Driver** or first name and last name of driver if editing
 - Primary action: **Save** (and cancel) return to `Drivers.vue`
 - Main Content: form with fields for the columns on the drivers table (excluding `approved_at` and timestamps)
+- The **User** field is searchable: typing filters the available users by name or email
 - Follow UI patterns from elsewhere
 
 ### [Card: Driver] — on `UserDetails.vue` (`/users/:id`)
@@ -232,7 +234,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | `user_id`                 | INTEGER FK | Optional; must reference `users.id`; unique when not null                             |
 | `first_name`              | STRING     | Required; trimmed; max 255                                                            |
 | `last_name`               | STRING     | Required; trimmed; max 255                                                            |
-| `phone_number`            | STRING     | Required; trimmed; must be in format `(xxx)xxx-xxxx`                                  |
+| `phone_number`            | STRING     | Required; trimmed; must be in format `xxx-xxx-xxxx`                                  |
 | `license_state`           | STRING     | Required; one of the state abbreviations                                              |
 | `license_expiration_date` | DATEONLY   | Required; must be in format `yyyy-mm-dd`                                              |
 | `approved_at`             | DATE       | May be null; set by the server (FR-012)                                               |
@@ -269,6 +271,12 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **When** I have the Driver Form open
 - **Then** the user field populates all users who aren't already attached to a driver, plus the driver's own linked user when editing
 
+#### Scenario: Search users in the user field
+
+- **Given** I am signed in as admin or an area_admin with the Driver Form open
+- **When** I type part of a user's name or email into the user field
+- **Then** only the available users that match are listed
+
 #### Scenario: Linked users are saved for drivers
 
 - **Given** I am signed in as admin or an area_admin on the drivers view
@@ -290,7 +298,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 #### Scenario: Invalid phone number is rejected
 
 - **Given** I am signed in as admin or an area_admin
-- **When** I submit a driver with a phone number not in format `(xxx)xxx-xxxx`
+- **When** I submit a driver with a phone number not in format `xxx-xxx-xxxx`
 - **Then** the request returns 400 with a helpful error message
 
 #### Scenario: Duplicate linked user is rejected
@@ -371,6 +379,12 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - **When** I confirm
 - **Then** the driver is deleted and removed from the drivers view
 
+#### Scenario: Former status can be saved
+
+- **Given** I am signed in as admin or an area_admin
+- **When** I edit a driver's status to `former`
+- **Then** the driver is saved with that status
+
 #### Scenario: Approved timestamp on edit
 
 - **Given** I am signed in as admin or an area_admin on the drivers view
@@ -385,7 +399,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 #### Scenario: Re-approval resets approved timestamp
 
-- **Given** a driver with an approved_at timestamp is `revoked`
+- **Given** a previously approved driver is `revoked`
 - **When** I change the status to `approved`
 - **Then** the approved_at timestamp is set to the current time
 
@@ -436,6 +450,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-7.1 | Admin or area admin clicks to creates driver           | `frontend/tests/Drivers.test.js`     | `Admin or area admin clicks to creates driver`           |
 | US-7.1 | Driver is created                                      | `frontend/tests/DriverForm.test.js`  | `Driver is created`                                      |
 | US-7.1 | User field on driver form shows available users        | `frontend/tests/DriverForm.test.js`  | `User field on driver form shows available users`        |
+| US-7.1 | Search users in the user field                         | `frontend/tests/DriverForm.test.js`  | `Search users in the user field`                         |
 | US-7.1 | Linked users are saved for drivers                     | `backend/tests/drivers.test.js`      | `Linked users are saved for drivers`                     |
 | US-7.1 | Cannot submit without required fields                  | `backend/tests/drivers.test.js`      | `Cannot submit without required fields`                  |
 | US-7.1 | Approved timestamp on create                           | `backend/tests/drivers.test.js`      | `Approved timestamp on create`                           |
@@ -454,7 +469,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-7.4 | Driver is deleted                                      | `backend/tests/drivers.test.js`      | `Driver is deleted`                                      |
 | US-7.4 | Former status can be saved                             | `backend/tests/drivers.test.js`      | `Former status can be saved`                             |
 | US-7.4 | Approved timestamp on edit                             | `backend/tests/drivers.test.js`      | `Approved timestamp on edit`                             |
-| US-7.4 | Approved timestamp is kept when status leaves approved | `backend/tests/drivers.test.js`      | `Approved timestamp is kept when status leaves approved` |
+| US-7.4 | Approved timestamp is removed when status leaves approved | `backend/tests/drivers.test.js`      | `Approved timestamp is removed when status leaves approved` |
 | US-7.4 | Re-approval resets approved timestamp                  | `backend/tests/drivers.test.js`      | `Re-approval resets approved timestamp`                  |
 | US-7.4 | Client-supplied approved timestamp is ignored          | `backend/tests/drivers.test.js`      | `Client-supplied approved timestamp is ignored`          |
 | US-7.4 | Deleting a linked user keeps the driver                | `backend/tests/users.test.js`        | `Deleting a linked user keeps the driver`                |
@@ -483,13 +498,13 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-###**)
-- [ ] **Success Criteria (SC-001**–**SC-004)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-###**)
+- [x] **Success Criteria (SC-001**–**SC-004)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

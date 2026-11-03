@@ -1,7 +1,7 @@
 # Behavior & Rules Reference
 
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, Feature 6 destination rules, and Feature 12 service type rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, Feature 6 destination rules, Feature 7 driver rules, and Feature 12 service type rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -74,8 +74,8 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Routes declare `meta.roles` | The user needs any listed role (admin always passes); no `meta.roles` = any signed-in user. The router guard and MenuBar links use the same `canOpen()` check. Routes open without a session (login) declare `meta.public`. | Feature 3, FR-011; Feature 1, FR-005 |
 | Frontend refreshes roles per page load | The first navigation after a page load calls `GET /api/users/:id` and replaces the stored roles before any role check. A `401` clears `user` and goes to login. | Feature 3, FR-009 |
 | Users list | Admin-only table at `/users`: name, email, role chips (`Admin`, `Maintenance`, `Area Admin — <area>`), 10 per page, name search (case-insensitive) and role filter; changing either returns to page 1. | Feature 3, US-3.1–3.3 |
-| User details | `/users/:id`: header with name, email, role chips, and member-since date; **Access** card with checkboxes (System roles; Area admin of, one per area) and its own Save/Cancel that stay on the page; **Driver** card and **Requests** / **Issue reports** / **Maintenance** (maintenance users only) tabs show "Coming soon" until Features 7–13; **Account** card deletes the user. On your own page, Admin and Delete are disabled. | Feature 3, US-3.4, US-3.5 |
-| Delete user | Confirm dialog naming the user, from the users list or the details page; disabled for the admin's own account. | Feature 3, US-3.5 |
+| User details | `/users/:id`: header with name, email, role chips, and member-since date; **Access** card with checkboxes (System roles; Area admin of, one per area) and its own Save/Cancel that stay on the page; **Driver** card shows the linked driver's status, license state and expiration, and phone number, or **No linked driver.**; **Requests** / **Issue reports** / **Maintenance** (maintenance users only) tabs show "Coming soon" until Features 8–13; **Account** card deletes the user. On your own page, Admin and Delete are disabled. | Feature 3, US-3.4, US-3.5; Feature 7, FR-020 |
+| Delete user | Confirm dialog naming the user, from the users list or the details page; disabled for the admin's own account. A linked driver is kept with no linked user. | Feature 3, US-3.5; Feature 7, FR-017 |
 
 ## Destinations
 
@@ -89,6 +89,20 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Miles from campus is optional | Empty is stored as `null`. A negative or non-integer value returns `{ "message": "Miles from campus must be a whole number of 0 or more." }`. This feature does not call a maps API. | Feature 6, FR-018 |
 | Delete removes the destination | `DELETE` returns `200` and does not check for other rows that point at the destination. | Feature 6, Assumptions |
 | Destinations are managed on one screen | `/destinations` heading is **Destination Management**. The list is a table of 10 rows per page with **Name**, **City**, **State**, and an **Official** or **Unofficial** chip. Create and edit use dialogs. Row icon buttons use `size="small"` and `variant="text"` with aria-labels **Edit destination** and **Delete destination**. Delete uses the shared confirmation dialog. Empty list copy is **No destinations yet. Create your first destination.** | Feature 6, Screen Requirements |
+
+## Drivers
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Only admins and area admins manage drivers | Every `/api/drivers` route except `/selectable` uses `authorizeRoles("admin", "area_admin")`. A missing token is `401`. A signed-in user without one of those roles is `403` `{ "message": "Admin or area admin role required." }`. `/drivers`, `/drivers/new`, and `/drivers/:id` use `meta.roles: ["admin", "area_admin"]`. `/drivers` has `meta.nav: "Drivers"`, so those roles see the **Drivers** link and everyone else does not. Other signed-in users who open a URL are redirected home. An unsigned visit redirects to `/login`. | Feature 7, FR-001, US-7.5 |
+| Drivers are global | There is no area. An area admin reads, creates, edits, and deletes every driver. | Feature 7, Data Ownership |
+| Any signed-in user can list selectable drivers | `GET /api/drivers/selectable` returns only `id`, `firstName`, and `lastName`, for `approved` drivers whose license expires today or later. | Feature 7, FR-015 |
+| A driver links to at most one user | `userId` is optional, must be an existing user, and is unique. A duplicate is `400` `{ "message": "User is already linked to a driver." }`. The form's **User** field lists users with no driver, plus the driver's own linked user when editing, and typing in it filters them by name or email. | Feature 7, FR-003, FR-014, FR-016 |
+| Deleting a user keeps the driver | The driver stays, with `userId` set to null. | Feature 7, FR-017 |
+| Required fields are trimmed and validated | First and last name are required, max 255. Phone number is required, in format `xxx-xxx-xxxx`. License state is required, one of the 50 states and `DC`; the form preselects `OK`. License expiration date is a required `yyyy-mm-dd` date, and past dates are accepted. Status is `pending`, `approved`, `denied`, `revoked`, or `former`; blank is saved as `pending`. | Feature 7, FR-004–FR-011, FR-013, FR-019 |
+| `approvedAt` is set by the server | Client values are ignored. It is the current time when a driver is created as `approved` or changes to `approved`, stays the same while the driver remains `approved`, and is null when the status changes to anything else. | Feature 7, FR-012 |
+| A field left out of an update keeps its stored value | `PUT` changes only the keys in the body. | Feature 7, Assumptions |
+| Drivers are a table plus a form page | `/drivers` heading is **Driver Management**. The table shows 10 rows per page with **First Name**, **Last Name**, **Status**, **Phone Number**, and **License Expiration**. Names link to the driver. Search matches first name, last name, and phone number, and a status filter narrows the list; changing either returns to page 1. An expiration date before today is highlighted with a red chip. **Edit driver** opens `/drivers/:id`. **Delete driver** uses the shared confirmation dialog. Empty copy is **No drivers yet. Create your first driver.** `/drivers/new` heading is **New Driver**. Edit heading is the driver's name. **Save** and **Cancel** return to the list; a failed save shows its message and stays on the page. | Feature 7, Screen Requirements |
 
 ## Service types
 
