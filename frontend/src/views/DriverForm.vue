@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import driverServices from "../services/driverServices.js";
 import { useRequest } from "../composables/useRequest.js";
+import FormSection from "../components/layout/FormSection.vue";
 import PageShell from "../components/layout/PageShell.vue";
 import { DRIVER_STATUS_OPTIONS, LICENSE_STATES, isValidPhoneNumber } from "../models/drivers.js";
 import { fullName } from "../models/users.js";
@@ -112,30 +113,73 @@ watch(
 </script>
 
 <template>
-  <PageShell :title :breadcrumbs :loading :error="loadError" :max-width="720">
+  <PageShell
+    :title
+    subtitle="Their name, contact, account, license, and approval."
+    :breadcrumbs
+    :loading
+    :error="loadError"
+    :max-width="1040"
+    centered
+  >
     <v-form ref="formRef" @submit.prevent="save">
-      <v-autocomplete
-        v-model="form.userId"
-        :items="loaded.users"
-        :item-title="userLabel"
-        item-value="id"
-        label="User"
-        hint="Optional. Search by name or email. Only users without a driver are listed."
-        persistent-hint
-        no-data-text="No matching users."
-        clearable
-        class="mb-4"
-      />
-      <v-text-field v-model="form.firstName" label="First Name" :rules="[required, maxLength]" />
-      <v-text-field v-model="form.lastName" label="Last Name" :rules="[required, maxLength]" />
-      <v-text-field v-model="form.phoneNumber" label="Phone Number" placeholder="405-425-1234" :rules="[required, phoneFormat]" />
-      <v-select v-model="form.licenseState" :items="LICENSE_STATES" label="License State" :rules="[required]" />
-      <v-text-field v-model="form.licenseExpirationDate" label="License Expiration Date" type="date" :rules="[required]" />
-      <v-select v-model="form.status" :items="DRIVER_STATUS_OPTIONS" label="Status" :rules="[required]" />
+      <FormSection title="Name" subtitle="How the driver appears in the drivers list and on vehicle requests.">
+        <v-row density="comfortable">
+          <v-col cols="12" sm="6">
+            <v-text-field v-model="form.firstName" hide-details="auto" label="First Name" :rules="[required, maxLength]" />
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-text-field v-model="form.lastName" hide-details="auto" label="Last Name" :rules="[required, maxLength]" />
+          </v-col>
+        </v-row>
+      </FormSection>
 
-      <v-alert v-if="saveError" type="error" density="compact" class="mb-4">{{ saveError }}</v-alert>
+      <FormSection title="Contact" subtitle="How to reach the driver about a trip.">
+        <v-row density="comfortable">
+          <v-col cols="12" sm="6">
+            <v-text-field v-model="form.phoneNumber" hide-details="auto" label="Phone Number" placeholder="405-425-1234" :rules="[required, phoneFormat]" />
+          </v-col>
+        </v-row>
+      </FormSection>
 
-      <div class="d-flex justify-end ga-2">
+      <FormSection
+        title="User account"
+        subtitle="Optional. A linked user sees these driver details on their profile. Search by name or email; only users without a driver can be chosen."
+      >
+        <v-autocomplete
+          v-model="form.userId"
+          hide-details="auto"
+          :items="loaded.users"
+          :item-title="userLabel"
+          item-value="id"
+          label="User"
+          no-data-text="No matching users."
+          clearable
+        />
+      </FormSection>
+
+      <FormSection title="License" subtitle="Drivers with an expired license can't be chosen for vehicle requests.">
+        <v-row density="comfortable">
+          <v-col cols="12" sm="6">
+            <v-select v-model="form.licenseState" hide-details="auto" :items="LICENSE_STATES" label="License State" :rules="[required]" />
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-text-field v-model="form.licenseExpirationDate" hide-details="auto" label="License Expiration Date" type="date" :rules="[required]" />
+          </v-col>
+        </v-row>
+      </FormSection>
+
+      <FormSection title="Approval" subtitle="Only approved drivers can be chosen for vehicle requests.">
+        <v-row density="comfortable">
+          <v-col cols="12" sm="6">
+            <v-select v-model="form.status" hide-details="auto" :items="DRIVER_STATUS_OPTIONS" label="Status" :rules="[required]" />
+          </v-col>
+        </v-row>
+      </FormSection>
+
+      <v-divider />
+      <v-alert v-if="saveError" type="error" density="compact" class="mt-6">{{ saveError }}</v-alert>
+      <div class="d-flex justify-end ga-2 pt-6">
         <v-btn color="secondary" variant="text" :disabled="saving" @click="cancel">Cancel</v-btn>
         <v-btn color="primary" variant="elevated" class="oc-cta" type="submit" :loading="saving">Save</v-btn>
       </div>

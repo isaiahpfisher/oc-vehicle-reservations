@@ -140,6 +140,20 @@ describe("Feature 7 — Drivers", () => {
           expect(await field("VTextField", label)).toBeDefined();
         }
 
+        // Fields are grouped into sections, each holding its own fields.
+        const sections = [...document.body.querySelectorAll("form section")];
+        expect(sections.map((section) => section.querySelector("h3").textContent.trim())).toEqual([
+          "Name",
+          "Contact",
+          "User account",
+          "License",
+          "Approval",
+        ]);
+        expect(sections[0].textContent).toContain("First Name");
+        expect(sections[0].textContent).toContain("Last Name");
+        expect(sections[3].textContent).toContain("License Expiration Date");
+        expect(sections[4].textContent).toContain("Status");
+
         wrapper.unmount();
         await router.push("/");
       }
@@ -163,9 +177,10 @@ describe("Feature 7 — Drivers", () => {
 
       await waitFor(() => expect(rows()).toHaveLength(10));
       const headers = [...document.body.querySelectorAll(".v-data-table thead th")].map((th) => th.textContent.trim());
-      expect(headers).toEqual(["First Name", "Last Name", "Status", "Phone Number", "License Expiration", "Actions"]);
-      expect(rows()[0].textContent).toContain("Mary");
-      expect(rows()[0].textContent).toContain("Smith");
+      expect(headers).toEqual(["Name", "Status", "Phone Number", "License Expiration", "Actions"]);
+      const name = rows()[0].querySelector("td a");
+      expect(name.textContent.trim()).toBe("Mary Smith");
+      expect(name.getAttribute("href")).toBe("/drivers/2");
       expect(rows()[0].textContent).toContain("Approved");
       expect(rows()[0].textContent).toContain("918-555-0000");
       expect(rows()[0].textContent).toContain("2999-09-01");

@@ -31,8 +31,7 @@ const {
 } = useRequest(driverServices.getDrivers, { initial: [], fallback: "Failed to fetch drivers." });
 
 const headers = [
-  { title: "First Name", key: "firstName", sortable: false },
-  { title: "Last Name", key: "lastName", sortable: false },
+  { title: "Name", key: "name", sortable: false },
   { title: "Status", key: "status", sortable: false },
   { title: "Phone Number", key: "phoneNumber", sortable: false, nowrap: true },
   { title: "License Expiration", key: "licenseExpirationDate", sortable: false, nowrap: true },
@@ -40,7 +39,9 @@ const headers = [
 ];
 
 const filteredDrivers = computed(() =>
-  drivers.value.filter((driver) => driverMatchesQuery(driver, query.value) && driverHasStatus(driver, statusFilter.value)),
+  drivers.value
+    .filter((driver) => driverMatchesQuery(driver, query.value) && driverHasStatus(driver, statusFilter.value))
+    .map((driver) => ({ ...driver, name: fullName(driver) })),
 );
 
 watch([query, statusFilter], () => {
@@ -108,23 +109,13 @@ onMounted(getDrivers);
         :items-per-page-options="[ITEMS_PER_PAGE]"
         item-value="id"
       >
-        <template #[`item.firstName`]="{ item }">
+        <template #[`item.name`]="{ item }">
           <router-link
             :to="{ name: 'driverDetails', params: { id: item.id } }"
             class="drivers-name d-block text-truncate text-primary font-weight-medium"
-            :title="item.firstName"
+            :title="item.name"
           >
-            {{ item.firstName }}
-          </router-link>
-        </template>
-
-        <template #[`item.lastName`]="{ item }">
-          <router-link
-            :to="{ name: 'driverDetails', params: { id: item.id } }"
-            class="drivers-name d-block text-truncate text-primary font-weight-medium"
-            :title="item.lastName"
-          >
-            {{ item.lastName }}
+            {{ item.name }}
           </router-link>
         </template>
 
@@ -162,6 +153,6 @@ onMounted(getDrivers);
 
 <style scoped>
 .drivers-name {
-  max-width: 12rem;
+  max-width: 18rem;
 }
 </style>

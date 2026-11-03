@@ -24,6 +24,7 @@ export default (sequelize, Sequelize) => {
     phoneNumber: {
       type: Sequelize.STRING,
       allowNull: false,
+      unique: true,
     },
     licenseState: {
       type: Sequelize.STRING,

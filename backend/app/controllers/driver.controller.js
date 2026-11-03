@@ -7,6 +7,7 @@ import { requiredInt, requiredText } from "../helpers/fields.js";
 const exports = {};
 
 const USER_TAKEN = "User is already linked to a driver.";
+const PHONE_TAKEN = "Phone number already taken.";
 const PHONE_NUMBER = /^\d{3}-\d{3}-\d{4}$/;
 const DATE_FORMAT = "License expiration date must be in format 'yyyy-mm-dd'.";
 
@@ -143,6 +144,14 @@ const resolveDriver = async (body, driver = null) => {
     }
   }
 
+  // FR-021: no two drivers share a phone number.
+  if (values.phoneNumber) {
+    const other = await db.driver.findOne({ where: { phoneNumber: values.phoneNumber }, attributes: ["id"] });
+    if (other && other.id !== driver?.id) {
+      return { message: PHONE_TAKEN };
+    }
+  }
+
   const status = field(body, "status");
   if (status.present || creating) {
     const read = readStatus(status.value);
@@ -161,7 +170,8 @@ const resolveDriver = async (body, driver = null) => {
 
 const sendWriteError = (res, err, action) => {
   if (err.name === "SequelizeUniqueConstraintError") {
-    return res.status(400).send({ message: USER_TAKEN });
+    const phone = Object.keys(err.fields ?? {}).some((key) => key.includes("phone_number"));
+    return res.status(400).send({ message: phone ? PHONE_TAKEN : USER_TAKEN });
   }
 
   logger.error(`driver ${action} failed: ${err.message}`);

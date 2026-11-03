@@ -87,6 +87,7 @@
 - **FR-018**: Request bodies use camelCase and MUST also accept snake_case aliases, matching the vehicles API.
 - **FR-019**: A past `license_expiration_date` MUST be accepted, so that existing drivers with expired licenses can be recorded.
 - **FR-020**: `GET /api/users/:id` MUST include `driver`, with the linked driver's `status`, `licenseState`, `licenseExpirationDate`, and `phoneNumber`, or `null` if there is no linked driver.
+- **FR-021**: `phone_number` MUST be unique: no two drivers may share a phone number. Saving a driver with its own current number is allowed.
 
 ---
 
@@ -99,6 +100,7 @@
 
 - User id that does not exist → client block and/or `400`.
 - Non-unique user id → client block and/or `400`.
+- Phone number already used by another driver → `400`.
 - Empty or whitespace-only first name → client block and/or `400`.
 - First name longer than 255 characters → `400`.
 - Empty or whitespace-only last name → client block and/or `400`.
@@ -195,7 +197,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - Heading: **Driver Management**
 - Primary action: **+ New Driver** opens a new page (`DriverForm.vue`)
 - Main Content: searchable and filterable data table (follow example in `ListUsers.vue`).
-  - Columns should be first name, last name, status, phone number, and license expiration
+  - Columns should be name (first and last name in one column), status, phone number, and license expiration
   - Search matches first name, last name, and phone number
   - Filter by status
   - Expired license dates are highlighted
@@ -207,6 +209,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 - Heading: **New Driver** or first name and last name of driver if editing
 - Primary action: **Save** (and cancel) return to `Drivers.vue`
 - Main Content: form with fields for the columns on the drivers table (excluding `approved_at` and timestamps)
+- The form is grouped into `FormSection`s, each with a title and short description on the left and its fields vertically centered on the right (stacked on small screens), separated by dividers: **Name** (first name, last name), **Contact** (phone number), **User account** (user), **License** (state, expiration date), **Approval** (status). **Cancel** and **Save** sit below the last section. The form is centered on the page with even space on both sides.
 - The **User** field is searchable: typing filters the available users by name or email
 - Follow UI patterns from elsewhere
 
@@ -234,7 +237,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | `user_id`                 | INTEGER FK | Optional; must reference `users.id`; unique when not null                             |
 | `first_name`              | STRING     | Required; trimmed; max 255                                                            |
 | `last_name`               | STRING     | Required; trimmed; max 255                                                            |
-| `phone_number`            | STRING     | Required; trimmed; must be in format `xxx-xxx-xxxx`                                  |
+| `phone_number`            | STRING     | Required; trimmed; unique; must be in format `xxx-xxx-xxxx`                          |
 | `license_state`           | STRING     | Required; one of the state abbreviations                                              |
 | `license_expiration_date` | DATEONLY   | Required; must be in format `yyyy-mm-dd`                                              |
 | `approved_at`             | DATE       | May be null; set by the server (FR-012)                                               |
@@ -305,6 +308,12 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 
 - **Given** a user is already linked to a driver
 - **When** I submit another driver with that user
+- **Then** the request returns 400 with a helpful error message
+
+#### Scenario: Duplicate phone number is rejected
+
+- **Given** a driver already has a phone number
+- **When** I submit another driver with that phone number
 - **Then** the request returns 400 with a helpful error message
 
 #### Scenario: Past license expiration date is accepted
@@ -456,6 +465,7 @@ Any signed in admin or area admin user may create, edit, delete, or read the lis
 | US-7.1 | Approved timestamp on create                           | `backend/tests/drivers.test.js`      | `Approved timestamp on create`                           |
 | US-7.1 | Invalid phone number is rejected                       | `backend/tests/drivers.test.js`      | `Invalid phone number is rejected`                       |
 | US-7.1 | Duplicate linked user is rejected                      | `backend/tests/drivers.test.js`      | `Duplicate linked user is rejected`                      |
+| US-7.1 | Duplicate phone number is rejected                     | `backend/tests/drivers.test.js`      | `Duplicate phone number is rejected`                     |
 | US-7.1 | Past license expiration date is accepted               | `backend/tests/drivers.test.js`      | `Past license expiration date is accepted`               |
 | US-7.2 | Empty State                                            | `frontend/tests/Drivers.test.js`     | `Empty State`                                            |
 | US-7.2 | Normal State                                           | `frontend/tests/Drivers.test.js`     | `Normal State`                                           |

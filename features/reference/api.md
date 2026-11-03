@@ -170,6 +170,7 @@ Success body: `{ "id", "userId", "firstName", "lastName", "phoneNumber", "licens
 | Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
 | Unknown or non-integer `userId` | `400` | `{ "message": "User does not exist." }` |
 | `userId` linked to another driver | `400` | `{ "message": "User is already linked to a driver." }` |
+| `phoneNumber` used by another driver | `400` | `{ "message": "Phone number already taken." }` |
 | Missing or whitespace-only first name, last name, phone number, license state, or expiration date | `400` | `{ "message": "Missing first name." }` and the matching message for that field |
 | First or last name longer than 255 characters after trim | `400` | `{ "message": "First name too long." }` or `{ "message": "Last name too long." }` |
 | Phone number not in format `xxx-xxx-xxxx` | `400` | `{ "message": "Phone number must be in format 'xxx-xxx-xxxx'." }` |

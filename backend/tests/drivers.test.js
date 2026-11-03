@@ -15,10 +15,14 @@ const signInAdmin = async () => {
   return bearer(body.token);
 };
 
+// Phone numbers are unique (FR-021), so each body gets the next number: 405-425-1234, 405-425-1235, …
+let phoneCount = 0;
+const nextPhoneNumber = () => `405-425-${1234 + phoneCount++}`;
+
 const validBody = (overrides = {}) => ({
   firstName: "John",
   lastName: "Doe",
-  phoneNumber: "405-425-1234",
+  phoneNumber: nextPhoneNumber(),
   licenseState: "OK",
   licenseExpirationDate: "2999-09-01",
   status: "pending",
@@ -43,6 +47,7 @@ const dateString = (daysFromToday) => {
 };
 
 beforeEach(async () => {
+  phoneCount = 0;
   await syncTestDatabase();
 });
 
@@ -212,6 +217,36 @@ describe("Feature 7 — Driver Management API", () => {
       await postDriver(admin, validBody());
       const unlinked = await postDriver(admin, validBody());
       expect(unlinked.status).toBe(201);
+    });
+
+    it("Duplicate phone number is rejected", async () => {
+      const admin = await signInAdmin();
+      const first = await postDriver(admin, validBody({ phoneNumber: "405-555-0001" }));
+      const second = await postDriver(admin, validBody({ phoneNumber: "405-555-0002" }));
+
+      for (const phoneNumber of ["405-555-0001", "  405-555-0001  "]) {
+        const duplicate = await postDriver(admin, validBody({ phoneNumber }));
+        expect(duplicate.status).toBe(400);
+        expect(duplicate.body).toEqual({ message: "Phone number already taken." });
+      }
+      expect(await db.driver.count()).toBe(2);
+
+      const moved = await putDriver(admin, second.body.id, { phone_number: "405-555-0001" });
+      expect(moved.status).toBe(400);
+      expect(moved.body).toEqual({ message: "Phone number already taken." });
+      expect((await db.driver.findByPk(second.body.id)).phoneNumber).toBe("405-555-0002");
+
+      // Saving a driver with its own number is not a duplicate.
+      const same = await putDriver(admin, first.body.id, { phoneNumber: "405-555-0001", firstName: "Johnny" });
+      expect(same.status).toBe(200);
+
+      // A freed-up number can be reused.
+      await request(app).delete(`/api/drivers/${first.body.id}`).set(admin);
+      const reused = await putDriver(admin, second.body.id, { phoneNumber: "405-555-0001" });
+      expect(reused.status).toBe(200);
+
+      // The database enforces it too, if two requests race past the pre-check.
+      await expect(db.driver.create({ ...validBody(), phoneNumber: "405-555-0001" })).rejects.toThrow();
     });
 
     it("Past license expiration date is accepted", async () => {
