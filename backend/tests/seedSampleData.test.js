@@ -3,7 +3,7 @@
  * Spec: features/feature-8-vehicle-requests.md → Assumptions
  */
 import db from "../app/models/index.js";
-import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
+import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 beforeEach(async () => {
@@ -15,14 +15,33 @@ afterAll(async () => {
 });
 
 describe("Feature 8 — Vehicle Request Management sample data", () => {
-  it("Seed adds sample vehicles, drivers, and destinations and replaces old requests", async () => {
+  it("Seed adds sample vehicles, service types, drivers, and destinations and replaces old requests", async () => {
     const result = await seed();
     expect(result.exitCode).toBe(0);
     expect(result.message).toContain(`Added sample data: ${SEED_VEHICLES.length} vehicles`);
 
     expect(await db.vehicle.count()).toBe(SEED_VEHICLES.length);
+    expect(await db.vehicleType.count()).toBe(SEED_VEHICLE_TYPES.length);
+    expect(await db.serviceType.count()).toBe(SEED_SERVICE_TYPES.length);
     expect(await db.driver.count()).toBe(SEED_DRIVERS.length);
     expect(await db.destination.count()).toBe(SEED_DESTINATIONS.length);
+
+    // Enough rows to page through, and every driver status and both kinds of destination.
+    expect(SEED_VEHICLES.length).toBeGreaterThanOrEqual(50);
+    expect(SEED_DRIVERS.length).toBeGreaterThanOrEqual(50);
+    expect(SEED_DESTINATIONS.length).toBeGreaterThanOrEqual(50);
+    expect(new Set(SEED_DRIVERS.map(({ status }) => status))).toEqual(new Set(["pending", "approved", "denied", "revoked", "former"]));
+    expect(new Set(SEED_DESTINATIONS.map(({ isSaved }) => isSaved))).toEqual(new Set([true, false]));
+    expect(new Set(SEED_VEHICLES.map(({ status }) => status))).toEqual(new Set(["active", "retired"]));
+    // Phone numbers, VINs, and plates are unique, like the API requires.
+    for (const values of [
+      SEED_DRIVERS.map(({ phoneNumber }) => phoneNumber),
+      SEED_VEHICLES.map(({ identifier }) => identifier),
+      SEED_VEHICLES.map(({ licensePlate }) => licensePlate).filter(Boolean),
+      SEED_VEHICLES.map(({ universityId }) => universityId),
+    ]) {
+      expect(new Set(values).size).toBe(values.length);
+    }
 
     // Vehicles land in their named area; drivers link to seeded accounts by email.
     const bus = await db.vehicle.findOne({ where: { universityId: "ATH-B01" }, include: ["area", "vehicleType"] });

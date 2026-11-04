@@ -43,9 +43,12 @@ export const repeatsInARow = (stops) => stops.some((stop, i) => i > 0 && stopKey
 
 export const routeSummary = (request) => request.destinations.map(({ name }) => name).join(" → ");
 
-/** Short name for a request: "Trip to BOK Center", "Trip to BOK Center +2 more". Purpose is long-form text, so it isn't used. */
-export const tripTitle = ({ destinations: [first, ...rest] }) =>
-  `Trip to ${first.name}${rest.length ? ` +${rest.length} more` : ""}`;
+/**
+ * Short name for a request: "Trip to BOK Center", "Trip to BOK Center +2 more". Purpose is long-form text, so it isn't used.
+ * A request saved without stops (only possible through old data) still gets a name, so its page can load and be fixed.
+ */
+export const tripTitle = ({ destinations: [first, ...rest] = [] }) =>
+  first ? `Trip to ${first.name}${rest.length ? ` +${rest.length} more` : ""}` : "Trip with no destinations";
 
 const pad = (value) => String(value).padStart(2, "0");
 

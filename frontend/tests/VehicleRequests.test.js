@@ -404,6 +404,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("User views requests as a table", async () => {
       requestServices.getMyRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/");
+      await click("Table");
 
       await waitFor(() => expect(rowTexts()).toHaveLength(2));
       expect(document.body.textContent).toContain("My Requests");
@@ -434,7 +435,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
       requestServices.getMyRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/");
 
-      await click("Month");
+      // The month calendar is the default view.
+      await waitFor(() => expect(named("Month").classList).toContain("v-btn--active"));
 
       await waitFor(() => expect(document.body.querySelector(".v-calendar")?.textContent).toContain("Away game"));
       expect(document.body.querySelector(".v-calendar").textContent).not.toContain("Spring retreat");
@@ -443,6 +445,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("User searches and filters requests", async () => {
       requestServices.getMyRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/");
+      await click("Table");
       await waitFor(() => expect(rowTexts()).toHaveLength(2));
 
       const search = wrapper
@@ -479,6 +482,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       requestServices.getMyRequests.mockResolvedValue({ data: [tripRequest()] });
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
       await mountAppAt("/");
+      await click("Table");
       await waitFor(() => expect(rowTexts()).toHaveLength(1));
 
       document.body.querySelector(".v-data-table tbody tr").click();
@@ -514,6 +518,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin sees all requests", async () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/requests", admin);
+      await click("Table");
 
       await waitFor(() => expect(rowTexts()).toHaveLength(2));
       expect(document.body.textContent).toContain("Requests");
@@ -548,6 +553,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin searches and filters requests", async () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/requests", admin);
+      await click("Table");
       await waitFor(() => expect(rowTexts()).toHaveLength(2));
 
       byTest("toggle-filters").click();
@@ -570,6 +576,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const cancelled = tripRequest({ id: 4, purpose: "Old trip", status: "cancelled" });
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), awaiting, cancelled, farTrip] });
       await mountAppAt("/requests", admin);
+      await click("Table");
       await waitFor(() => expect(rowTexts()).toHaveLength(4));
 
       byTest("needs-action").click();
@@ -587,6 +594,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest()] });
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
       await mountAppAt("/requests", admin);
+      await click("Table");
       await waitFor(() => expect(rowTexts()).toHaveLength(1));
 
       document.body.querySelector(".v-data-table tbody tr").click();
@@ -612,6 +620,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(requestServices.updateRequest).toHaveBeenCalledWith(1, { status: "awaiting_vehicle" });
       await waitFor(() => expect(document.body.textContent).toContain("Awaiting vehicle"));
       expect(named("Approve")).toBeUndefined();
+    });
+
+    it("opens a request whose stops are missing so they can be added back", async () => {
+      requestServices.getRequest.mockResolvedValue({ data: tripRequest({ destinations: [] }) });
+      await mountAppAt("/requests/1", admin);
+
+      await waitFor(() => expect(document.body.querySelector("h2")?.textContent).toContain("Trip with no destinations"));
     });
 
     it("warns admins that editing an approved request resets it to pending", async () => {

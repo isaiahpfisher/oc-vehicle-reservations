@@ -234,7 +234,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 - Heading: **My Requests**
 - Primary action: **+ New Request** opens `CreateRequest.vue`
-- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar
+- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar. The monthly calendar is shown first.
 - Each row/calendar event displays important information about the request, and can be clicked to view the request `Request.vue`
 - **Empty state:** **"You have not submitted any requests."**.
 - **Loading state:** skeleton or progress indicator while requests are fetching.
@@ -245,7 +245,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 **Single Vue view** (`Admin/Requests.vue`)
 
 - Heading: **Requests**
-- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar
+- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar. The monthly calendar is shown first.
 - Each row/calendar event displays important information about the request, and can be clicked to view the request `Request.vue`
 - It should be easy to filter out requests that don't need the user's attention.
 - **Empty state:** **"No one has any submitted requests."**.
@@ -470,7 +470,7 @@ Replaces Feature 6's create and edit dialogs (FR-010). Admins and area admins on
 #### Scenario: User views requests as a monthly calendar
 
 - **Given** I am signed in and I have submitted requests
-- **When** I open the **My Requests** view and choose the monthly calendar display
+- **When** I open the **My Requests** view (the monthly calendar is the default display)
 - **Then** my requests that fall in the selected month appear as calendar events
 
 #### Scenario: User searches and filters requests

@@ -8,7 +8,7 @@ import RequestsBrowser from "../components/requests/RequestsBrowser.vue";
 import RequestViewToggle from "../components/requests/RequestViewToggle.vue";
 
 const router = useRouter();
-const view = ref("table");
+const view = ref("month");
 
 const {
   data: requests,

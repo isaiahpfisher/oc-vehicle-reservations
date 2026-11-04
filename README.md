@@ -72,9 +72,11 @@ Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Dev
 | `multirole@oc.edu` | Maintenance, Area Admin — Music, Area Admin — Theatre |
 | `requester@oc.edu` | none (requester) |
 
-The seed also adds staff and students across six areas (Admissions, Athletics, Facilities, Music, Student Life, Theatre); see `backend/scripts/seed.mjs`.
+The seed also adds about 150 staff and students across ten areas, with at least one area admin per area; see `backend/scripts/seed.mjs`.
 
-It also replaces vehicle types, vehicles, drivers, destinations, and vehicle requests with samples so requests can be tried end to end: about 16 requests across every area and status, dated around the day you seed (`requester@oc.edu` owns several). With `GOOGLE_MAPS_API_KEY` set, seeding makes one billed Google Routes call per sample request.
+It also replaces vehicle types, vehicles, service types, drivers, destinations, and vehicle requests with enough sample data to try searching, filtering, paging, and the calendar: about 80 vehicles, 75 drivers (every status, plus expired and soon-to-expire licenses), 60 destinations (a few unofficial), 14 service types, and 300 requests across every area and status, dated from four months before to four months after the day you seed (`requester@oc.edu` owns about 15). The data comes from a fixed random seed, so every run gives the same rows.
+
+Request mileage is estimated from the seed destinations' coordinates, so seeding makes no Google calls. Add `-- --google` to estimate it with Google Routes instead; that makes one billed call per request (about 300).
 
 ## Branching
 

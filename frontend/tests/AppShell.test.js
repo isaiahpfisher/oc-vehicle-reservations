@@ -104,6 +104,35 @@ describe("App shell (ui-style-system.mdc)", () => {
     expect(sectionTitles(mainNav)).toEqual(["Fleet"]);
   });
 
+  it("highlights the Sidebar link for the page's section, including nested pages", async () => {
+    signIn([{ id: 1, role: "admin", areaId: null, area: null }]);
+    await openApp("/drivers");
+    const highlighted = () =>
+      [...drawer().querySelectorAll("a.v-list-item--active")].map((link) => link.textContent.trim());
+
+    expect(highlighted()).toEqual(["Drivers"]);
+    for (const [path, expected] of [
+      ["/drivers/new", ["Drivers"]],
+      ["/drivers/3", ["Drivers"]],
+      ["/vehicles/4", ["Vehicles"]],
+      ["/destinations/new", ["Destinations"]],
+      ["/requests/5", ["Requests"]],
+      ["/", ["My Requests"]],
+    ]) {
+      await router.push(path);
+      await settle();
+      await waitFor(() => expect(highlighted()).toEqual(expected));
+    }
+  });
+
+  it("highlights My Requests on a requester's own request page", async () => {
+    signIn([]);
+    await openApp("/requests/5");
+
+    const highlighted = [...appBar().querySelectorAll("a.v-btn--active")].map((link) => link.textContent.trim());
+    expect(highlighted).toEqual(["My Requests"]);
+  });
+
   it("collapses and expands the Sidebar", async () => {
     signIn([{ id: 1, role: "maintenance", areaId: null, area: null }]);
     await openApp("/");

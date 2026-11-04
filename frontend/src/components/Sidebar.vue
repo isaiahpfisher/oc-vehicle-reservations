@@ -5,7 +5,7 @@ import AppLogo from "./AppLogo.vue";
 import ProfileMenu from "./ProfileMenu.vue";
 import { useAppNav } from "../composables/useAppNav.js";
 
-const { navLinks, navGroups } = useAppNav();
+const { navLinks, navGroups, isCurrent } = useAppNav();
 // `meta.pinned` pages sit just above the profile instead of with the other pages.
 const pinnedLinks = computed(() => navLinks.value.filter((link) => link.meta.pinned));
 
@@ -36,6 +36,7 @@ const rail = ref(useDisplay().smAndDown.value);
           v-for="link in group.links"
           :key="link.name"
           :to="{ name: link.name }"
+          :active="isCurrent(link)"
           :prepend-icon="link.meta.icon"
           :title="link.meta.nav"
           :aria-label="rail ? link.meta.nav : undefined"
@@ -54,6 +55,7 @@ const rail = ref(useDisplay().smAndDown.value);
           v-for="link in pinnedLinks"
           :key="link.name"
           :to="{ name: link.name }"
+          :active="isCurrent(link)"
           :prepend-icon="link.meta.icon"
           :title="link.meta.nav"
           :aria-label="rail ? link.meta.nav : undefined"

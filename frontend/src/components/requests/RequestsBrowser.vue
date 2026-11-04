@@ -18,7 +18,7 @@ import {
 } from "../../models/requests.js";
 
 /** "table", "week", or "month" — owned by the page so RequestViewToggle can sit in the PageShell header. */
-const view = defineModel("view", { type: String, default: "table" });
+const view = defineModel("view", { type: String, default: "month" });
 
 const props = defineProps({
   requests: { type: Array, default: () => [] },
@@ -184,7 +184,7 @@ const moveCalendar = (direction) => {
     <v-expand-transition>
       <div v-show="showFilters" data-test="filters">
         <v-card border flat class="mb-4 pa-4">
-          <v-row dense>
+          <v-row density="comfortable">
             <v-col cols="12" sm="6" md="3">
               <v-autocomplete
                 v-model="filters.area"

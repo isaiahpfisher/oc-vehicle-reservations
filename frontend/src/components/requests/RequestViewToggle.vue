@@ -1,6 +1,6 @@
 <script setup>
 /** Table / week / month switch for request lists; sits in the PageShell header actions. */
-const view = defineModel({ type: String, default: "table" });
+const view = defineModel({ type: String, default: "month" });
 </script>
 
 <template>

@@ -6,9 +6,8 @@ import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
 import { REQUEST_STATUSES } from "../app/models/vehicleRequest.model.js";
-import { SEED_REQUESTS, seed } from "../scripts/seed.mjs";
+import { SEED_AREAS, SEED_REQUESTS, seed, seedTripMiles } from "../scripts/seed.mjs";
 import { requestInclude } from "../app/helpers/vehicleRequests.js";
-import { savedMiles } from "../app/helpers/mileage.js";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -31,7 +30,7 @@ describe("Feature 8 — Vehicle Request Management seed data", () => {
     const requests = await db.vehicleRequest.findAll({ include: requestInclude() });
     expect(requests).toHaveLength(SEED_REQUESTS.length);
     expect(new Set(requests.map(({ status }) => status))).toEqual(new Set(REQUEST_STATUSES));
-    expect(new Set(requests.map(({ area }) => area.name)).size).toBe(6);
+    expect(new Set(requests.map(({ area }) => area.name)).size).toBe(SEED_AREAS.length);
 
     // The requester test account has requests to look at.
     expect(requests.filter(({ user }) => user.email === "requester@oc.edu").length).toBeGreaterThanOrEqual(3);
@@ -53,11 +52,12 @@ describe("Feature 8 — Vehicle Request Management seed data", () => {
         expect([label, driver.status, driver.licenseExpirationDate >= lastDay]).toEqual([label, "approved", true]);
       }
 
-      // No destination twice in a row; estimated miles are filled in where saved distances allow (no Google key in tests).
+      // No destination twice in a row; estimated miles come from the seed coordinates (Google only with `--google`).
       const stops = [...row.stops].sort((a, b) => a.stopOrder - b.stopOrder).map(({ destination }) => destination);
       const stopIds = stops.map(({ id }) => id);
       expect([label, stopIds.some((id, i) => i > 0 && id === stopIds[i - 1])]).toEqual([label, false]);
-      expect([label, row.estimatedMiles]).toEqual([label, savedMiles(stops)]);
+      expect([label, row.estimatedMiles]).toEqual([label, seedTripMiles(stops.map(({ name }) => name))]);
+      expect([label, row.estimatedMiles > 0]).toEqual([label, true]);
 
       // Approval matches status (FR-005), and vehicles match FR-006 and belong to the request's area.
       const approved = ["awaiting_vehicle", "reserved", "returned"].includes(row.status);

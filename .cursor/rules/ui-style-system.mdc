@@ -75,7 +75,7 @@ For users with no roles besides requesters:
 </v-app>
 ```
 
-For users with additional roles, use a sidebar instead of a menu bar. The sidebar should have the OC Logo at the top and the profile glued to the bottom. It should be collapsible. Its pages are grouped into titled sections (**Trips**, **Fleet**, **Administration**) via route `meta.navGroup`; a section with no pages the user may open is left out, and when collapsed the titles become dividers and each link shows its page name in a tooltip.
+For users with additional roles, use a sidebar instead of a menu bar. The sidebar should have the OC Logo at the top and the profile glued to the bottom. It should be collapsible. Its pages are grouped into titled sections (**Trips**, **Fleet**, **Administration**) via route `meta.navGroup`; a section with no pages the user may open is left out, and when collapsed the titles become dividers and each link shows its page name in a tooltip. The link for the current page stays highlighted on its nested pages (`/drivers/3` highlights **Drivers**); pages under no link (a requester's `/requests/:id`) highlight **My Requests**. The MenuBar follows the same rule.
 
 ```vue
 <v-app>
