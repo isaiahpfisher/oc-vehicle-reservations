@@ -35,11 +35,12 @@ let fx;
 const seed = async () => {
   const athletics = await db.area.create({ name: "Athletics" });
   const music = await db.area.create({ name: "Music" });
+  let phone = 100;
   const driver = (firstName, lastName, overrides = {}) =>
     db.driver.create({
       firstName,
       lastName,
-      phoneNumber: "(405)555-0100",
+      phoneNumber: `405-555-0${phone++}`, // Feature 7: unique, xxx-xxx-xxxx
       licenseState: "OK",
       licenseExpirationDate: "2035-01-01",
       status: "approved",
@@ -747,6 +748,30 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const row = await db.vehicleRequest.findByPk(created.body.id);
       expect(row.approverId).toBeNull();
       expect(row.status).toBe("awaiting_vehicle");
+    });
+  });
+
+  describe("Feature 7 follow-up — Driver deletion guard", () => {
+    it("Cannot delete driver with requests", async () => {
+      const requester = await signIn();
+      const areaAdmin = await signInWithRoles([{ role: "area_admin", areaId: fx.athletics.id }], "aa@example.com");
+      await create(requester.headers, { drivers: [fx.dana.id] });
+      const remove = (id) => request(app).delete(`/api/drivers/${id}`).set(areaAdmin.headers);
+
+      const response = await remove(fx.dana.id);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        message: "Driver is on vehicle requests and can't be deleted. Change their status to former instead.",
+      });
+      expect(await db.driver.findByPk(fx.dana.id)).not.toBeNull();
+
+      // A driver on no request can still be deleted, and a former driver stays on old requests.
+      expect((await remove(fx.sam.id)).status).toBe(200);
+      const former = await request(app).put(`/api/drivers/${fx.dana.id}`).set(areaAdmin.headers).send({ status: "former" });
+      expect(former.status).toBe(200);
+      const { body: mine } = await request(app).get("/api/me/requests").set(requester.headers);
+      expect(mine[0].drivers.map(({ id }) => id)).toEqual([fx.dana.id]);
     });
   });
 });

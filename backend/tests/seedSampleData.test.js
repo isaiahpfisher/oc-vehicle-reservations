@@ -3,7 +3,7 @@
  * Spec: features/feature-8-vehicle-requests.md → Assumptions
  */
 import db from "../app/models/index.js";
-import { SEED_DESTINATIONS, INTERIM_DRIVERS, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
+import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 beforeEach(async () => {
@@ -21,7 +21,7 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     expect(result.message).toContain(`Added sample data: ${SEED_VEHICLES.length} vehicles`);
 
     expect(await db.vehicle.count()).toBe(SEED_VEHICLES.length);
-    expect(await db.driver.count()).toBe(INTERIM_DRIVERS.length);
+    expect(await db.driver.count()).toBe(SEED_DRIVERS.length);
     expect(await db.destination.count()).toBe(SEED_DESTINATIONS.length);
 
     // Vehicles land in their named area; drivers link to seeded accounts by email.
@@ -49,6 +49,6 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     expect((await seed({ keep: ["me@eagles.oc.edu"] })).exitCode).toBe(0);
     expect(await db.vehicleRequest.findOne({ where: { purpose: "Old trip" } })).toBeNull();
     expect(await db.vehicle.count()).toBe(SEED_VEHICLES.length);
-    expect(await db.driver.count()).toBe(INTERIM_DRIVERS.length);
+    expect(await db.driver.count()).toBe(SEED_DRIVERS.length);
   });
 });

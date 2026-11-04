@@ -289,3 +289,70 @@ describe("Feature 3 — User Role Management API", () => {
     });
   });
 });
+
+// Feature 7 — Driver Management (features/feature-7-drivers.md) extends these user endpoints.
+describe("Feature 7 — Driver Management API", () => {
+  const driverRow = (overrides = {}) => ({
+    firstName: "Bob",
+    lastName: "Jones",
+    phoneNumber: "405-425-1234",
+    licenseState: "OK",
+    licenseExpirationDate: "2999-09-01",
+    status: "approved",
+    ...overrides,
+  });
+
+  describe("US-7.2 — View drivers", () => {
+    it("Linked driver shown on user details", async () => {
+      const admin = await signInAdmin();
+      const area = await createArea("Athletics");
+      const other = await createArea("Music");
+      // Several roles: the linked driver must not be lost or repeated across joined role rows.
+      const bob = await createUserWithRoles(
+        [{ role: "area_admin", areaId: area.id }, { role: "area_admin", areaId: other.id }, "maintenance"],
+        { email: "bob@eagles.oc.edu" },
+      );
+      await db.driver.create(driverRow({ userId: bob.body.userId }));
+
+      for (const headers of [bearer(admin.body.token), bearer(bob.body.token)]) {
+        const response = await request(app).get(`/api/users/${bob.body.userId}`).set(headers);
+
+        expect(response.status).toBe(200);
+        expect(response.body.roles).toHaveLength(3);
+        expect(response.body.driver).toEqual({
+          status: "approved",
+          licenseState: "OK",
+          licenseExpirationDate: "2999-09-01",
+          phoneNumber: "405-425-1234",
+        });
+      }
+    });
+
+    it("No linked driver on user details", async () => {
+      const admin = await signInAdmin();
+      const bob = await registerUser({ email: "bob@eagles.oc.edu" });
+      await db.driver.create(driverRow());
+
+      const response = await request(app).get(`/api/users/${bob.body.userId}`).set(bearer(admin.body.token));
+
+      expect(response.status).toBe(200);
+      expect(response.body.driver).toBeNull();
+    });
+  });
+
+  describe("US-7.4 — Edit and delete drivers", () => {
+    it("Deleting a linked user keeps the driver", async () => {
+      const admin = await signInAdmin();
+      const bob = await registerUser({ email: "bob@eagles.oc.edu" });
+      const driver = await db.driver.create(driverRow({ userId: bob.body.userId }));
+
+      const response = await request(app).delete(`/api/users/${bob.body.userId}`).set(bearer(admin.body.token));
+
+      expect(response.status).toBe(204);
+      expect(await db.user.findByPk(bob.body.userId)).toBeNull();
+      await driver.reload();
+      expect(driver.userId).toBeNull();
+      expect(driver.firstName).toBe("Bob");
+    });
+  });
+});

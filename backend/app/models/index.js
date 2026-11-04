@@ -27,7 +27,7 @@ db.role = roleModel(sequelize, Sequelize);
 db.serviceType = serviceTypeModel(sequelize, Sequelize);
 db.destination = destinationModel(sequelize, Sequelize);
 db.vehicle = vehicleModel(sequelize, Sequelize);
-db.driver = driverModel(sequelize, Sequelize); // INTERIM(feature-7)
+db.driver = driverModel(sequelize, Sequelize);
 db.vehicleRequest = vehicleRequestModel(sequelize, Sequelize);
 db.vehicleRequestDestination = vehicleRequestDestinationModel(sequelize, Sequelize);
 db.vehicleRequestDriver = vehicleRequestDriverModel(sequelize, Sequelize);
@@ -90,9 +90,17 @@ db.vehicle.belongsTo(db.vehicleType, {
   onDelete: "RESTRICT",
 });
 
-// INTERIM(feature-7): Feature 7's spec links a driver to at most one user. Remove when Feature 7 merges its own.
-db.user.hasOne(db.driver, { foreignKey: "userId", as: "driver", onDelete: "SET NULL" });
-db.driver.belongsTo(db.user, { foreignKey: "userId", as: "user", onDelete: "SET NULL" });
+db.user.hasOne(db.driver, {
+  foreignKey: "userId",
+  as: "driver",
+  onDelete: "SET NULL",
+});
+
+db.driver.belongsTo(db.user, {
+  foreignKey: "userId",
+  as: "user",
+  onDelete: "SET NULL",
+});
 
 // Feature 8: requests are never deleted, so the rows they point at can't be either (controllers answer 400 first).
 db.user.hasMany(db.vehicleRequest, { foreignKey: "userId", as: "vehicleRequests", onDelete: "RESTRICT" });

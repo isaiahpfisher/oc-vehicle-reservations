@@ -1,6 +1,10 @@
-// INTERIM(feature-7): the `drivers` table from Feature 7's spec, so Feature 8 can validate drivers.
-// Feature 7's model replaces this file when it merges.
 export const DRIVER_STATUSES = ["pending", "approved", "denied", "revoked", "former"];
+
+export const LICENSE_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS",
+  "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC",
+  "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+];
 
 export default (sequelize, Sequelize) => {
   const Driver = sequelize.define("driver", {
@@ -20,6 +24,7 @@ export default (sequelize, Sequelize) => {
     phoneNumber: {
       type: Sequelize.STRING,
       allowNull: false,
+      unique: true,
     },
     licenseState: {
       type: Sequelize.STRING,

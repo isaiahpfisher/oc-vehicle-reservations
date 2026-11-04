@@ -24,11 +24,6 @@ const requestServices = {
   getVehicleOptions(requestId) {
     return apiClient.get(`requests/${requestId}/vehicle-options`);
   },
-
-  // INTERIM(feature-7): move to driverServices.js when Drivers merges. The path is Feature 7's (FR-015).
-  getDrivers() {
-    return apiClient.get("drivers/selectable");
-  },
 };
 
 export default requestServices;

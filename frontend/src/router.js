@@ -10,6 +10,7 @@ import { useAuthStore } from "./stores/auth.js";
  * `meta.public`: open without a session; a signed-in user is sent home instead (Feature 1, FR-005).
  * `meta.roles`: the user needs any one of these (admins always pass); no `meta.roles` = any signed-in user.
  * `meta.nav` / `meta.icon`: label and icon for the MenuBar/Sidebar link, shown only when the user may open the route.
+ * `meta.navGroup`: the Sidebar section the link sits in (NAV_GROUPS in useAppNav.js); links keep the order defined here.
  * `meta.pinned`: the Sidebar shows the link just above the profile instead of with the other pages.
  */
 const router = createRouter({
@@ -28,6 +29,13 @@ const router = createRouter({
       component: MyRequests,
       meta: { nav: "My Requests", icon: "mdi-car-outline", pinned: true },
     },
+    // Trips: planning and approving trips.
+    {
+      path: "/requests",
+      name: "adminRequests",
+      component: () => import("./views/Admin/Requests.vue"),
+      meta: { nav: "Requests", navGroup: "Trips", icon: "mdi-clipboard-list-outline", roles: ["area_admin"] },
+    },
     {
       path: "/requests/new",
       name: "createRequest",
@@ -40,47 +48,49 @@ const router = createRouter({
       props: true,
     },
     {
-      path: "/requests",
-      name: "adminRequests",
-      component: () => import("./views/Admin/Requests.vue"),
-      meta: { nav: "Requests", icon: "mdi-clipboard-list-outline", roles: ["area_admin"] },
+      path: "/drivers",
+      name: "drivers",
+      component: () => import("./views/Drivers.vue"),
+      meta: { nav: "Drivers", navGroup: "Trips", icon: "mdi-card-account-details-outline", roles: ["admin", "area_admin"] },
     },
     {
-      path: "/users",
-      name: "users",
-      component: () => import("./views/users/ListUsers.vue"),
-      meta: { nav: "Users", icon: "mdi-account-multiple-outline", roles: ["admin"] },
+      path: "/drivers/new",
+      name: "driverCreate",
+      component: () => import("./views/DriverForm.vue"),
+      meta: { roles: ["admin", "area_admin"] },
     },
     {
-      path: "/users/:id",
-      name: "userDetails",
-      component: () => import("./views/users/UserDetails.vue"),
+      path: "/drivers/:id",
+      name: "driverDetails",
+      component: () => import("./views/DriverForm.vue"),
       props: true,
-      meta: { roles: ["admin"] },
-    },
-    {
-      path: "/areas",
-      name: "areas",
-      component: () => import("./views/Areas.vue"),
-      meta: { nav: "Areas", icon: "mdi-map-marker-outline", roles: ["admin"] },
-    },
-    {
-      path: "/vehicle-types",
-      name: "vehicle-types",
-      component: () => import("./views/VehicleTypes.vue"),
-      meta: { nav: "Vehicle Types", icon: "mdi-car-outline", roles: ["admin"] },
+      meta: { roles: ["admin", "area_admin"] },
     },
     {
       path: "/destinations",
       name: "destinations",
       component: () => import("./views/Destinations.vue"),
-      meta: { nav: "Destinations", icon: "mdi-map-marker-outline", roles: ["admin", "area_admin"] },
+      meta: { nav: "Destinations", navGroup: "Trips", icon: "mdi-map-marker-outline", roles: ["admin", "area_admin"] },
     },
+    {
+      path: "/destinations/new",
+      name: "destinationCreate",
+      component: () => import("./views/DestinationForm.vue"),
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/destinations/:id",
+      name: "destinationDetails",
+      component: () => import("./views/DestinationForm.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    // Fleet: the vehicles and their upkeep.
     {
       path: "/vehicles",
       name: "vehicles",
       component: () => import("./views/Vehicles.vue"),
-      meta: { nav: "Vehicles", icon: "mdi-car-multiple", roles: ["admin", "area_admin"] },
+      meta: { nav: "Vehicles", navGroup: "Fleet", icon: "mdi-car-multiple", roles: ["admin", "area_admin"] },
     },
     {
       path: "/vehicles/new",
@@ -96,14 +106,41 @@ const router = createRouter({
       meta: { roles: ["admin", "area_admin"] },
     },
     {
+      path: "/vehicle-types",
+      name: "vehicle-types",
+      component: () => import("./views/VehicleTypes.vue"),
+      meta: { nav: "Vehicle Types", navGroup: "Fleet", icon: "mdi-shape-outline", roles: ["admin"] },
+    },
+    {
       path: "/service-types",
       name: "service-types",
       component: () => import("./views/ServiceTypes.vue"),
       meta: {
         nav: "Service Types",
+        navGroup: "Fleet",
         icon: "mdi-wrench-outline",
         roles: ["admin", "area_admin", "maintenance"],
       },
+    },
+    // Administration: who can do what, and where.
+    {
+      path: "/users",
+      name: "users",
+      component: () => import("./views/users/ListUsers.vue"),
+      meta: { nav: "Users", navGroup: "Administration", icon: "mdi-account-multiple-outline", roles: ["admin"] },
+    },
+    {
+      path: "/users/:id",
+      name: "userDetails",
+      component: () => import("./views/users/UserDetails.vue"),
+      props: true,
+      meta: { roles: ["admin"] },
+    },
+    {
+      path: "/areas",
+      name: "areas",
+      component: () => import("./views/Areas.vue"),
+      meta: { nav: "Areas", navGroup: "Administration", icon: "mdi-domain", roles: ["admin"] },
     },
     {
       path: "/:pathMatch(.*)*",

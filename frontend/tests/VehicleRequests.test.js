@@ -8,6 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import areaServices from "../src/services/areaServices.js";
 import destinationServices from "../src/services/destinationServices.js";
+import driverServices from "../src/services/driverServices.js";
 import requestServices from "../src/services/requestServices.js";
 import placeServices from "../src/services/placeServices.js";
 import { calendarTitle, toDateInput } from "../src/models/requests.js";
@@ -29,8 +30,11 @@ vi.mock("../src/services/requestServices.js", () => ({
     createRequest: vi.fn(),
     updateRequest: vi.fn(),
     getVehicleOptions: vi.fn(),
-    getDrivers: vi.fn(),
   },
+}));
+
+vi.mock("../src/services/driverServices.js", () => ({
+  default: { getSelectableDrivers: vi.fn() },
 }));
 
 vi.mock("../src/services/destinationServices.js", () => ({
@@ -177,7 +181,7 @@ beforeEach(async () => {
   signInAs(null);
   vi.resetAllMocks();
   areaServices.getAreas.mockResolvedValue({ data: [athletics, music] });
-  requestServices.getDrivers.mockResolvedValue({ data: [dana, sam] });
+  driverServices.getSelectableDrivers.mockResolvedValue({ data: [dana, sam] });
   destinationServices.getSelectableDestinations.mockResolvedValue({ data: [okc, tulsa] });
   requestServices.getMyRequests.mockResolvedValue({ data: [] });
   requestServices.getRequests.mockResolvedValue({ data: [] });

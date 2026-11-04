@@ -12,6 +12,7 @@ import PageShell from "../../components/layout/PageShell.vue";
 import DetailLayout from "../../components/layout/DetailLayout.vue";
 import DetailHeader from "../../components/layout/DetailHeader.vue";
 import SectionCard from "../../components/layout/SectionCard.vue";
+import { driverStatusLabel } from "../../models/drivers.js";
 import { fullName, initials, memberSince, roleLabel, sortRolesForDisplay } from "../../models/users.js";
 
 const props = defineProps({
@@ -41,6 +42,18 @@ const breadcrumbs = computed(() => [
   { title: "Users", to: { name: "users" } },
   { title: name.value, disabled: true },
 ]);
+
+const driverRows = computed(() => {
+  const driver = user.value?.driver;
+  if (!driver) return [];
+
+  return [
+    { label: "Status", value: driverStatusLabel(driver.status) },
+    { label: "License state", value: driver.licenseState },
+    { label: "License expiration", value: driver.licenseExpirationDate },
+    { label: "Phone number", value: driver.phoneNumber },
+  ];
+});
 
 // Placeholders for later features (see "Delivered to later features" in the Feature 3 spec).
 const tabs = computed(() => [
@@ -109,7 +122,13 @@ watch(userId, (id) => Promise.all([loadUser(id), loadAreas()]), { immediate: tru
         <UserAccessCard :user :areas :is-self="isSelf" @saved="onRolesSaved" />
 
         <SectionCard title="Driver">
-          <ComingSoon compact icon="mdi-card-account-details-outline" text="Driver status and license details." />
+          <div v-if="user.driver" class="d-flex flex-column ga-2 text-body-medium">
+            <div v-for="row in driverRows" :key="row.label" class="d-flex justify-space-between ga-4">
+              <span class="text-medium-emphasis">{{ row.label }}</span>
+              <span>{{ row.value }}</span>
+            </div>
+          </div>
+          <div v-else class="text-body-medium text-medium-emphasis">No linked driver.</div>
         </SectionCard>
 
         <SectionCard

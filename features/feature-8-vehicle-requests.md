@@ -116,7 +116,8 @@
 - **FR-007**: Estimated mileage will be calculated using Google APIs. Without them (no `GOOGLE_MAPS_API_KEY`, or the request fails), only a trip to a single saved destination is estimated (twice its saved distance from campus); any other trip's mileage is unknown (`null`, shown as "Unknown") rather than an understated guess. An unknown estimate is retried the next time the request is edited.
 - **FR-008**: The custom address dialog offers address search (Google Places Autocomplete), proxied through the backend so the key stays server-side. Searches wait for 3+ characters and a pause in typing, share one session token per address, and end with a Place Details lookup of address fields only (Essentials tier). Picking a result fills the address fields, which stay editable. Without a key, or when Google fails, the fields are filled in by hand as before.
 - **FR-009**: A trip has at most 10 destinations (Google Routes bills more than 10 intermediate stops at a higher tier). The form stops offering more, and the API rejects more with a 400.
-- **FR-010**: The Destination Management form (Feature 6) uses the same address search as FR-008. Picking a result fills the address fields and name (keeping a name already typed), and fills **Miles from campus** with the one-way driving distance from campus through a separate Google Routes lookup limited to admins and area admins. All fields stay editable; without a key, or when Google fails, they are typed in as before. Feature 6's API is unchanged.
+- **FR-010**: The Destination Management form (Feature 6) moves from the create and edit dialogs to its own page, laid out like the Driver form (Feature 7), and uses the same address search as FR-008. Picking a result fills the address fields and name (keeping a name already typed), and fills **Miles from campus** with the one-way driving distance from campus through a separate Google Routes lookup limited to admins and area admins. All fields stay editable; without a key, or when Google fails, they are typed in as before. Feature 6's fields, validation messages, and API are unchanged.
+- **FR-011**: Destination Management (Feature 6) gets a search box and an availability filter, like the Drivers list (Feature 7). Search matches every word against the name, address lines, city, state, and ZIP code; the filter shows **Official** or **Unofficial** destinations. Both apply together, reset the table to its first page, and show **"No destinations match your search."** when nothing matches. Filtering happens in the browser on Feature 6's list; the API is unchanged.
 
 ---
 
@@ -130,7 +131,7 @@
 - Requests use Features 4–6 directly. Any signed-in user can list official destinations through `GET /api/destinations/selectable`; Feature 6's own routes stay limited to admins and area admins.
 - A custom stop follows Feature 6's rules: it needs a street address, and it is saved as an unofficial destination (`is_saved` false) that admins can review. An unofficial destination can't be chosen for a request unless the request already has it.
 - Since requests are never deleted, deleting something a request uses returns `400`: a destination, vehicle, or area, or the user who made the request. This changes Feature 6's "delete doesn't check other rows" and Feature 3's user deletion. Deleting an approver clears `approver_id`.
-- **INTERIM** (until Feature 7 merges; `dev` has its spec only): the `drivers` table from Feature 7's spec, `GET /api/drivers/selectable` (its FR-015), and sample drivers in `npm run seed`. Each piece is marked `INTERIM(feature-7)` and is removed when Feature 7 merges. The **Cannot delete driver with requests** scenario is tested when `DELETE /api/drivers/:driverId` exists; the database already restricts it.
+- Drivers come from Feature 7: the request form lists `GET /api/drivers/selectable` (its FR-015), and a request shows drivers by name only. Deleting a driver on any request returns `400` (see **Feature 7 follow-up — Driver deletion guard**).
 - **INTERIM** (until Features 9, 11, and 13 merge): every vehicle reports as in service with unknown miles until service (`backend/app/helpers/vehicleService.js`).
 
 ## Edge Cases
@@ -275,6 +276,17 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - The header names the trip by its first destination ("Trip to BOK Center +2 more"), not its purpose. Purpose is long-form text and shows in the basic fields section, editable or not.
 
 - **Error state:** `<v-alert type="error">` for API failures.
+
+### [View: Destination Form] — route names `destinationCreate` (`/destinations/new`) and `destinationDetails` (`/destinations/:id`) (`DestinationForm.vue`)
+
+Replaces Feature 6's create and edit dialogs (FR-010). Admins and area admins only, like Feature 6's view.
+
+- Register `/destinations/new` before `/destinations/:id`
+- On Destination Management, **+ New Destination** opens `/destinations/new`; a row's name and its **Edit destination** icon open `/destinations/:id`. Delete stays a confirmation dialog on the list.
+- Destination Management has a search box (**Search destinations by name or address...**) and a **Filter by availability** select above the table (FR-011).
+- Heading: **New Destination**, or the destination's name when editing. Breadcrumbs lead back to **Destinations**.
+- The form is grouped into `FormSection`s like the Driver form: **Find on Google Maps** (address search, FR-008), **Name**, **Address** (address line 1 and 2, city, state, ZIP code), **Distance** (miles from campus, filled by FR-010's lookup), **Availability** (**Official** switch, on for a new destination). **Cancel** and **Save** sit below the last section and return to Destination Management.
+- Field errors use Feature 6's messages and show under the field; an API failure shows in a `<v-alert type="error">` and the page stays open.
 
 ---
 
@@ -628,6 +640,16 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 | US-8.8 | Admin assigns vehicles to a request | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin assigns vehicles to a request |
 | US-8.9 | Estimated mileage is added when a request is created | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Estimated mileage is added when a request is created |
 | US-8.9 | Estimated mileage updates when destinations change | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Estimated mileage updates when destinations change |
+| Feature 7 follow-up | Cannot delete driver with requests | `backend/tests/vehicleRequests.test.js` | Cannot delete driver with requests |
+| FR-011 | Search destinations by name or address | `frontend/tests/Destinations.test.js` | Search destinations by name or address |
+| FR-011 | Filter destinations by availability | `frontend/tests/Destinations.test.js` | Filter destinations by availability |
+| FR-010 | Destination name opens its page | `frontend/tests/Destinations.test.js` | Destination name opens its page |
+| FR-010 | Cancel returns to the destinations list without saving | `frontend/tests/Destinations.test.js` | Cancel returns to the destinations list without saving |
+| FR-010 | Stays on the page and shows the API error when saving fails | `frontend/tests/Destinations.test.js` | Stays on the page and shows the API error when saving fails |
+| FR-010 | Picking an address fills the form and looks up miles from campus | `frontend/tests/Destinations.test.js` | Picking an address fills the form and looks up miles from campus |
+| FR-010 | Keeps a name the user already typed | `frontend/tests/Destinations.test.js` | Keeps a name the user already typed |
+| FR-010 | Falls back to typing miles when the lookup fails | `frontend/tests/Destinations.test.js` | Falls back to typing miles when the lookup fails |
+| FR-010 | Ignores a distance for a destination the user has moved on from | `frontend/tests/Destinations.test.js` | Ignores a distance for a destination the user has moved on from |
 
 ## Definition of Done
 

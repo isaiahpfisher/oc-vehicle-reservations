@@ -2,7 +2,7 @@ import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { ROLE_NAMES } from "../models/role.model.js";
 import { parseId, requiredInt } from "../helpers/fields.js";
-import { rolesInclude, toUserResponse } from "../helpers/users.js";
+import { driverInclude, rolesInclude, toLinkedDriverResponse, toUserResponse } from "../helpers/users.js";
 import { isAdmin } from "../authorization/authorization.js";
 
 const exports = {};
@@ -71,12 +71,12 @@ exports.findOne = async (req, res) => {
       return notFound(res, userId);
     }
 
-    const user = await db.user.findByPk(userId, { include: rolesInclude() });
+    const user = await db.user.findByPk(userId, { include: [...rolesInclude(), ...driverInclude()] });
     if (!user) {
       return notFound(res, userId);
     }
 
-    return res.send(toUserResponse(user));
+    return res.send({ ...toUserResponse(user), driver: toLinkedDriverResponse(user.driver) });
   } catch (err) {
     logger.error(`User findOne failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch user." });

@@ -45,6 +45,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+const sectionTitles = (list) => [...list.querySelectorAll(".v-list-subheader")].map((header) => header.textContent.trim());
+
 describe("App shell (ui-style-system.mdc)", () => {
   it("shows the MenuBar with logo and profile menu for requesters", async () => {
     signIn([]);
@@ -68,19 +70,21 @@ describe("App shell (ui-style-system.mdc)", () => {
 
     const content = sidebar.querySelector(".v-navigation-drawer__content");
     expect(content.textContent).toContain("OC");
-    // Feature 8 (US-8.2) made home the My Requests page and added Requests for area admins.
-    // Feature 5 adds Vehicles for admin and area admin. Feature 12 adds Service Types.
-    // Feature 6 (US-6.5) adds Destinations for admin and area admin.
-    // Feature 12 (US-12.5) adds Service Types for admin, area admin, and maintenance.
-    expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
+    // Pages come from route `meta.nav` (Features 3–8, 12), grouped into sections by `meta.navGroup`.
+    const mainNav = content.querySelector('[aria-label="Main navigation"]');
+    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
       "Requests",
-      "Users",
-      "Areas",
-      "Vehicle Types",
+      "Drivers",
       "Destinations",
       "Vehicles",
+      "Vehicle Types",
       "Service Types",
+      "Users",
+      "Areas",
     ]);
+    expect(sectionTitles(mainNav)).toEqual(["Trips", "Fleet", "Administration"]);
+    expect(mainNav.textContent.indexOf("Trips")).toBeLessThan(mainNav.textContent.indexOf("Requests"));
+    expect(mainNav.textContent.indexOf("Administration")).toBeLessThan(mainNav.textContent.indexOf("Users"));
 
     // My Requests (`meta.pinned`) and the profile are glued to the bottom (drawer append slot), My Requests first.
     const bottom = sidebar.querySelector(".v-navigation-drawer__append");
@@ -89,6 +93,15 @@ describe("App shell (ui-style-system.mdc)", () => {
     const profile = bottom.querySelector('[aria-label="Open profile menu"]');
     expect(profile.textContent).toContain("Jane Doe");
     expect(pinned.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("leaves out Sidebar sections the user has no pages in", async () => {
+    signIn([{ id: 1, role: "maintenance", areaId: null, area: null }]);
+    await openApp("/");
+
+    const mainNav = drawer().querySelector('[aria-label="Main navigation"]');
+    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual(["Service Types"]);
+    expect(sectionTitles(mainNav)).toEqual(["Fleet"]);
   });
 
   it("collapses and expands the Sidebar", async () => {
@@ -100,10 +113,20 @@ describe("App shell (ui-style-system.mdc)", () => {
     await settle();
     expect(drawer().classList).toContain("v-navigation-drawer--rail");
     expect(drawer().textContent).not.toContain("Vehicle Registration");
+    // Collapsed, section titles give way to icons only.
+    expect(drawer().querySelectorAll(".v-list-subheader")).toHaveLength(0);
+    // Collapsed links name their page in a tooltip; expanded, the label shows, so tooltips stay off.
+    const tooltips = () =>
+      wrapper.findComponent({ name: "VNavigationDrawer" }).findAllComponents({ name: "VTooltip" }).map((tooltip) => tooltip.props());
+    expect(tooltips().map(({ text, disabled }) => [text, disabled])).toEqual([
+      ["Service Types", false],
+      ["My Requests", false],
+    ]);
 
     drawer().querySelector('[aria-label="Expand sidebar"]').click();
     await settle();
     expect(drawer().classList).not.toContain("v-navigation-drawer--rail");
+    expect(tooltips().every(({ disabled }) => disabled)).toBe(true);
   });
 
   it("signs out from the Sidebar profile menu", async () => {

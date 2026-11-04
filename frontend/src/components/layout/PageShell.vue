@@ -15,11 +15,13 @@ defineProps({
   error: { type: String, default: "" },
   /** Narrow single-column pages (e.g. forms): content max width in px. */
   maxWidth: { type: [Number, String], default: null },
+  /** Center a narrow page with even space on both sides instead of aligning it left. */
+  centered: Boolean,
 });
 </script>
 
 <template>
-  <v-container class="py-8" :class="{ 'page-shell--narrow': maxWidth }" :style="maxWidth ? { maxWidth: `${maxWidth}px` } : undefined">
+  <v-container class="py-8" :class="{ 'page-shell--narrow': maxWidth && !centered }" :style="maxWidth ? { maxWidth: `${maxWidth}px` } : undefined">
     <v-breadcrumbs v-if="breadcrumbs.length" :items="breadcrumbs" class="px-0 pt-0" />
 
     <div v-if="title || $slots.actions" class="d-flex flex-wrap align-center ga-4 mb-6">

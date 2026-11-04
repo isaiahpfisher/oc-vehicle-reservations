@@ -1,6 +1,6 @@
 /**
  * Feature 3 — FR-016: replace users, sessions, roles, and areas with development seed data.
- * Feature 8 adds sample vehicle types, vehicles, destinations, and vehicle requests, plus INTERIM drivers until Feature 7 merges.
+ * Feature 8 adds sample vehicle types, vehicles, drivers, destinations, and vehicle requests.
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...]
  */
 import path from "path";
@@ -115,25 +115,22 @@ export const SEED_VEHICLES = [
   vehicle("Facilities", "FAC-G02", "Golf Cart", "Club Car", "Carryall 502", 2022, 2),
 ];
 
-/*
- * INTERIM(feature-7): Feature 7's seed data replaces this. Covers every status, an expired license, and a driver with no
- * account. Feature 7's `former` status is included too.
- */
-export const INTERIM_DRIVERS = [
-  { firstName: "Riley", lastName: "Requester", email: "requester@oc.edu", phoneNumber: "(405)555-0001", licenseState: "OK", licenseExpirationDate: "2029-03-15", status: "approved" },
-  { firstName: "Taylor", lastName: "Athletics", email: "areaadmin@oc.edu", phoneNumber: "(405)555-0002", licenseState: "OK", licenseExpirationDate: "2031-01-31", status: "approved" },
-  { firstName: "Marcus", lastName: "Bell", email: "marcus.bell@oc.edu", phoneNumber: "(405)555-0003", licenseState: "OK", licenseExpirationDate: "2028-09-30", status: "approved" },
-  { firstName: "Elena", lastName: "Ruiz", email: "elena.ruiz@oc.edu", phoneNumber: "(405)555-0004", licenseState: "OK", licenseExpirationDate: "2027-02-28", status: "approved" },
-  { firstName: "Tom", lastName: "Garrison", email: "tom.garrison@oc.edu", phoneNumber: "(405)555-0005", licenseState: "OK", licenseExpirationDate: "2030-12-31", status: "approved" },
-  { firstName: "Noah", lastName: "Patel", email: "noah.patel@oc.edu", phoneNumber: "(405)555-0006", licenseState: "OK", licenseExpirationDate: "2032-04-30", status: "approved" },
-  { firstName: "Grace", lastName: "Kim", email: "grace.kim@oc.edu", phoneNumber: "(405)555-0007", licenseState: "OK", licenseExpirationDate: "2031-07-31", status: "approved" },
-  { firstName: "Laura", lastName: "Simmons", email: "laura.simmons@oc.edu", phoneNumber: "(405)555-0008", licenseState: "OK", licenseExpirationDate: "2026-11-15", status: "approved" },
-  { firstName: "Hannah", lastName: "Lee", email: "hannah.lee@oc.edu", phoneNumber: "(405)555-0009", licenseState: "OK", licenseExpirationDate: "2026-09-30", status: "approved" },
-  { firstName: "Jacob", lastName: "Miller", email: "jacob.miller@oc.edu", phoneNumber: "(405)555-0010", licenseState: "OK", licenseExpirationDate: "2029-05-01", status: "pending" },
-  { firstName: "Ethan", lastName: "Brooks", email: "ethan.brooks@oc.edu", phoneNumber: "(405)555-0011", licenseState: "OK", licenseExpirationDate: "2030-01-01", status: "denied" },
-  { firstName: "Sophia", lastName: "Nguyen", email: "sophia.nguyen@oc.edu", phoneNumber: "(405)555-0012", licenseState: "OK", licenseExpirationDate: "2029-08-01", status: "revoked" },
-  { firstName: "Wes", lastName: "Hart", email: null, phoneNumber: "(405)555-0014", licenseState: "OK", licenseExpirationDate: "2030-03-31", status: "former" },
-  { firstName: "Frank", lastName: "Delgado", email: null, phoneNumber: "(405)555-0013", licenseState: "OK", licenseExpirationDate: "2029-10-31", status: "approved" },
+/* Drivers (Feature 7) cover every status, an expired license, one expiring soon, and a driver with no account. */
+export const SEED_DRIVERS = [
+  { firstName: "Riley", lastName: "Requester", email: "requester@oc.edu", phoneNumber: "405-555-0001", licenseState: "OK", licenseExpirationDate: "2029-03-15", status: "approved" },
+  { firstName: "Taylor", lastName: "Athletics", email: "areaadmin@oc.edu", phoneNumber: "405-555-0002", licenseState: "OK", licenseExpirationDate: "2031-01-31", status: "approved" },
+  { firstName: "Marcus", lastName: "Bell", email: "marcus.bell@oc.edu", phoneNumber: "405-555-0003", licenseState: "OK", licenseExpirationDate: "2028-09-30", status: "approved" },
+  { firstName: "Elena", lastName: "Ruiz", email: "elena.ruiz@oc.edu", phoneNumber: "405-555-0004", licenseState: "OK", licenseExpirationDate: "2027-02-28", status: "approved" },
+  { firstName: "Tom", lastName: "Garrison", email: "tom.garrison@oc.edu", phoneNumber: "405-555-0005", licenseState: "OK", licenseExpirationDate: "2030-12-31", status: "approved" },
+  { firstName: "Noah", lastName: "Patel", email: "noah.patel@oc.edu", phoneNumber: "405-555-0006", licenseState: "OK", licenseExpirationDate: "2032-04-30", status: "approved" },
+  { firstName: "Grace", lastName: "Kim", email: "grace.kim@oc.edu", phoneNumber: "405-555-0007", licenseState: "OK", licenseExpirationDate: "2031-07-31", status: "approved" },
+  { firstName: "Laura", lastName: "Simmons", email: "laura.simmons@oc.edu", phoneNumber: "405-555-0008", licenseState: "OK", licenseExpirationDate: "2026-11-15", status: "approved" },
+  { firstName: "Hannah", lastName: "Lee", email: "hannah.lee@oc.edu", phoneNumber: "405-555-0009", licenseState: "OK", licenseExpirationDate: "2026-09-30", status: "approved" },
+  { firstName: "Jacob", lastName: "Miller", email: "jacob.miller@oc.edu", phoneNumber: "405-555-0010", licenseState: "OK", licenseExpirationDate: "2029-05-01", status: "pending" },
+  { firstName: "Ethan", lastName: "Brooks", email: "ethan.brooks@oc.edu", phoneNumber: "405-555-0011", licenseState: "OK", licenseExpirationDate: "2030-01-01", status: "denied" },
+  { firstName: "Sophia", lastName: "Nguyen", email: "sophia.nguyen@oc.edu", phoneNumber: "405-555-0012", licenseState: "OK", licenseExpirationDate: "2029-08-01", status: "revoked" },
+  { firstName: "Wes", lastName: "Hart", email: null, phoneNumber: "405-555-0014", licenseState: "OK", licenseExpirationDate: "2030-03-31", status: "former" },
+  { firstName: "Frank", lastName: "Delgado", email: null, phoneNumber: "405-555-0013", licenseState: "OK", licenseExpirationDate: "2029-10-31", status: "approved" },
 ];
 
 const destination = (name, addressLine1, city, state, zipCode, milesFromCampus, isSaved = true) => ({
@@ -182,10 +179,10 @@ const seedSampleTables = async ({ areaIds, transaction }) => {
     { transaction },
   );
 
-  const users = await db.user.findAll({ where: { email: INTERIM_DRIVERS.map(({ email }) => email).filter(Boolean) }, transaction });
+  const users = await db.user.findAll({ where: { email: SEED_DRIVERS.map(({ email }) => email).filter(Boolean) }, transaction });
   const userIds = Object.fromEntries(users.map((user) => [user.email, user.id]));
   await db.driver.bulkCreate(
-    INTERIM_DRIVERS.map(({ email, ...fields }) => ({
+    SEED_DRIVERS.map(({ email, ...fields }) => ({
       ...fields,
       userId: userIds[email] ?? null,
       approvedAt: fields.status === "approved" ? new Date() : null,
@@ -396,7 +393,7 @@ export const seed = async ({ keep = [] } = {}) => {
     exitCode: 0,
     message: [
       `Seeded ${SEED_AREAS.length} areas and ${SEED_USERS.length} users.`,
-      `Added sample data: ${SEED_VEHICLES.length} vehicles, ${INTERIM_DRIVERS.length} drivers, ${SEED_DESTINATIONS.length} destinations.`,
+      `Added sample data: ${SEED_VEHICLES.length} vehicles, ${SEED_DRIVERS.length} drivers, ${SEED_DESTINATIONS.length} destinations.`,
       `Added ${SEED_REQUESTS.length} vehicle requests.`,
       kept.length ? `Kept: ${kept.join(", ")}.` : "",
       missing.length ? `Not found (nothing kept): ${missing.join(", ")}.` : "",
