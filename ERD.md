@@ -162,11 +162,12 @@ erDiagram
 
     MAINTENANCE_NEED {
       int id PK
-      int issue_report_id FK "optional"
+      int issue_report_id FK "optional" "unique"
       int author_id FK
       int vehicle_id FK
       int assignee_id FK "optional"
-      text description
+      string title
+      text description "optional"
       boolean out_of_service
       enum priority "high, medium, low, none"
       enum status "open, in_progress, completed, cancelled"
