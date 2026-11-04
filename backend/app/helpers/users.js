@@ -22,6 +22,26 @@ const toRoleResponse = (role) => ({
 /** Roles in display-stable order, as returned by the API. */
 export const toRolesResponse = (roles = []) => [...roles].sort(compareRoles).map(toRoleResponse);
 
+/** Sequelize `include` that loads a user's linked driver. */
+export const driverInclude = () => [
+  {
+    model: db.driver,
+    as: "driver",
+    attributes: ["id", "status", "licenseState", "licenseExpirationDate", "phoneNumber"],
+  },
+];
+
+/** The linked driver as shown on a user (Feature 7, FR-020), or `null`. */
+export const toLinkedDriverResponse = (driver) =>
+  driver
+    ? {
+        status: driver.status,
+        licenseState: driver.licenseState,
+        licenseExpirationDate: driver.licenseExpirationDate,
+        phoneNumber: driver.phoneNumber,
+      }
+    : null;
+
 /** Flat user payload with roles (no Sequelize instance internals). */
 export const toUserResponse = (user) => ({
   id: user.id,

@@ -68,6 +68,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     // Feature 5 adds Vehicles for admin and area admin. Feature 12 adds Service Types.
     // Feature 6 (US-6.5) adds Destinations for admin and area admin.
     // Feature 12 (US-12.5) adds Service Types for admin, area admin, and maintenance.
+    // Feature 7 (US-7.5) adds Drivers for admin and area admin.
     expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
       "Home",
       "Users",
@@ -75,6 +76,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Vehicle Types",
       "Destinations",
       "Vehicles",
+      "Drivers",
       "Service Types",
     ]);
 

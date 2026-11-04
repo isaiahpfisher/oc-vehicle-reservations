@@ -94,10 +94,11 @@ Build every routed view from the shared shells in `frontend/src/components/layou
 
 | Component | Use for | Key props / slots |
 | --- | --- | --- |
-| `PageShell` | The outer frame of **every** view | `title`, `subtitle`, `breadcrumbs` (required on nested pages); `#actions` for header CTAs (e.g. **+ New Vehicle**); `loading` / `error` for whole-page loads (`#loading` slot for a custom skeleton); `maxWidth` for narrow single-column pages |
+| `PageShell` | The outer frame of **every** view | `title`, `subtitle`, `breadcrumbs` (required on nested pages); `#actions` for header CTAs (e.g. **+ New Vehicle**); `loading` / `error` for whole-page loads (`#loading` slot for a custom skeleton); `maxWidth` for narrow single-column pages (aligned left; add `centered` for even space on both sides) |
 | `SectionCard` | Any titled card of content or settings | `title`, `subtitle`; `#append` for a header CTA; default slot = body; `#actions` = footer buttons under a divider (secondary/cancel first, primary last) |
 | `DetailHeader` | The identity card at the top of a detail page | `title` (rendered as the page `h2`), `subtitle`, `meta`, `initials` or `icon`; `#append` for status/role chips |
 | `DetailLayout` | Detail page body | `#header` (a `DetailHeader`), `#aside` (narrow column: what the record is / its settings, as `SectionCard`s), default slot (wide column: tabs and tables of related activity) |
+| `FormSection` | One group of fields on a form page (e.g. `DriverForm.vue`) | `title`, `subtitle` on the left; default slot = the fields on the right, vertically centered beside them (use `hide-details="auto"` on fields so empty message space doesn't throw off the centering). Stacks on small screens; consecutive sections get a divider. Put **Cancel** / **Save** after the last section. |
 
 Pair them with the existing shared pieces in `components/common/`:
 

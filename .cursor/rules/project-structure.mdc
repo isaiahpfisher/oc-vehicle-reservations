@@ -15,7 +15,7 @@ oc-vehicle-reservations/
     src/
       views/                 # Route-level pages
       components/            # Reusable UI (forms, nav, dialogs)
-        layout/              # Page shells: PageShell, SectionCard, DetailHeader, DetailLayout (see ui-style-system.mdc)
+        layout/              # Page shells: PageShell, SectionCard, DetailHeader, DetailLayout, FormSection (see ui-style-system.mdc)
         common/              # ListState, ComingSoon, ConfirmModal/ConfirmProvider
       services/              # Axios API modules (*Services.js)
       composables/           # useRequest, useConfirm, useRoles, …

@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -83,6 +83,24 @@ Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissi
 
 JSON keys are the camelCase names above.
 
+## `drivers`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `userId` (`user_id`) | INTEGER | Null when there is no linked user. References `users.id`. Unique when not null. Set to null when the user is deleted. |
+| `firstName` (`first_name`) | STRING | Required, trimmed, max 255 |
+| `lastName` (`last_name`) | STRING | Required, trimmed, max 255 |
+| `phoneNumber` (`phone_number`) | STRING | Required, trimmed, unique. Format `xxx-xxx-xxxx` |
+| `licenseState` (`license_state`) | STRING | Required. A state abbreviation (the 50 states and `DC`) |
+| `licenseExpirationDate` (`license_expiration_date`) | DATEONLY | Required. `yyyy-mm-dd`. Past dates are allowed |
+| `approvedAt` (`approved_at`) | DATE | Set by the server. The time the driver became `approved`; null while any other status |
+| `status` | ENUM | Required. `pending`, `approved`, `denied`, `revoked`, or `former`. Defaults to `pending` |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+JSON keys are the camelCase names above.
+
 ## `service_types`
 
 | Column | Type | Rules |
@@ -121,5 +139,6 @@ The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, a
 - An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
 - An area has many vehicles. A vehicle belongs to one area. The area cannot be deleted while it still has vehicles.
 - A vehicle type has many vehicles. A vehicle belongs to one vehicle type. The vehicle type cannot be deleted while it still has vehicles.
+- A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
 - Service types have no associations.
 - Destinations have no associations.

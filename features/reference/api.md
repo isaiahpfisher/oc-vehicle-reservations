@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -40,9 +40,9 @@ User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
 | `GET` | `/api/users` | Admin | `200` array of users, sorted by last then first name. |
-| `GET` | `/api/users/:id` | Self or admin | `200` with that user. Another user (non-admin) → `404`. |
+| `GET` | `/api/users/:id` | Self or admin | `200` with that user, plus `driver`: `{ status, licenseState, licenseExpirationDate, phoneNumber }` for the linked driver, or `null`. Another user (non-admin) → `404`. |
 | `PUT` | `/api/users/:id` | Admin | `200` with the user. Body `{ "roles": [{ "role": "maintenance" }, { "role": "area_admin", "areaId": 2 }] }` replaces all roles in one transaction. Name and email in the body are ignored. |
-| `DELETE` | `/api/users/:id` | Admin | `204` with no body. Deletes the user's sessions and roles. |
+| `DELETE` | `/api/users/:id` | Admin | `204` with no body. Deletes the user's sessions and roles. A linked driver is kept with `userId` set to `null`. |
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -143,6 +143,42 @@ Success body: `{ "id", "areaId", "vehicleTypeId", "universityId", "make", "model
 | Status is not `active` or `retired` | `400` | `{ "message": "Invalid status." }` |
 | `:vehicleId` is not an integer | `400` | `{ "message": "Invalid vehicle id." }` |
 | Vehicle id does not exist | `404` | `{ "message": "Vehicle with id=… not found." }` |
+
+## Drivers
+
+Every route requires a Bearer token. Every route except `GET /api/drivers/selectable` also requires `admin` or `area_admin` (`authorizeRoles("admin", "area_admin")`). Admins pass that check. Drivers are global: an area admin can read and change every driver.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/drivers` | Admin or area admin | `200` array of drivers, ordered by last name, then first name. |
+| `GET` | `/api/drivers/selectable` | Bearer | `200` array of `{ id, firstName, lastName }` for `approved` drivers whose license expires today or later, ordered the same way. |
+| `GET` | `/api/drivers/available-users` | Admin or area admin | `200` array of `{ id, firstName, lastName, email }` for users with no driver, ordered by last name, then first name. `?driverId=` also includes that driver's linked user. |
+| `GET` | `/api/drivers/:driverId` | Admin or area admin | `200` with one driver. |
+| `POST` | `/api/drivers` | Admin or area admin | `201` with the created driver. |
+| `PUT` | `/api/drivers/:driverId` | Admin or area admin | `200` with the updated driver. A field omitted from the body keeps its stored value. A blank `userId` unlinks the user. |
+| `DELETE` | `/api/drivers/:driverId` | Admin or area admin | `200` `{ "message": "Driver deleted successfully." }`. |
+
+Create body: `{ "userId", "firstName", "lastName", "phoneNumber", "licenseState", "licenseExpirationDate", "status" }`. The same keys are accepted with underscores (`user_id`, `first_name`). `userId` is optional. A blank `status` is saved as `pending`.
+
+`approvedAt` is set by the server and ignored in request bodies: the current time when `status` becomes `approved`, and `null` when it changes to anything else.
+
+Success body: `{ "id", "userId", "firstName", "lastName", "phoneNumber", "licenseState", "licenseExpirationDate", "status", "approvedAt", "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Unknown or non-integer `userId` | `400` | `{ "message": "User does not exist." }` |
+| `userId` linked to another driver | `400` | `{ "message": "User is already linked to a driver." }` |
+| `phoneNumber` used by another driver | `400` | `{ "message": "Phone number already taken." }` |
+| Missing or whitespace-only first name, last name, phone number, license state, or expiration date | `400` | `{ "message": "Missing first name." }` and the matching message for that field |
+| First or last name longer than 255 characters after trim | `400` | `{ "message": "First name too long." }` or `{ "message": "Last name too long." }` |
+| Phone number not in format `xxx-xxx-xxxx` | `400` | `{ "message": "Phone number must be in format 'xxx-xxx-xxxx'." }` |
+| License state is not a state abbreviation | `400` | `{ "message": "Invalid license state." }` |
+| Expiration date is not a real `yyyy-mm-dd` date | `400` | `{ "message": "License expiration date must be in format 'yyyy-mm-dd'." }` |
+| Status is not `pending`, `approved`, `denied`, `revoked`, or `former` | `400` | `{ "message": "Invalid status." }` |
+| `:driverId` or `?driverId=` is not an integer | `400` | `{ "message": "Invalid driver id." }` |
+| Driver id does not exist | `404` | `{ "message": "Driver with id=… not found." }` |
 
 ## Service types
 

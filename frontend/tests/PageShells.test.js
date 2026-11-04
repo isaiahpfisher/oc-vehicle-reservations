@@ -8,6 +8,7 @@ import PageShell from "../src/components/layout/PageShell.vue";
 import SectionCard from "../src/components/layout/SectionCard.vue";
 import DetailHeader from "../src/components/layout/DetailHeader.vue";
 import DetailLayout from "../src/components/layout/DetailLayout.vue";
+import FormSection from "../src/components/layout/FormSection.vue";
 import { mountWithPlugins } from "./testUtils.js";
 
 const mountShell = async (component, props = {}, slots = {}) => (await mountWithPlugins(component, { props, slots })).wrapper;
@@ -54,6 +55,14 @@ describe("Page shells (ui-style-system.mdc)", () => {
       const wrapper = await mountShell(PageShell, { title: "Form", maxWidth: 768 });
 
       expect(wrapper.find(".v-container").attributes("style")).toContain("max-width: 768px");
+      expect(wrapper.find(".v-container").classes()).toContain("page-shell--narrow");
+    });
+
+    it("centers a narrow page when asked", async () => {
+      const wrapper = await mountShell(PageShell, { title: "Form", maxWidth: 768, centered: true });
+
+      expect(wrapper.find(".v-container").attributes("style")).toContain("max-width: 768px");
+      expect(wrapper.find(".v-container").classes()).not.toContain("page-shell--narrow");
     });
   });
 
@@ -104,6 +113,32 @@ describe("Page shells (ui-style-system.mdc)", () => {
       const wrapper = await mountShell(DetailHeader, { title: "Van 12", icon: "mdi-van-passenger" });
 
       expect(wrapper.find(".v-avatar .v-icon").classes()).toContain("mdi-van-passenger");
+    });
+  });
+
+  describe("FormSection", () => {
+    it("puts the title and description beside the fields, centered vertically and stacking on small screens", async () => {
+      const wrapper = await mountShell(
+        FormSection,
+        { title: "Name", subtitle: "How the driver appears." },
+        { default: () => h("input", { class: "field" }) },
+      );
+
+      expect(wrapper.find("section").exists()).toBe(true);
+      expect(wrapper.find("section").classes()).toContain("align-center");
+      const [aside, fields] = wrapper.findAll(".v-col");
+      expect(aside.find("h3").text()).toBe("Name");
+      expect(aside.text()).toContain("How the driver appears.");
+      expect(fields.find(".field").exists()).toBe(true);
+      expect(aside.classes()).toEqual(expect.arrayContaining(["v-col--cols-12", "v-col--cols-md-4"]));
+      expect(fields.classes()).toEqual(expect.arrayContaining(["v-col--cols-12", "v-col--cols-md-8"]));
+    });
+
+    it("leaves out the description when not given", async () => {
+      const wrapper = await mountShell(FormSection, { title: "Contact" });
+
+      expect(wrapper.find("h3").text()).toBe("Contact");
+      expect(wrapper.find("p").exists()).toBe(false);
     });
   });
 

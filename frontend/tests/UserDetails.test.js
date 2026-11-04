@@ -210,11 +210,7 @@ describe("Feature 3 — User Role Management UI", () => {
         });
       }
 
-      const driverCard = [...document.body.querySelectorAll(".v-card")].find((el) =>
-        el.querySelector(".v-card-title")?.textContent.trim() === "Driver",
-      );
-      expect(driverCard.textContent).toContain("Coming soon");
-
+      // Feature 7 (US-7.2) replaced the Driver card's placeholder; see "Linked driver shown on user details" below.
       wrapper.unmount();
       await router.push("/");
       await openDetails(bob);
@@ -283,6 +279,42 @@ describe("Feature 3 — User Role Management UI", () => {
 
       expect(button("Delete user").disabled).toBe(true);
       expect(document.body.textContent).toContain("You cannot delete yourself.");
+    });
+  });
+});
+
+// Feature 7 — Driver Management (features/feature-7-drivers.md) fills in the Driver card.
+describe("Feature 7 — Driver Management UI", () => {
+  describe("US-7.2 — View drivers", () => {
+    const driverCard = () =>
+      [...document.body.querySelectorAll(".v-card")].find(
+        (el) => el.querySelector(".v-card-title")?.textContent.trim() === "Driver",
+      );
+
+    it("Linked driver shown on user details", async () => {
+      userServices.getUser.mockResolvedValue({
+        data: {
+          ...bob,
+          driver: { status: "revoked", licenseState: "TX", licenseExpirationDate: "2027-09-01", phoneNumber: "405-425-1234" },
+        },
+      });
+      await openDetails(bob);
+
+      const text = driverCard().textContent;
+      expect(text).toContain("Revoked");
+      expect(text).toContain("TX");
+      expect(text).toContain("2027-09-01");
+      expect(text).toContain("405-425-1234");
+      expect(text).not.toContain("No linked driver.");
+      expect(text).not.toContain("Coming soon");
+    });
+
+    it("No linked driver on user details", async () => {
+      userServices.getUser.mockResolvedValue({ data: { ...bob, driver: null } });
+      await openDetails(bob);
+
+      expect(driverCard().textContent).toContain("No linked driver.");
+      expect(driverCard().textContent).not.toContain("Coming soon");
     });
   });
 });

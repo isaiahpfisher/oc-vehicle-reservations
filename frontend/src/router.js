@@ -77,6 +77,25 @@ const router = createRouter({
       meta: { roles: ["admin", "area_admin"] },
     },
     {
+      path: "/drivers",
+      name: "drivers",
+      component: () => import("./views/Drivers.vue"),
+      meta: { nav: "Drivers", icon: "mdi-card-account-details-outline", roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/drivers/new",
+      name: "driverCreate",
+      component: () => import("./views/DriverForm.vue"),
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
+      path: "/drivers/:id",
+      name: "driverDetails",
+      component: () => import("./views/DriverForm.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
       path: "/service-types",
       name: "service-types",
       component: () => import("./views/ServiceTypes.vue"),
