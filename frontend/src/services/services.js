@@ -3,7 +3,7 @@ import router from "../router.js";
 import { useAuthStore } from "../stores/auth.js";
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.DEV ? "http://localhost:3200/api/" : "/course-t1/",
+  baseURL: import.meta.env.DEV ? "http://localhost:3200/api/" : "/vehicle-t1/",
   withCredentials: true,
 });
 

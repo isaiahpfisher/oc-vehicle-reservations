@@ -17,7 +17,7 @@ export const startGoogleSignIn = () => {
 
   const params = new URLSearchParams({
     client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "",
-    redirect_uri: `${window.location.origin}/login`,
+    redirect_uri: `${window.location.origin}${import.meta.env.BASE_URL}login`,
     response_type: "id_token",
     scope: "openid email profile",
     nonce,

@@ -16,7 +16,30 @@ Built with Spec-Driven Development (SDD). Specifications define _what_ to build 
 | Backend  | Node.js (ES modules), Express, Sequelize, MySQL                   |
 | Tests    | Jest + supertest (backend), Vitest + `@vue/test-utils` (frontend) |
 
-Default ports: frontend `8082`, backend `3200`. API mount: `/api` (change in `backend/server.js` and `frontend/src/services/services.js`).
+Default ports: frontend `8082`, backend `3200`. API mount: `/api` in development, `/vehicle-t1` in production (change in `backend/server.js` and `frontend/src/services/services.js`).
+
+---
+
+## Deployment
+
+`.github/workflows/deploy.yml` deploys on every push to `dev`, or manually from the Actions tab. The frontend goes to `/var/www/html/seiv2026/p4/t1`. The backend goes to `/home/ubuntu/nodeapps/2026/project4/t1` and runs as `vehicle-t1-backend.service` on port `3021`, behind Apache's `ProxyPass /vehicle-t1 http://localhost:3021/vehicle-t1`.
+
+Configure these as GitHub repository secrets. Never commit their values or the SSH key.
+
+| Secret | Value |
+| ------ | ----- |
+| `SERVER_SSH_KEY` | Contents of the server's `.pem` file |
+| `REMOTE_HOST` | Server hostname |
+| `REMOTE_USER` | `ubuntu` |
+| `FRONTEND_DEPLOY_TARGET` | `/var/www/html/seiv2026/p4/t1` |
+| `BACKEND_DEPLOY_TARGET` | `/home/ubuntu/nodeapps/2026/project4/t1` |
+| `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME` | MySQL connection |
+| `DB_TIMEZONE` | IANA time zone, e.g. `America/Chicago` (the default if unset) |
+| `AUTH_SECRET` | Long random string |
+| `GOOGLE_CLIENT_ID` | OAuth client whose authorized redirect URIs include `https://<host>/seiv2026/p4/t1/login` |
+| `GOOGLE_MAPS_API_KEY` | Google Maps Platform key used by the backend (Feature 8) |
+| `PORT` | `3021` |
+| `SEQUELIZE_SYNC_ALTER` | `false`. New tables are still created; set `true` for one deploy to add columns to existing tables. |
 
 ---
 
