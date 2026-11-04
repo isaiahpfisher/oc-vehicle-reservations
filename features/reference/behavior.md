@@ -1,7 +1,7 @@
 # Behavior & Rules Reference
 
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, Feature 6 destination rules, Feature 7 driver rules, and Feature 12 service type rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, Feature 6 destination rules, Feature 7 driver rules, Feature 9 mileage log rules, and Feature 12 service type rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -104,6 +104,17 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | `approvedAt` is set by the server | Client values are ignored. It is the current time when a driver is created as `approved` or changes to `approved`, stays the same while the driver remains `approved`, and is null when the status changes to anything else. | Feature 7, FR-012 |
 | A field left out of an update keeps its stored value | `PUT` changes only the keys in the body. | Feature 7, Assumptions |
 | Drivers are a table plus a form page | `/drivers` heading is **Driver Management**. The table shows 10 rows per page with **Name** (first and last name), **Status**, **Phone Number**, and **License Expiration**. The name links to the driver. Search matches first name, last name, and phone number, and a status filter narrows the list; changing either returns to page 1. An expiration date before today is highlighted with a red chip. **Edit driver** opens `/drivers/:id`. **Delete driver** uses the shared confirmation dialog. Empty copy is **No drivers yet. Create your first driver.** `/drivers/new` heading is **New Driver**. The form groups its fields into sections (**Name**, **Contact**, **User account**, **License**, **Approval**), each with a title and description on the left and its fields vertically centered on the right, stacked on small screens. The form is centered on the page. Edit heading is the driver's name. **Save** and **Cancel** return to the list; a failed save shows its message and stays on the page. | Feature 7, Screen Requirements |
+
+## Mileage logs
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Only admins and area admins manage mileage logs | Every `/api/mileage-logs` route uses `authenticate`. An admin may use any vehicle. An area admin may use a vehicle only when it belongs to an area they administer. Anyone else who is signed in receives `403` `{ "message": "Forbidden." }`. A missing token is `401` `{ "message": "Unauthorized." }`. `/vehicles/:vehicleId/mileage-logs` uses `meta.roles: ["admin", "area_admin"]`. It is not in the nav. An unsigned visit redirects to `/login`. The vehicle page links to that vehicle's mileage log. | Feature 9, FR-001, US-9.5 |
+| A row is one reading for one vehicle | `vehicleId` must be an existing vehicle. The list is `GET /api/mileage-logs?vehicleId=`. The page shows only that vehicle. Create and edit dialogs have no vehicle field. An update that sends a different vehicle returns `400` `{ "message": "Vehicle cannot be changed." }`. A missing vehicle id returns `{ "message": "Missing vehicle." }`. An unknown vehicle returns `404` `{ "message": "Vehicle not found." }`. | Feature 9, FR-004 |
+| The signed-in user is stored as the adder | Create sets `userId` from the session and ignores a body `userId`. Update does not change `userId`. The row shows that user's first and last name. | Feature 9, FR-003 |
+| The reading is a whole number of 0 or more | Missing returns `{ "message": "Missing odometer reading." }`. A non-integer returns `{ "message": "Odometer reading must be a whole number." }`. A negative returns `{ "message": "Odometer reading must be zero or greater." }`. `0` is saved. The dialog uses the same rules, with `Required field.` when a field is empty. | Feature 9, FR-005 |
+| The recorded date is a real calendar date | The value is `YYYY-MM-DD`. Missing returns `{ "message": "Missing recorded date." }`. Anything else returns `{ "message": "Invalid recorded date." }`. | Feature 9, FR-006 |
+| Mileage logs are one vehicle's screen | Heading is **Mileage Log** and shows that vehicle's `universityId`. **+ New Mileage Log** opens a dialog with **Odometer reading**, **Recorded date**, **Create**, and **Cancel**. **Recorded date** is a calendar field: the browser shows the local date format, and the saved value is `YYYY-MM-DD`. Edit uses **Save** and **Cancel**. Delete uses the shared confirmation dialog. Row icon buttons use `size="small"` and aria-labels **Edit mileage log** and **Delete mileage log**. Empty copy is **No mileage logs yet for this vehicle.** | Feature 9, Screen Requirements |
 
 ## Service types
 

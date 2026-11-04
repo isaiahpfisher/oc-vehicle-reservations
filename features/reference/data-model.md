@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 9 adds `mileage_logs`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -132,6 +132,20 @@ The JSON body uses `service_frequency_days` and `service_frequency_miles`.
 
 The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, and `miles_from_campus`. There is no `area_id`.
 
+## `mileage_logs`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `vehicle_id` | INTEGER | Required. References `vehicles.id`. |
+| `user_id` | INTEGER | Required. The user who added the reading. Set from the session. References `users.id`. |
+| `odometer_reading` | INTEGER | Required. Whole number of 0 or more. |
+| `recorded_at` | DATEONLY | Required. Calendar date `YYYY-MM-DD`. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+JSON keys are `vehicleId`, `userId`, `odometerReading`, and `recordedAt`.
+
 ## Associations
 
 - A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
@@ -142,3 +156,5 @@ The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, a
 - A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
 - Service types have no associations.
 - Destinations have no associations.
+- A vehicle has many mileage logs. A mileage log belongs to one vehicle. The vehicle cannot be deleted while it still has mileage logs.
+- A user has many mileage logs. A mileage log belongs to one user. The user cannot be deleted while they still have mileage logs.
