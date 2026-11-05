@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 10 adds `issue_reports` and an interim `vehicle_requests` table. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -132,6 +132,35 @@ The JSON body uses `service_frequency_days` and `service_frequency_miles`.
 
 The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, and `miles_from_campus`. There is no `area_id`.
 
+## `issue_reports`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `vehicle_id` | INTEGER | Required. Existing vehicle. |
+| `vehicle_request_id` | INTEGER | Null when omitted. Existing vehicle request when present. |
+| `author_id` | INTEGER | Required. Set from the signed-in user. Not taken from the body. |
+| `assignee_id` | INTEGER | Null when omitted. Existing user when present. |
+| `type` | ENUM | `low_gas`, `dirty`, `maintenance`, or `other` |
+| `description` | TEXT | Required, trimmed. Whitespace-only is rejected. |
+| `status` | ENUM | `pending`, `resolved`, or `cancelled` |
+| `resolved_at` | DATEONLY | Required when `status` is `resolved`. Null otherwise. |
+| `created_at` | DATE | Sequelize timestamp |
+| `updated_at` | DATE | Sequelize timestamp |
+
+JSON keys are camelCase: `vehicleId`, `vehicleRequestId`, `authorId`, `assigneeId`, `resolvedAt`, `createdAt`, `updatedAt`.
+
+## `vehicle_requests` (interim)
+
+Stand-in until Feature 8. Remove this table definition from the stand-in model when the real vehicle request model lands. Sequelize `alter` will add Feature 8's columns.
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `purpose` | TEXT | Required |
+| `created_at` | DATE | Sequelize timestamp |
+| `updated_at` | DATE | Sequelize timestamp |
+
 ## Associations
 
 - A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
@@ -142,3 +171,7 @@ The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, a
 - A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
 - Service types have no associations.
 - Destinations have no associations.
+- A vehicle has many issue reports. An issue report belongs to one vehicle. The vehicle cannot be deleted while it still has issue reports.
+- A vehicle request has many issue reports. An issue report optionally belongs to one vehicle request. Deleting the vehicle request keeps the issue report with no linked request.
+- A user has many issue reports as author. An issue report belongs to one author. The author cannot be deleted while they still have issue reports.
+- A user has many issue reports as assignee. An issue report optionally belongs to one assignee. Deleting the assignee keeps the issue report with no assignee.

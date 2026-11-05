@@ -121,7 +121,8 @@ describe("Feature 3 — User Role Management UI", () => {
     it("Navigation hides unauthorized links", async () => {
       await pageLoad(storedUser([]));
       await openApp("/");
-      expect(navLabels()).toEqual(["Home"]);
+      // Feature 10 adds Issue Reports for every signed-in user, including one with no roles.
+      expect(navLabels()).toEqual(["Home", "Issue Reports"]);
 
       wrapper.unmount();
       await pageLoad(storedUser([admin]));

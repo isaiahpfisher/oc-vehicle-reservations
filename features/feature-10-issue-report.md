@@ -100,6 +100,8 @@
 - Feature 3 provides `admin` and `area_admin`. An admin may access every issue report. An area admin may access issue reports whose vehicle belongs to an area they administer. A signed-in user with neither role may create a report and read their own reports. The maintenance role does not grant issue-report access.
 - A report belongs to the area of its vehicle.
 - Feature 5 provides vehicles. Feature 8 provides vehicle requests. This feature does not create vehicles or vehicle requests.
+- **INTERIM:** Feature 8 is not merged. `backend/app/models/vehicleRequest.model.js`, `backend/app/controllers/vehicleRequest.controller.js`, `backend/app/routes/vehicleRequest.routes.js`, and `frontend/src/services/vehicleRequestServices.js` are a stand-in so the vehicle-request select can load. The stand-in table is `vehicle_requests` with only `purpose`. `GET /api/vehicle-requests` returns `id` and `purpose` for any signed-in user. Remove the stand-in when Feature 8 merges and point issue reports at the real model.
+- The Vehicle and Assignee selects load from `GET /api/vehicles` and `GET /api/users`. Those lists stay limited to admin and area admin (vehicles) and admin (users). A signed-in user without those roles still opens this page; if a list call fails, that select is empty.
 - The author is shown with that user's first and last name. An assignee, when set, is shown the same way.
 - A vehicle in the list is shown by its `universityId`.
 - A vehicle request in the list is shown by its id and `purpose`.
@@ -908,13 +910,13 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-014** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-014** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 
