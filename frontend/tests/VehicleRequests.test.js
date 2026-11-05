@@ -11,7 +11,7 @@ import destinationServices from "../src/services/destinationServices.js";
 import driverServices from "../src/services/driverServices.js";
 import requestServices from "../src/services/requestServices.js";
 import placeServices from "../src/services/placeServices.js";
-import { calendarTitle, toDateInput } from "../src/models/requests.js";
+import { STATUSES, calendarTitle, toDateInput } from "../src/models/requests.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
@@ -440,6 +440,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       await waitFor(() => expect(document.body.querySelector(".v-calendar")?.textContent).toContain("Away game"));
       expect(document.body.querySelector(".v-calendar").textContent).not.toContain("Spring retreat");
+
+      // A key names every status's event color, matching the colors the events use.
+      const key = [...document.body.querySelectorAll('[aria-label="Status key"] li')];
+      expect(key.map((item) => item.textContent.trim())).toEqual(Object.values(STATUSES).map(({ label }) => label));
+      Object.values(STATUSES).forEach(({ color }, index) =>
+        expect(key[index].querySelector("span").classList).toContain(`bg-${color}`),
+      );
     });
 
     it("User searches and filters requests", async () => {

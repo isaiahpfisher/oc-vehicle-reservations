@@ -1,5 +1,6 @@
 /**
  * Feature 3 — FR-016: replace users, sessions, roles, and areas with development seed data.
+ * The project team (TEAM_ADMINS) is always seeded as admins, so signing in with Google after a seed needs no make-admin.
  * Feature 8 adds vehicle types, vehicles, service types, drivers, destinations, and vehicle requests, so every table has
  * enough rows to try searching, filtering, paging, and the calendar.
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...] [-- --google]
@@ -13,6 +14,7 @@ import { fileURLToPath } from "url";
 import { Op } from "sequelize";
 import db from "../app/models/index.js";
 import { estimateMiles } from "../app/helpers/mileage.js";
+import { TEAM_ADMINS, isTeamAdmin } from "../app/config/teamAdmins.js";
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Deterministic randomness                                                                                            */
@@ -172,13 +174,15 @@ const generatedStudents = () => {
   return students;
 };
 
-/** Every email ends in @oc.edu. */
-export const SEED_USERS = [...TEST_ACCOUNTS, ...STAFF, ...NAMED_STUDENTS, ...generatedStudents()];
+/** Every sample email ends in @oc.edu. The team admins stay out of these, so they don't change the generated data. */
+const SAMPLE_USERS = [...TEST_ACCOUNTS, ...STAFF, ...NAMED_STUDENTS, ...generatedStudents()];
 
-const STUDENTS = SEED_USERS.slice(TEST_ACCOUNTS.length + STAFF.length);
-const ADMINS = SEED_USERS.filter(({ roles }) => roles.some(({ role }) => role === "admin")).map(({ email }) => email);
+export const SEED_USERS = [...TEAM_ADMINS, ...SAMPLE_USERS];
+
+const STUDENTS = SAMPLE_USERS.slice(TEST_ACCOUNTS.length + STAFF.length);
+const ADMINS = SAMPLE_USERS.filter(({ roles }) => roles.some(({ role }) => role === "admin")).map(({ email }) => email);
 const areaAdminsOf = (area) =>
-  SEED_USERS.filter(({ roles }) => roles.some((role) => role.area === area)).map(({ email }) => email);
+  SAMPLE_USERS.filter(({ roles }) => roles.some((role) => role.area === area)).map(({ email }) => email);
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Vehicle types, vehicles, and service types (Features 4, 5, and 12)                                                  */
@@ -782,7 +786,7 @@ const generatedRequests = () => {
   }
 
   const approvedDrivers = SEED_DRIVERS.filter(({ status }) => status === "approved");
-  const requesters = SEED_USERS.filter(({ email }) => !TEST_ACCOUNTS.some((account) => account.email === email));
+  const requesters = SAMPLE_USERS.filter(({ email }) => !TEST_ACCOUNTS.some((account) => account.email === email));
 
   /** Fewest vehicles that seat everyone: the smallest one that fits, else the biggest few (a shortfall is allowed, FR-004). */
   const chooseVehicles = (area, types, people, span) => {
@@ -986,6 +990,11 @@ export const seed = async ({ keep = [], google = false } = {}) => {
         roles.map(({ role, area }) => ({ userId: user.id, role, areaId: area ? areaIds[area] : null })),
         { transaction },
       );
+    }
+
+    // A team admin kept with --keep still ends up an admin.
+    for (const user of keptUsers.filter(({ email }) => isTeamAdmin(email))) {
+      await db.role.findOrCreate({ where: { userId: user.id, role: "admin", areaId: null }, transaction });
     }
 
     await seedSampleTables({ areaIds, transaction });

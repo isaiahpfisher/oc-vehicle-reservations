@@ -222,17 +222,16 @@ const remove = (index) => {
   flex: 0 0 auto;
 }
 
+/* Plain text, not a box, so it doesn't read as an input. */
 .route-empty {
   flex: 1 1 auto;
-  padding: 10px 14px;
-  border: 1px dashed rgba(var(--v-theme-outline), 0.6);
-  border-radius: 8px;
   font-size: 0.875rem;
+  font-style: italic;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .route-empty--error {
-  border-color: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-error));
 }
 
 .route-picker {

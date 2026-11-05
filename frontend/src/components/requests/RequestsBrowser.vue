@@ -4,6 +4,7 @@ import ListState from "../common/ListState.vue";
 import RequestStatusChip from "./RequestStatusChip.vue";
 import {
   NEEDS_ACTION_STATUSES,
+  STATUSES,
   STATUS_OPTIONS,
   calendarEvent,
   calendarTitle,
@@ -336,6 +337,12 @@ const moveCalendar = (direction) => {
             @click="moveCalendar(1)"
           />
         </div>
+        <ul class="calendar-legend d-flex flex-wrap ga-4 px-4 pb-3 text-body-small" aria-label="Status key">
+          <li v-for="(meta, status) in STATUSES" :key="status" class="d-flex align-center ga-2">
+            <span class="calendar-legend-swatch" :class="`bg-${meta.color}`" />
+            {{ meta.label }}
+          </li>
+        </ul>
         <v-divider />
         <v-calendar
           v-model="focus"
@@ -395,6 +402,17 @@ const moveCalendar = (direction) => {
 
 .browser-calendar {
   min-height: 600px;
+}
+
+.calendar-legend {
+  list-style: none;
+  margin: 0;
+}
+
+.calendar-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
 }
 
 .browser-calendar :deep(.v-event) {

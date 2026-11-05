@@ -60,7 +60,7 @@ To test role-based access, seed realistic users and sign in as them without Goog
 npm run seed -- --keep you@eagles.oc.edu   # replaces users, sessions, roles, and areas; --keep preserves your account
 ```
 
-Re-run it any time to reset to the same data. The backend (server and scripts) reads `backend/.env`, falling back to the repo-root `.env`, from whatever directory you start it in.
+The seed always creates the project team (`isaiah.fisher@eagles.oc.edu`, `lana.n.cutter@eagles.oc.edu`, `j.walraven@eagles.oc.edu`) as admins, so they can sign in with Google right after seeding without `make-admin`. With `DEV_LOGIN=true` (never in production), Google sign-in also gives these accounts the admin role, even on a database that was never seeded. Re-run it any time to reset to the same data. The backend (server and scripts) reads `backend/.env`, falling back to the repo-root `.env`, from whatever directory you start it in.
 
 Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Developer sign-in** form under the Google button on the login page (it only appears in development builds). Every account's password is `password` (override with `DEV_LOGIN_PASSWORD`). Dev sign-in is refused whenever `NODE_ENV=production`, and `npm run seed` refuses to run there.
 

@@ -236,6 +236,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - Primary action: **+ New Request** opens `CreateRequest.vue`
 - Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar. The monthly calendar is shown first.
 - Each row/calendar event displays important information about the request, and can be clicked to view the request `Request.vue`
+- Calendar events are colored by status, with a key above the calendar naming each status's color.
 - **Empty state:** **"You have not submitted any requests."**.
 - **Loading state:** skeleton or progress indicator while requests are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
@@ -247,6 +248,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - Heading: **Requests**
 - Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar. The monthly calendar is shown first.
 - Each row/calendar event displays important information about the request, and can be clicked to view the request `Request.vue`
+- Calendar events are colored by status, with a key above the calendar naming each status's color.
 - It should be easy to filter out requests that don't need the user's attention.
 - **Empty state:** **"No one has any submitted requests."**.
 - **Loading state:** skeleton or progress indicator while requests are fetching.
