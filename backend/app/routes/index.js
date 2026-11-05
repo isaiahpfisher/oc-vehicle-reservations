@@ -7,6 +7,7 @@ import serviceTypeRoutes from "./serviceType.routes.js";
 import destinationRoutes from "./destination.routes.js";
 import vehicleRoutes from "./vehicle.routes.js";
 import driverRoutes from "./driver.routes.js";
+import mileageLogRoutes from "./mileageLog.routes.js";
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use("/service-types", serviceTypeRoutes);
 router.use("/destinations", destinationRoutes);
 router.use("/vehicles", vehicleRoutes);
 router.use("/drivers", driverRoutes);
+router.use("/mileage-logs", mileageLogRoutes);
 
 export default router;

@@ -287,6 +287,13 @@ const cancel = () => {
       <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
 
       <div class="d-flex ga-2 mt-2">
+        <router-link
+          v-if="!isCreate"
+          class="vehicle-form__mileage"
+          :to="{ name: 'vehicle-mileage-logs', params: { vehicleId: route.params.id } }"
+        >
+          Mileage log
+        </router-link>
         <button type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
           {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
         </button>
@@ -326,5 +333,16 @@ const cancel = () => {
   border: 0;
   background: transparent;
   color: rgb(var(--v-theme-on-surface));
+}
+
+.vehicle-form__mileage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  color: rgb(var(--v-theme-primary));
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
 }
 </style>
