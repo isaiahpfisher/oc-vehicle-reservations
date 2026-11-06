@@ -304,6 +304,60 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(response.status).toBe(201);
       expect(response.body).toMatchObject({ startAt: "2030-12-18T14:00:00.000Z", endAt: "2030-12-18T22:30:00.000Z" });
     });
+
+    it("Request form offers only official destinations", async () => {
+      const { headers } = await signIn();
+      await fx.destination("Hidden Stop", "Guthrie", null, { isSaved: false });
+
+      const response = await request(app).get("/api/destinations/selectable").set(headers);
+
+      expect(response.status).toBe(200);
+      expect(response.body.map(({ name }) => name)).toEqual(["OKC Arena", "Tulsa Center"]);
+      expect(response.body[0]).toMatchObject({ addressLine1: "1 OKC Arena Way", city: "Oklahoma City", milesFromCampus: 15 });
+      expect(response.body[0]).not.toHaveProperty("isSaved");
+
+      expect((await request(app).get("/api/destinations/selectable")).status).toBe(401);
+      // Feature 6's own list stays limited to admins and area admins.
+      expect((await request(app).get("/api/destinations").set(headers)).status).toBe(403);
+    });
+
+    it("Request form offers only approved drivers with current licenses", async () => {
+      const { headers } = await signIn();
+      await fx.driver("Pat", "Pending", { status: "pending" });
+      await fx.driver("Fay", "Former", { status: "former" });
+      await fx.driver("Ex", "Pired", { licenseExpirationDate: "2020-01-01" });
+
+      const response = await request(app).get("/api/drivers/selectable").set(headers);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([
+        { id: fx.dana.id, firstName: "Dana", lastName: "Driver" },
+        { id: fx.sam.id, firstName: "Sam", lastName: "Wheel" },
+      ]);
+      expect((await request(app).get("/api/drivers/selectable")).status).toBe(401);
+    });
+
+    it("User cannot choose an unofficial destination", async () => {
+      const { headers } = await signIn();
+      const custom = { name: "Grandma's House", addressLine1: "1 Main St", city: "Guthrie", state: "OK" };
+      const hidden = await fx.destination("Hidden Stop", "Guthrie", null, { isSaved: false });
+
+      const rejected = await create(headers, { destinations: [{ id: hidden.id }] });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body).toEqual({ message: "Hidden Stop isn't available as a destination." });
+
+      // A custom stop is saved unofficial, and stays usable on its own request after an edit.
+      const created = await create(headers, { destinations: [custom] });
+      expect(created.status).toBe(201);
+      const stop = created.body.destinations[0];
+      expect(stop).toMatchObject({ isSaved: false, addressLine2: null, zipCode: null });
+
+      const edited = await update(headers, created.body.id, {
+        destinations: [{ id: stop.id }, { id: fx.okc.id }],
+      });
+      expect(edited.status).toBe(200);
+      expect(edited.body.destinations.map(({ id }) => id)).toEqual([stop.id, fx.okc.id]);
+    });
   });
 
   describe("US-8.2 — View list of my vehicle requests", () => {
@@ -360,6 +414,19 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect((await request(app).get("/api/requests/999").set(headers)).status).toBe(404);
       expect((await request(app).get("/api/requests/abc").set(headers)).body).toEqual({ message: "Invalid request id." });
+    });
+
+    it("Requester sees drivers and vehicles without their private details", async () => {
+      const requester = await signIn();
+      const admin = await signInWithRoles(["admin"], "admin@example.com");
+      const created = await create(requester.headers);
+      await update(admin.headers, created.body.id, { vehicles: [fx.van1.id] });
+
+      const { body: seen } = await request(app).get(`/api/requests/${created.body.id}`).set(requester.headers);
+
+      expect(seen.drivers).toEqual([{ id: fx.dana.id, firstName: "Dana", lastName: "Driver" }]);
+      expect(seen.vehicles[0]).toMatchObject({ universityId: "V-1", passengerCapacity: 12, vehicleType: { name: "Van" } });
+      expect(seen.vehicles[0]).not.toHaveProperty("identifier");
     });
   });
 
@@ -633,72 +700,27 @@ describe("Feature 8 — Vehicle Request Management", () => {
     });
   });
 
-  describe("Integration with Features 3, 5, and 6", () => {
-    it("offers only official destinations to any signed-in user", async () => {
-      const { headers } = await signIn();
-      await fx.destination("Hidden Stop", "Guthrie", null, { isSaved: false });
-
-      const response = await request(app).get("/api/destinations/selectable").set(headers);
-
-      expect(response.status).toBe(200);
-      expect(response.body.map(({ name }) => name)).toEqual(["OKC Arena", "Tulsa Center"]);
-      expect(response.body[0]).toMatchObject({ addressLine1: "1 OKC Arena Way", city: "Oklahoma City", milesFromCampus: 15 });
-      expect(response.body[0]).not.toHaveProperty("isSaved");
-
-      expect((await request(app).get("/api/destinations/selectable")).status).toBe(401);
-      // Feature 6's own list stays limited to admins and area admins.
-      expect((await request(app).get("/api/destinations").set(headers)).status).toBe(403);
-    });
-
-    it("offers only approved drivers with current licenses, by name only", async () => {
-      const { headers } = await signIn();
-      await fx.driver("Pat", "Pending", { status: "pending" });
-      await fx.driver("Fay", "Former", { status: "former" });
-      await fx.driver("Ex", "Pired", { licenseExpirationDate: "2020-01-01" });
-
-      const response = await request(app).get("/api/drivers/selectable").set(headers);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual([
-        { id: fx.dana.id, firstName: "Dana", lastName: "Driver" },
-        { id: fx.sam.id, firstName: "Sam", lastName: "Wheel" },
-      ]);
-      expect((await request(app).get("/api/drivers/selectable")).status).toBe(401);
-    });
-
-    it("does not expose driver or vehicle records to requesters", async () => {
+  describe("Deletion guards", () => {
+    it("Cannot delete driver with requests", async () => {
       const requester = await signIn();
-      const admin = await signInWithRoles(["admin"], "admin@example.com");
-      const created = await create(requester.headers);
-      await update(admin.headers, created.body.id, { vehicles: [fx.van1.id] });
+      const areaAdmin = await signInWithRoles([{ role: "area_admin", areaId: fx.athletics.id }], "aa@example.com");
+      await create(requester.headers, { drivers: [fx.dana.id] });
+      const remove = (id) => request(app).delete(`/api/drivers/${id}`).set(areaAdmin.headers);
 
-      const { body: seen } = await request(app).get(`/api/requests/${created.body.id}`).set(requester.headers);
+      const response = await remove(fx.dana.id);
 
-      expect(seen.drivers).toEqual([{ id: fx.dana.id, firstName: "Dana", lastName: "Driver" }]);
-      expect(seen.vehicles[0]).toMatchObject({ universityId: "V-1", passengerCapacity: 12, vehicleType: { name: "Van" } });
-      expect(seen.vehicles[0]).not.toHaveProperty("identifier");
-    });
-
-    it("rejects an unofficial destination unless the request already has it", async () => {
-      const { headers } = await signIn();
-      const custom = { name: "Grandma's House", addressLine1: "1 Main St", city: "Guthrie", state: "OK" };
-      const hidden = await fx.destination("Hidden Stop", "Guthrie", null, { isSaved: false });
-
-      const rejected = await create(headers, { destinations: [{ id: hidden.id }] });
-      expect(rejected.status).toBe(400);
-      expect(rejected.body).toEqual({ message: "Hidden Stop isn't available as a destination." });
-
-      // A custom stop is saved unofficial, and stays usable on its own request after an edit.
-      const created = await create(headers, { destinations: [custom] });
-      expect(created.status).toBe(201);
-      const stop = created.body.destinations[0];
-      expect(stop).toMatchObject({ isSaved: false, addressLine2: null, zipCode: null });
-
-      const edited = await update(headers, created.body.id, {
-        destinations: [{ id: stop.id }, { id: fx.okc.id }],
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        message: "Driver is on vehicle requests and can't be deleted. Change their status to former instead.",
       });
-      expect(edited.status).toBe(200);
-      expect(edited.body.destinations.map(({ id }) => id)).toEqual([stop.id, fx.okc.id]);
+      expect(await db.driver.findByPk(fx.dana.id)).not.toBeNull();
+
+      // A driver on no request can still be deleted, and a former driver stays on old requests.
+      expect((await remove(fx.sam.id)).status).toBe(200);
+      const former = await request(app).put(`/api/drivers/${fx.dana.id}`).set(areaAdmin.headers).send({ status: "former" });
+      expect(former.status).toBe(200);
+      const { body: mine } = await request(app).get("/api/me/requests").set(requester.headers);
+      expect(mine[0].drivers.map(({ id }) => id)).toEqual([fx.dana.id]);
     });
 
     it("keeps requests when something they point at would be deleted", async () => {
@@ -748,30 +770,6 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const row = await db.vehicleRequest.findByPk(created.body.id);
       expect(row.approverId).toBeNull();
       expect(row.status).toBe("awaiting_vehicle");
-    });
-  });
-
-  describe("Feature 7 follow-up — Driver deletion guard", () => {
-    it("Cannot delete driver with requests", async () => {
-      const requester = await signIn();
-      const areaAdmin = await signInWithRoles([{ role: "area_admin", areaId: fx.athletics.id }], "aa@example.com");
-      await create(requester.headers, { drivers: [fx.dana.id] });
-      const remove = (id) => request(app).delete(`/api/drivers/${id}`).set(areaAdmin.headers);
-
-      const response = await remove(fx.dana.id);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        message: "Driver is on vehicle requests and can't be deleted. Change their status to former instead.",
-      });
-      expect(await db.driver.findByPk(fx.dana.id)).not.toBeNull();
-
-      // A driver on no request can still be deleted, and a former driver stays on old requests.
-      expect((await remove(fx.sam.id)).status).toBe(200);
-      const former = await request(app).put(`/api/drivers/${fx.dana.id}`).set(areaAdmin.headers).send({ status: "former" });
-      expect(former.status).toBe(200);
-      const { body: mine } = await request(app).get("/api/me/requests").set(requester.headers);
-      expect(mine[0].drivers.map(({ id }) => id)).toEqual([fx.dana.id]);
     });
   });
 });

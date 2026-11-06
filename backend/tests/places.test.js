@@ -1,5 +1,5 @@
 /**
- * Feature 8 — Vehicle Request Management (address search and destination miles, FR-008, FR-010)
+ * Feature 8 — Vehicle Request Management (address search and destination miles, US-8.1 and US-8.10)
  * Spec: features/feature-8-vehicle-requests.md
  */
 import { jest } from "@jest/globals";
@@ -144,8 +144,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
     });
   });
 
-  describe("FR-010 — Destination miles from campus", () => {
-    it("returns one-way driven miles from campus to a place", async () => {
+  describe("US-8.10 — Destination Management updates", () => {
+    it("Picking an address fills the form and looks up miles from campus", async () => {
       const headers = await areaAdminHeaders();
       const calls = stubGoogle({ body: { routes: [{ distanceMeters: 160934 }] } });
 

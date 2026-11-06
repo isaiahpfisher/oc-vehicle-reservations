@@ -3,6 +3,9 @@
  * Spec: features/feature-6-destinations.md
  * Feature 8, FR-010 moves create and edit from dialogs to their own page (`DestinationForm.vue`),
  * so "dialog" in a scenario title below means that page.
+ *
+ * Feature 8 — Vehicle Request Management (US-8.10, changes to Destination Management)
+ * Spec: features/feature-8-vehicle-requests.md
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
@@ -590,9 +593,11 @@ describe("Feature 6 — Destinations", () => {
       expect(router.currentRoute.value.path).toBe("/");
     });
   });
+});
 
-  // Feature 8, FR-011: Destination Management can be searched and filtered, like the Drivers list.
-  describe("FR-011 — Search and filter destinations", () => {
+describe("Feature 8 — Vehicle Request Management", () => {
+  // FR-011: Destination Management can be searched and filtered, like the Drivers list.
+  describe("US-8.10 — Destination Management updates", () => {
     const zoo = {
       ...lake,
       id: 3,
@@ -651,10 +656,8 @@ describe("Feature 6 — Destinations", () => {
       await filter.setValue(null);
       await waitFor(() => expect(listed()).toEqual(["Pops", "Arcadia Lake"]));
     });
-  });
 
-  // Feature 8, FR-010: create and edit happen on their own page, laid out like the Driver form.
-  describe("FR-010 — Destination form page", () => {
+    // FR-010: create and edit happen on their own page, laid out like the Driver form.
     it("Destination name opens its page", async () => {
       signIn();
       destinationServices.getDestinations.mockResolvedValue({ data: [pops] });
@@ -696,10 +699,8 @@ describe("Feature 6 — Destinations", () => {
       await waitFor(() => expect(document.body.textContent).toContain("Destination name already exists."));
       expect(router.currentRoute.value.name).toBe("destinationCreate");
     });
-  });
 
-  // Feature 8, FR-010: the destination form uses Google address search and distance from campus.
-  describe("FR-010 — Address search on the destination form", () => {
+    // FR-008 and FR-010: the destination form uses Google address search and distance from campus.
     const suggestion = { placeId: "place-1", name: "Pops 66", description: "Arcadia, OK, USA" };
     const address = { addressLine1: "660 W Highway 66", addressLine2: "", city: "Arcadia", state: "OK", zipCode: "73007" };
 
