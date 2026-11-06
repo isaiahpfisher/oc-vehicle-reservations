@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 10 issue report routes, Feature 9 mileage log routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 8 vehicle request routes, Feature 9 mileage log routes, Feature 10 issue report routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -156,7 +156,7 @@ Every route requires a Bearer token. Every route except `GET /api/drivers/select
 | `GET` | `/api/drivers/:driverId` | Admin or area admin | `200` with one driver. |
 | `POST` | `/api/drivers` | Admin or area admin | `201` with the created driver. |
 | `PUT` | `/api/drivers/:driverId` | Admin or area admin | `200` with the updated driver. A field omitted from the body keeps its stored value. A blank `userId` unlinks the user. |
-| `DELETE` | `/api/drivers/:driverId` | Admin or area admin | `200` `{ "message": "Driver deleted successfully." }`. |
+| `DELETE` | `/api/drivers/:driverId` | Admin or area admin | `200` `{ "message": "Driver deleted successfully." }`. `400` while a vehicle request uses the driver (Feature 8). |
 
 Create body: `{ "userId", "firstName", "lastName", "phoneNumber", "licenseState", "licenseExpirationDate", "status" }`. The same keys are accepted with underscores (`user_id`, `first_name`). `userId` is optional. A blank `status` is saved as `pending`.
 
@@ -285,10 +285,6 @@ Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId"
 | `:issueReportId` is not an integer | `400` | `{ "message": "Invalid issue report id." }` |
 | Issue report id does not exist | `404` | `{ "message": "Issue report with id=… not found." }` |
 
-## Vehicle requests (interim)
-
-`GET /api/vehicle-requests` requires a Bearer token and returns `{ "id", "purpose" }` for every row, ordered by `id`. This route is a stand-in until Feature 8. A missing session uses the shared auth `401` messages, not the issue-report `Unauthorized.` body.
-
 ## Mileage logs
 
 Every route requires a Bearer token (`authenticate`). An admin may read and change mileage logs for any vehicle. An area admin may do that only when the vehicle belongs to an area they administer. Any other signed-in user receives `403` `{ "message": "Forbidden." }`. A missing session is `401` `{ "message": "Unauthorized." }`.
@@ -323,3 +319,64 @@ Success body: `{ "id", "vehicleId", "userId", "odometerReading", "recordedAt", "
 - Flat JSON responses (no `{ success, data }` envelope).
 - Errors: `{ "message": "..." }`.
 - Authenticated routes: `Authorization: Bearer <token>`.
+
+## Vehicle Requests (Feature 8)
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/me/requests` | Bearer | `200` array of the signed-in user's requests |
+| `GET` | `/api/requests` | `authenticateAreaAdmin` | `200` all requests (admin) or those in managed areas (area admin) |
+| `POST` | `/api/requests` | Bearer | `201` with the created request, owned by the signed-in user |
+| `GET` | `/api/requests/:requestId` | Bearer | `200` if the user owns it or manages its area |
+| `PUT` | `/api/requests/:requestId` | Bearer | `200` with the updated request. Omitted fields keep their stored values. |
+| `GET` | `/api/requests/:requestId/vehicle-options` | `authenticateAreaAdmin` | `200` array of `{ vehicle, conflictingRequestIds, outOfService, milesUntilService }` for the request's area |
+
+Body fields: `areaId`, `purpose`, `startAt`, `endAt`, `allDay`, `numberOfPeople`, `drivers` (array of driver ids), `destinations` (ordered array of `{ id }` for saved destinations or `{ name, addressLine1, addressLine2, city, state, zipCode }` for new ones). `PUT` also takes `status` and `vehicles` (array of vehicle ids, managers only).
+
+Responses include `area`, `user`, `approver`, and flattened `drivers`, ordered `destinations`, and `vehicles`. All-day `startAt`/`endAt` are returned as `YYYY-MM-DD`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| Missing `areaId`, `purpose`, `startAt`, `endAt`, `numberOfPeople`, `drivers`, or `destinations` | `400` | `{ "message": "Missing <field>." }` |
+| `numberOfPeople` not a non-negative integer | `400` | `numberOfPeople must be a non-negative integer.` |
+| End before start | `400` | `endAt cannot be before startAt.` |
+| Same destination twice in a row | `400` | `A destination is listed twice in a row.` |
+| More than 10 destinations | `400` | `A trip can have at most 10 destinations.` |
+| Driver not approved / license expired / expires before trip ends | `400` | `<Name> is not an approved driver.` / `<Name>'s license has expired.` / `<Name>'s license expires before the trip ends.` |
+| Vehicle outside the request's area | `400` | `Vehicles must belong to the request's area.` |
+| Requester assigns vehicles, sets a status other than `cancelled`, or edits a non-pending request | `403` | |
+| Requester calls `GET /api/requests` or `vehicle-options` | `403` | `{ "message": "Area admin role required." }` |
+| Request not found or not visible to the user | `404` | `Vehicle request with id=… not found.` |
+
+### Address search (Feature 8, FR-008)
+
+Proxies Google Places so the key stays on the server. Any signed-in user. Pass the same `sessionToken` (a client-generated UUID) to every call for one address so Google bills them as one session.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/places/autocomplete?input=…&sessionToken=…` | Bearer | `200` array of `{ placeId, name, description }`, biased toward campus, US only |
+| `GET` | `/api/places/:placeId?sessionToken=…` | Bearer | `200` `{ addressLine1, addressLine2, city, state, zipCode }` |
+| `GET` | `/api/places/:placeId/miles-from-campus` | `admin` or `area_admin` | `200` `{ milesFromCampus }`: one-way driven miles from campus (Google Routes; billed per call) |
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| `input` shorter than 3 or longer than 200 characters | `400` | `Enter 3 to 200 characters to search.` |
+| Bad `sessionToken` / `placeId` | `400` | `Invalid session token.` / `Invalid place id.` |
+| `GOOGLE_MAPS_API_KEY` not set | `503` | `Address search isn't available.` |
+| Google request failed | `502` | `Address search failed.` |
+
+### Lists for the request form
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/destinations/selectable` | Bearer | `200` array of official destinations (`isSaved: true`) by name: `{ id, name, addressLine1, addressLine2, city, state, zipCode, milesFromCampus }` |
+
+In a request, `drivers` carries `{ id, firstName, lastName }` only, and `vehicles` omits the VIN or serial number.
+
+The request form loads drivers from Feature 7's `GET /api/drivers/selectable`.
+
+A stop in `destinations` is `{ id }` or `{ name, addressLine1, addressLine2, city, state, zipCode }`. A new stop requires `name`, `addressLine1`, `city`, and `state` (at most 255 characters each) and is saved unofficial (`isSaved: false`). `{ id }` of an unofficial destination returns `400` unless the request already has it.
+
+### Delete guards
+
+Requests are never deleted, so these return `400` while a request points at the row: `DELETE /api/destinations/:id`, `/api/vehicles/:id`, `/api/drivers/:id`, `/api/areas/:id`, and `/api/users/:id` (for the user who made the request). Deleting a user who only approved a request clears `approverId`.

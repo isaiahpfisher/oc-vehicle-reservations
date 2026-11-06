@@ -83,7 +83,7 @@ To test role-based access, seed realistic users and sign in as them without Goog
 npm run seed -- --keep you@eagles.oc.edu   # replaces users, sessions, roles, and areas; --keep preserves your account
 ```
 
-Re-run it any time to reset to the same data. The backend (server and scripts) reads `backend/.env`, falling back to the repo-root `.env`, from whatever directory you start it in.
+The seed always creates the project team (`isaiah.fisher@eagles.oc.edu`, `lana.n.cutter@eagles.oc.edu`, `j.walraven@eagles.oc.edu`) as admins, so they can sign in with Google right after seeding without `make-admin`. With `DEV_LOGIN=true` (never in production), Google sign-in also gives these accounts the admin role, even on a database that was never seeded. Re-run it any time to reset to the same data. The backend (server and scripts) reads `backend/.env`, falling back to the repo-root `.env`, from whatever directory you start it in.
 
 Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Developer sign-in** form under the Google button on the login page (it only appears in development builds). Every account's password is `password` (override with `DEV_LOGIN_PASSWORD`). Dev sign-in is refused whenever `NODE_ENV=production`, and `npm run seed` refuses to run there.
 
@@ -95,7 +95,11 @@ Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Dev
 | `multirole@oc.edu` | Maintenance, Area Admin — Music, Area Admin — Theatre |
 | `requester@oc.edu` | none (requester) |
 
-The seed also adds staff and students across six areas (Admissions, Athletics, Facilities, Music, Student Life, Theatre); see `backend/scripts/seed.mjs`.
+The seed also adds about 150 staff and students across ten areas, with at least one area admin per area; see `backend/scripts/seed.mjs`.
+
+It also replaces vehicle types, vehicles, service types, drivers, destinations, and vehicle requests with enough sample data to try searching, filtering, paging, and the calendar: about 80 vehicles, 75 drivers (every status, plus expired and soon-to-expire licenses), 60 destinations (a few unofficial), 14 service types, and 300 requests across every area and status, dated from four months before to four months after the day you seed (`requester@oc.edu` owns about 15). The data comes from a fixed random seed, so every run gives the same rows.
+
+Request mileage is estimated from the seed destinations' coordinates, so seeding makes no Google calls. Add `-- --google` to estimate it with Google Routes instead; that makes one billed call per request (about 300).
 
 ## Branching
 

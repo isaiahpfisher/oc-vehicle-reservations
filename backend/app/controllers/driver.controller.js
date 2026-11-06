@@ -303,6 +303,13 @@ exports.remove = async (req, res) => {
       return notFound(res, driverId);
     }
 
+    // Feature 8: requests are never deleted, so a driver on any request stays.
+    if ((await db.vehicleRequestDriver.count({ where: { driverId } })) > 0) {
+      return res.status(400).send({
+        message: "Driver is on vehicle requests and can't be deleted. Change their status to former instead.",
+      });
+    }
+
     await driver.destroy();
     return res.send({ message: "Driver deleted successfully." });
   } catch (err) {

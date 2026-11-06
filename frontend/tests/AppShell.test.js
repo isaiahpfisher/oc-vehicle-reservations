@@ -33,7 +33,10 @@ beforeEach(() => {
   signInAs(null);
   vi.resetAllMocks();
   // Role refresh echoes the stored roles.
-  apiClient.get.mockImplementation(async () => ({ data: { roles: JSON.parse(localStorage.getItem("user"))?.roles ?? [] } }));
+  // Feature 8 (US-8.2): home now loads `me/requests`, so only the role refresh gets a user back.
+  apiClient.get.mockImplementation(async (url) =>
+    url.startsWith("users/") ? { data: { roles: JSON.parse(localStorage.getItem("user"))?.roles ?? [] } } : { data: [] },
+  );
 });
 
 afterEach(() => {
@@ -41,6 +44,8 @@ afterEach(() => {
   wrapper = undefined;
   document.body.innerHTML = "";
 });
+
+const sectionTitles = (list) => [...list.querySelectorAll(".v-list-subheader")].map((header) => header.textContent.trim());
 
 describe("App shell (ui-style-system.mdc)", () => {
   it("shows the MenuBar with logo and profile menu for requesters", async () => {
@@ -65,26 +70,68 @@ describe("App shell (ui-style-system.mdc)", () => {
 
     const content = sidebar.querySelector(".v-navigation-drawer__content");
     expect(content.textContent).toContain("OC");
-    // Feature 5 adds Vehicles for admin and area admin. Feature 12 adds Service Types.
-    // Feature 6 (US-6.5) adds Destinations for admin and area admin.
-    // Feature 12 (US-12.5) adds Service Types for admin, area admin, and maintenance.
-    // Feature 7 (US-7.5) adds Drivers for admin and area admin.
-    // Feature 10 adds Issue Reports for every signed-in user.
-    expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
-      "Home",
-      "Users",
-      "Areas",
-      "Vehicle Types",
+    // Pages come from route `meta.nav` (Features 3–8, 10, 12), grouped into sections by `meta.navGroup`.
+    const mainNav = content.querySelector('[aria-label="Main navigation"]');
+    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
+      "Requests",
+      "Drivers",
       "Destinations",
       "Vehicles",
-      "Drivers",
+      "Vehicle Types",
       "Issue Reports",
       "Service Types",
+      "Users",
+      "Areas",
     ]);
+    expect(sectionTitles(mainNav)).toEqual(["Trips", "Fleet", "Administration"]);
+    expect(mainNav.textContent.indexOf("Trips")).toBeLessThan(mainNav.textContent.indexOf("Requests"));
+    expect(mainNav.textContent.indexOf("Administration")).toBeLessThan(mainNav.textContent.indexOf("Users"));
 
-    // Profile is glued to the bottom (drawer append slot).
+    // My Requests (`meta.pinned`) and the profile are glued to the bottom (drawer append slot), My Requests first.
     const bottom = sidebar.querySelector(".v-navigation-drawer__append");
-    expect(bottom.querySelector('[aria-label="Open profile menu"]').textContent).toContain("Jane Doe");
+    const pinned = bottom.querySelector('[aria-label="Pinned navigation"]');
+    expect([...pinned.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual(["My Requests"]);
+    const profile = bottom.querySelector('[aria-label="Open profile menu"]');
+    expect(profile.textContent).toContain("Jane Doe");
+    expect(pinned.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("leaves out Sidebar sections the user has no pages in", async () => {
+    signIn([{ id: 1, role: "maintenance", areaId: null, area: null }]);
+    await openApp("/");
+
+    const mainNav = drawer().querySelector('[aria-label="Main navigation"]');
+    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual(["Service Types"]);
+    expect(sectionTitles(mainNav)).toEqual(["Fleet"]);
+  });
+
+  it("highlights the Sidebar link for the page's section, including nested pages", async () => {
+    signIn([{ id: 1, role: "admin", areaId: null, area: null }]);
+    await openApp("/drivers");
+    const highlighted = () =>
+      [...drawer().querySelectorAll("a.v-list-item--active")].map((link) => link.textContent.trim());
+
+    expect(highlighted()).toEqual(["Drivers"]);
+    for (const [path, expected] of [
+      ["/drivers/new", ["Drivers"]],
+      ["/drivers/3", ["Drivers"]],
+      ["/vehicles/4", ["Vehicles"]],
+      ["/destinations/new", ["Destinations"]],
+      ["/requests/5", ["Requests"]],
+      ["/", ["My Requests"]],
+    ]) {
+      await router.push(path);
+      await settle();
+      await waitFor(() => expect(highlighted()).toEqual(expected));
+    }
+  });
+
+  it("highlights My Requests on a requester's own request page", async () => {
+    signIn([]);
+    await openApp("/requests/5");
+
+    const highlighted = [...appBar().querySelectorAll("a.v-btn--active")].map((link) => link.textContent.trim());
+    expect(highlighted).toEqual(["My Requests"]);
   });
 
   it("collapses and expands the Sidebar", async () => {
@@ -96,10 +143,20 @@ describe("App shell (ui-style-system.mdc)", () => {
     await settle();
     expect(drawer().classList).toContain("v-navigation-drawer--rail");
     expect(drawer().textContent).not.toContain("Vehicle Registration");
+    // Collapsed, section titles give way to icons only.
+    expect(drawer().querySelectorAll(".v-list-subheader")).toHaveLength(0);
+    // Collapsed links name their page in a tooltip; expanded, the label shows, so tooltips stay off.
+    const tooltips = () =>
+      wrapper.findComponent({ name: "VNavigationDrawer" }).findAllComponents({ name: "VTooltip" }).map((tooltip) => tooltip.props());
+    expect(tooltips().map(({ text, disabled }) => [text, disabled])).toEqual([
+      ["Service Types", false],
+      ["My Requests", false],
+    ]);
 
     drawer().querySelector('[aria-label="Expand sidebar"]').click();
     await settle();
     expect(drawer().classList).not.toContain("v-navigation-drawer--rail");
+    expect(tooltips().every(({ disabled }) => disabled)).toBe(true);
   });
 
   it("signs out from the Sidebar profile menu", async () => {

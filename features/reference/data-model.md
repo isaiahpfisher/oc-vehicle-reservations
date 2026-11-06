@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 9 adds `mileage_logs`. Feature 10 adds `issue_reports` and an interim `vehicle_requests` table. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 8 adds `vehicle_requests` and its stop, driver, and vehicle tables. Feature 9 adds `mileage_logs`. Feature 10 adds `issue_reports`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -164,16 +164,33 @@ JSON keys are `vehicleId`, `userId`, `odometerReading`, and `recordedAt`.
 
 JSON keys are camelCase: `vehicleId`, `vehicleRequestId`, `authorId`, `assigneeId`, `resolvedAt`, `createdAt`, `updatedAt`.
 
-## `vehicle_requests` (interim)
-
-Stand-in until Feature 8. Remove this table definition from the stand-in model when the real vehicle request model lands. Sequelize `alter` will add Feature 8's columns.
+## `vehicle_requests` (Feature 8)
 
 | Column | Type | Rules |
 | ------ | ---- | ----- |
 | `id` | INTEGER | Primary key, auto-increment |
-| `purpose` | TEXT | Required |
-| `created_at` | DATE | Sequelize timestamp |
-| `updated_at` | DATE | Sequelize timestamp |
+| `userId` (`user_id`) | INTEGER | Required. References `users.id`. Set from the session. |
+| `areaId` (`area_id`) | INTEGER | Required. References `areas.id`. |
+| `purpose` | TEXT | Required, trimmed |
+| `startAt` / `endAt` (`start_at` / `end_at`) | DATE | Required. `endAt >= startAt`. All-day trips are stored at UTC midnight. |
+| `allDay` (`all_day`) | BOOLEAN | Default `false` |
+| `numberOfPeople` (`number_of_people`) | INTEGER | Required, non-negative |
+| `estimatedMiles` (`estimated_miles`) | INTEGER | Nullable: `null` when the trip couldn't be estimated (FR-007). Recalculated when destinations change, or on any edit while `null`. |
+| `approverId` (`approver_id`) | INTEGER | Optional. References `users.id`. |
+| `approvedAt` (`approved_at`) | DATE | Optional |
+| `status` | ENUM | `pending`, `awaiting_vehicle`, `reserved`, `returned`, `cancelled`, `denied`. Default `pending`. |
+
+## `vehicle_request_destinations` / `vehicle_request_drivers` / `vehicle_request_vehicles` (Feature 8)
+
+| Table | Columns | Rules |
+| ----- | ------- | ----- |
+| `vehicle_request_destinations` | `vehicleRequestId`, `destinationId`, `stopOrder` (`stop_order`) | One row per stop, 1-based order. A destination may repeat, but not twice in a row. |
+| `vehicle_request_drivers` | `vehicleRequestId`, `driverId` | Unique on (`driver_id`, `vehicle_request_id`) |
+| `vehicle_request_vehicles` | `vehicleRequestId`, `vehicleId` | Unique on (`vehicle_request_id`, `vehicle_id`) |
+
+Deleting a request cascades to its stops, drivers, and vehicles (requests are never deleted by the API; only `npm run seed` clears them).
+
+Requests restrict deleting the user who made them and the area, destinations, drivers, and vehicles they use (`onDelete: RESTRICT`). Deleting an approver sets `approverId` to `null`.
 
 ## Associations
 
@@ -184,7 +201,7 @@ Stand-in until Feature 8. Remove this table definition from the stand-in model w
 - A vehicle type has many vehicles. A vehicle belongs to one vehicle type. The vehicle type cannot be deleted while it still has vehicles.
 - A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
 - Service types have no associations.
-- Destinations have no associations.
+- A destination has many request stops (Feature 8). It can't be deleted while a request uses it.
 - A vehicle has many mileage logs. A mileage log belongs to one vehicle. The vehicle cannot be deleted while it still has mileage logs.
 - A user has many mileage logs. A mileage log belongs to one user. The user cannot be deleted while they still have mileage logs.
 - A vehicle has many issue reports. An issue report belongs to one vehicle. The vehicle cannot be deleted while it still has issue reports.

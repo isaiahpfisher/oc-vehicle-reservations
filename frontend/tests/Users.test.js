@@ -10,6 +10,16 @@ import userServices from "../src/services/userServices.js";
 import areaServices from "../src/services/areaServices.js";
 import { apiError, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
 
+// Anything else the app shell loads (e.g. home's requests) gets an empty answer instead of reaching the network.
+vi.mock("../src/services/services.js", () => ({
+  default: {
+    get: vi.fn(async () => ({ data: [] })),
+    post: vi.fn(async () => ({ data: {} })),
+    put: vi.fn(async () => ({ data: {} })),
+    delete: vi.fn(async () => ({ data: {} })),
+  },
+}));
+
 vi.mock("../src/services/userServices.js", () => ({
   default: { getUsers: vi.fn(), getUser: vi.fn(), updateUserRoles: vi.fn(), deleteUser: vi.fn() },
 }));

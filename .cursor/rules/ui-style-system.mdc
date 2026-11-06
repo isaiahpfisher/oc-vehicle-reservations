@@ -75,7 +75,7 @@ For users with no roles besides requesters:
 </v-app>
 ```
 
-For users with additional roles, use a sidebar instead of a menu bar. The sidebar should have the OC Logo at the top and the profile glued to the bottom. It should be collapsible
+For users with additional roles, use a sidebar instead of a menu bar. The sidebar should have the OC Logo at the top and the profile glued to the bottom. It should be collapsible. Its pages are grouped into titled sections (**Trips**, **Fleet**, **Administration**) via route `meta.navGroup`; a section with no pages the user may open is left out, and when collapsed the titles become dividers and each link shows its page name in a tooltip. The link for the current page stays highlighted on its nested pages (`/drivers/3` highlights **Drivers**); pages under no link (a requester's `/requests/:id`) highlight **My Requests**. The MenuBar follows the same rule.
 
 ```vue
 <v-app>
@@ -84,7 +84,7 @@ For users with additional roles, use a sidebar instead of a menu bar. The sideba
 </v-app>
 ```
 
-Hide `MenuBar` / `Sidebar` on the login route and until the first navigation resolves (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links.
+Hide `MenuBar` / `Sidebar` on the login route and until the first navigation resolves (Feature 1). Pages appear in the MenuBar/Sidebar through route `meta.nav` (label), `meta.icon`, and `meta.roles` — don't hand-add links. `meta.pinned` moves a link in the Sidebar from the page list to just above the profile; the MenuBar ignores it.
 
 Add breadcrumbs to the top of all nested pages so users can easily get back to the previous page(s).
 
@@ -98,7 +98,7 @@ Build every routed view from the shared shells in `frontend/src/components/layou
 | `SectionCard` | Any titled card of content or settings | `title`, `subtitle`; `#append` for a header CTA; default slot = body; `#actions` = footer buttons under a divider (secondary/cancel first, primary last) |
 | `DetailHeader` | The identity card at the top of a detail page | `title` (rendered as the page `h2`), `subtitle`, `meta`, `initials` or `icon`; `#append` for status/role chips |
 | `DetailLayout` | Detail page body | `#header` (a `DetailHeader`), `#aside` (narrow column: what the record is / its settings, as `SectionCard`s), default slot (wide column: tabs and tables of related activity) |
-| `FormSection` | One group of fields on a form page (e.g. `DriverForm.vue`) | `title`, `subtitle` on the left; default slot = the fields on the right, vertically centered beside them (use `hide-details="auto"` on fields so empty message space doesn't throw off the centering). Stacks on small screens; consecutive sections get a divider. Put **Cancel** / **Save** after the last section. |
+| `FormSection` | One group of fields on a form page (e.g. `DriverForm.vue`, `DestinationForm.vue`) | `title`, `subtitle` on the left; default slot = the fields on the right, vertically centered beside them (use `hide-details="auto"` on fields so empty message space doesn't throw off the centering). Stacks on small screens; consecutive sections get a divider. Put **Cancel** / **Save** after the last section. |
 
 Pair them with the existing shared pieces in `components/common/`:
 

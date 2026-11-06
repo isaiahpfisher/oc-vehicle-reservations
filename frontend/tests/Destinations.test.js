@@ -1,6 +1,11 @@
 /**
  * Feature 6 — Destinations
  * Spec: features/feature-6-destinations.md
+ * Feature 8, FR-010 moves create and edit from dialogs to their own page (`DestinationForm.vue`),
+ * so "dialog" in a scenario title below means that page.
+ *
+ * Feature 8 — Vehicle Request Management (US-8.10, changes to Destination Management)
+ * Spec: features/feature-8-vehicle-requests.md
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
@@ -8,6 +13,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import destinationServices from "../src/services/destinationServices.js";
+import placeServices from "../src/services/placeServices.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
@@ -22,6 +28,10 @@ vi.mock("../src/services/destinationServices.js", () => ({
     updateDestination: vi.fn(),
     removeDestination: vi.fn(),
   },
+}));
+
+vi.mock("../src/services/placeServices.js", () => ({
+  default: { searchAddresses: vi.fn(), getAddress: vi.fn(), getMilesFromCampus: vi.fn() },
 }));
 
 const signedInUser = {
@@ -123,11 +133,13 @@ const fill = async (values) => {
   }
 };
 
+const heading = () => document.body.querySelector("h2")?.textContent.trim();
+
 const openNewDestination = async () => {
-  namedButton("+ New Destination").click();
-  await settle();
+  await clickNamed("+ New Destination");
   await waitFor(() => {
-    expect(document.body.textContent).toContain("New destination");
+    expect(router.currentRoute.value.name).toBe("destinationCreate");
+    expect(heading()).toBe("New Destination");
   });
 };
 
@@ -149,7 +161,17 @@ const openEdit = async (name) => {
   await waitFor(() => expect(editButton(name)).toBeTruthy());
   editButton(name).click();
   await settle();
-  await waitFor(() => expect(namedButton("Save")).toBeTruthy());
+  await waitFor(() => {
+    expect(router.currentRoute.value.name).toBe("destinationDetails");
+    expect(heading()).toBe(name);
+  });
+};
+
+/** Edit opens the saved record from the API, so serve it there too. */
+const listWith = (...destinations) => {
+  destinationServices.getDestinationById.mockImplementation(async (id) => ({
+    data: destinations.find((destination) => String(destination.id) === String(id)),
+  }));
 };
 
 const expectBlocked = (service, message) => {
@@ -168,6 +190,7 @@ beforeEach(async () => {
     return { data: [] };
   });
   destinationServices.getDestinations.mockResolvedValue({ data: [] });
+  listWith(pops, lake);
   destinationServices.createDestination.mockResolvedValue({ status: 201, data: pops });
   destinationServices.updateDestination.mockResolvedValue({ status: 200, data: pops });
   destinationServices.removeDestination.mockResolvedValue({
@@ -221,7 +244,7 @@ describe("Feature 6 — Destinations", () => {
 
       await openNewDestination();
       await fill({ ...requiredFields, "ZIP code": "73007", "Miles from campus": "22" });
-      await clickNamed("Create");
+      await clickNamed("Save");
 
       await waitFor(() => expect(destinationServices.createDestination).toHaveBeenCalledTimes(1));
       expect(destinationServices.createDestination).toHaveBeenCalledWith({
@@ -256,7 +279,7 @@ describe("Feature 6 — Destinations", () => {
 
       await openNewDestination();
       await fill(requiredFields);
-      await clickNamed("Create");
+      await clickNamed("Save");
 
       await waitFor(() => expect(destinationServices.createDestination).toHaveBeenCalledTimes(1));
       expect(destinationServices.createDestination.mock.calls[0][0].is_saved).toBe(true);
@@ -275,7 +298,7 @@ describe("Feature 6 — Destinations", () => {
 
       await openNewDestination();
       await fill(requiredFields);
-      await clickNamed("Create");
+      await clickNamed("Save");
 
       await waitFor(() => expect(destinationServices.createDestination).toHaveBeenCalledTimes(1));
       expect(destinationServices.createDestination).toHaveBeenCalledWith({
@@ -333,7 +356,7 @@ describe("Feature 6 — Destinations", () => {
         await mountAppAt("/destinations");
         await openNewDestination();
         await fill(values);
-        await clickNamed("Create");
+        await clickNamed("Save");
         expectBlocked(destinationServices.createDestination, message);
       });
     }
@@ -427,7 +450,8 @@ describe("Feature 6 — Destinations", () => {
       await clickNamed("Save");
 
       await waitFor(() => expect(destinationServices.updateDestination).toHaveBeenCalledTimes(1));
-      expect(destinationServices.updateDestination).toHaveBeenCalledWith(1, expect.objectContaining({ name: "Arcadia Lake" }));
+      // The id comes from the route (`/destinations/1`), so it arrives as a string.
+      expect(destinationServices.updateDestination).toHaveBeenCalledWith("1", expect.objectContaining({ name: "Arcadia Lake" }));
       expect(updated.status).toBe(200);
       await waitFor(() => expect(wrapper.text()).toContain("Arcadia Lake"));
     });
@@ -435,6 +459,7 @@ describe("Feature 6 — Destinations", () => {
     it("Admin user makes an unofficial destination official", async () => {
       signIn();
       const unofficial = { ...pops, is_saved: false };
+      listWith(unofficial);
       const updated = { status: 200, data: { ...unofficial, is_saved: true } };
       destinationServices.updateDestination.mockResolvedValue(updated);
       destinationServices.getDestinations
@@ -455,6 +480,7 @@ describe("Feature 6 — Destinations", () => {
     it("Area admin user makes an unofficial destination official", async () => {
       signIn(areaAdminRoles);
       const unofficial = { ...pops, is_saved: false };
+      listWith(unofficial);
       const updated = { status: 200, data: { ...unofficial, is_saved: true } };
       destinationServices.updateDestination.mockResolvedValue(updated);
       destinationServices.getDestinations
@@ -565,6 +591,214 @@ describe("Feature 6 — Destinations", () => {
       await mountAppAt("/destinations");
 
       expect(router.currentRoute.value.path).toBe("/");
+    });
+  });
+});
+
+describe("Feature 8 — Vehicle Request Management", () => {
+  // FR-011: Destination Management can be searched and filtered, like the Drivers list.
+  describe("US-8.10 — Destination Management updates", () => {
+    const zoo = {
+      ...lake,
+      id: 3,
+      name: "OKC Zoo",
+      address_line_1: "2000 Remington Pl",
+      city: "Oklahoma City",
+      zip_code: "73111",
+      is_saved: true,
+    };
+    const listed = () => rows().map((row) => row.querySelector("a")?.textContent.trim()).filter(Boolean);
+    const search = async (text) => {
+      await (await field("VTextField", undefined)).setValue(text);
+      await settle();
+    };
+
+    it("Search destinations by name or address", async () => {
+      signIn();
+      destinationServices.getDestinations.mockResolvedValue({ data: [pops, lake, zoo] });
+      await mountAppAt("/destinations");
+      await waitFor(() => expect(listed()).toEqual(["Pops", "Arcadia Lake", "OKC Zoo"]));
+
+      for (const [text, expected] of [
+        ["zoo", ["OKC Zoo"]],
+        ["arcadia", ["Pops", "Arcadia Lake"]],
+        ["lake dr", ["Arcadia Lake"]],
+        ["73111", ["OKC Zoo"]],
+        ["OK-66 arcadia", ["Pops"]],
+      ]) {
+        await search(text);
+        await waitFor(() => expect(listed()).toEqual(expected));
+      }
+
+      await search("nowhere");
+      await waitFor(() => expect(document.body.textContent).toContain("No destinations match your search."));
+      await search("");
+      await waitFor(() => expect(listed()).toEqual(["Pops", "Arcadia Lake", "OKC Zoo"]));
+    });
+
+    it("Filter destinations by availability", async () => {
+      signIn(areaAdminRoles);
+      destinationServices.getDestinations.mockResolvedValue({ data: [pops, lake, zoo] });
+      await mountAppAt("/destinations");
+      await waitFor(() => expect(listed()).toHaveLength(3));
+
+      const filter = await field("VSelect", "Filter by availability");
+      expect(filter.props("items").map(({ title }) => title)).toEqual(["Official", "Unofficial"]);
+
+      await filter.setValue(false);
+      await waitFor(() => expect(listed()).toEqual(["Arcadia Lake"]));
+      await filter.setValue(true);
+      await waitFor(() => expect(listed()).toEqual(["Pops", "OKC Zoo"]));
+
+      // Search and filter combine.
+      await search("arcadia");
+      await waitFor(() => expect(listed()).toEqual(["Pops"]));
+      await filter.setValue(null);
+      await waitFor(() => expect(listed()).toEqual(["Pops", "Arcadia Lake"]));
+    });
+
+    // FR-010: create and edit happen on their own page, laid out like the Driver form.
+    it("Destination name opens its page", async () => {
+      signIn();
+      destinationServices.getDestinations.mockResolvedValue({ data: [pops] });
+      await mountAppAt("/destinations");
+
+      await waitFor(() => expect(rowFor("Pops")?.querySelector("a")).toBeTruthy());
+      rowFor("Pops").querySelector("a").click();
+      await settle();
+
+      await waitFor(() => expect(heading()).toBe("Pops"));
+      expect(router.currentRoute.value.fullPath).toBe("/destinations/1");
+      expect(destinationServices.getDestinationById).toHaveBeenCalledWith("1");
+      expect(document.body.querySelector(".v-breadcrumbs").textContent).toContain("Destinations");
+      const sections = [...document.body.querySelectorAll(".form-section h3")].map((h) => h.textContent.trim());
+      expect(sections).toEqual(["Find on Google Maps", "Name", "Address", "Distance", "Availability"]);
+    });
+
+    it("Cancel returns to the destinations list without saving", async () => {
+      signIn();
+      await mountAppAt("/destinations/new");
+
+      await fill(requiredFields);
+      await clickNamed("Cancel");
+
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("destinations"));
+      expect(destinationServices.createDestination).not.toHaveBeenCalled();
+    });
+
+    it("Stays on the page and shows the API error when saving fails", async () => {
+      signIn();
+      destinationServices.createDestination.mockRejectedValue({
+        response: { status: 400, data: { message: "Destination name already exists." } },
+      });
+      await mountAppAt("/destinations/new");
+
+      await fill(requiredFields);
+      await clickNamed("Save");
+
+      await waitFor(() => expect(document.body.textContent).toContain("Destination name already exists."));
+      expect(router.currentRoute.value.name).toBe("destinationCreate");
+    });
+
+    // FR-008 and FR-010: the destination form uses Google address search and distance from campus.
+    const suggestion = { placeId: "place-1", name: "Pops 66", description: "Arcadia, OK, USA" };
+    const address = { addressLine1: "660 W Highway 66", addressLine2: "", city: "Arcadia", state: "OK", zipCode: "73007" };
+
+    const openSearch = async () => {
+      await openNewDestination();
+      const search = await field("VAutocomplete", "Search for an address");
+      placeServices.searchAddresses.mockResolvedValue({ data: [suggestion] });
+      placeServices.getAddress.mockResolvedValue({ data: address });
+      return search;
+    };
+
+    it("Picking an address fills the form and looks up miles from campus", async () => {
+      signIn(areaAdminRoles);
+      placeServices.getMilesFromCampus.mockResolvedValue({ data: { milesFromCampus: 12 } });
+      await mountAppAt("/destinations");
+      const search = await openSearch();
+
+      search.vm.$emit("update:search", "Pops 66");
+      await waitFor(() => expect(placeServices.searchAddresses).toHaveBeenCalledTimes(1));
+      search.vm.$emit("update:modelValue", suggestion);
+
+      const miles = await textField("Miles from campus");
+      await waitFor(() => expect(miles.props("modelValue")).toBe(12));
+      expect(placeServices.getMilesFromCampus).toHaveBeenCalledWith("place-1");
+      expect((await textField("Name")).props("modelValue")).toBe("Pops 66");
+      expect((await textField("Address line 1")).props("modelValue")).toBe("660 W Highway 66");
+      expect((await textField("City")).props("modelValue")).toBe("Arcadia");
+      expect(document.body.textContent).toContain("From Google Maps");
+
+      // The filled fields stay editable and save through Feature 6's API.
+      await (await textField("Name")).setValue("Pops");
+      await (await textField("Miles from campus")).setValue("13");
+      await clickNamed("Save");
+      await waitFor(() => expect(destinationServices.createDestination).toHaveBeenCalledTimes(1));
+      expect(destinationServices.createDestination).toHaveBeenCalledWith({
+        name: "Pops",
+        address_line_1: "660 W Highway 66",
+        address_line_2: null,
+        city: "Arcadia",
+        state: "OK",
+        zip_code: "73007",
+        is_saved: true,
+        miles_from_campus: 13,
+      });
+    });
+
+    it("Keeps a name the user already typed", async () => {
+      signIn();
+      placeServices.getMilesFromCampus.mockResolvedValue({ data: { milesFromCampus: 12 } });
+      await mountAppAt("/destinations");
+      const search = await openSearch();
+      await (await textField("Name")).setValue("Route 66 stop");
+
+      search.vm.$emit("update:modelValue", suggestion);
+
+      const city = await textField("City");
+      await waitFor(() => expect(city.props("modelValue")).toBe("Arcadia"));
+      expect((await textField("Name")).props("modelValue")).toBe("Route 66 stop");
+    });
+
+    it("Falls back to typing miles when the lookup fails", async () => {
+      signIn();
+      placeServices.getMilesFromCampus.mockRejectedValue(new Error("Network Error"));
+      await mountAppAt("/destinations");
+      const search = await openSearch();
+
+      search.vm.$emit("update:modelValue", suggestion);
+
+      const city = await textField("City");
+      await waitFor(() => expect(city.props("modelValue")).toBe("Arcadia"));
+      await waitFor(() => expect(placeServices.getMilesFromCampus).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(document.body.textContent).toContain("Network Error"));
+      expect((await textField("Miles from campus")).props("modelValue")).toBe("");
+      await (await textField("Miles from campus")).setValue("22");
+      await clickNamed("Save");
+      await waitFor(() => expect(destinationServices.createDestination).toHaveBeenCalledTimes(1));
+      expect(destinationServices.createDestination.mock.calls[0][0].miles_from_campus).toBe(22);
+    });
+
+    it("Ignores a distance for a destination the user has moved on from", async () => {
+      signIn();
+      let answer;
+      placeServices.getMilesFromCampus.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      destinationServices.getDestinations.mockResolvedValue({ data: [pops] });
+      await mountAppAt("/destinations");
+      await openEdit("Pops");
+      const search = await field("VAutocomplete", "Search for an address");
+      placeServices.getAddress.mockResolvedValue({ data: address });
+
+      search.vm.$emit("update:modelValue", suggestion);
+      await waitFor(() => expect(placeServices.getMilesFromCampus).toHaveBeenCalledTimes(1));
+      // Same page component, new record: the answer for Pops must not land on the new form.
+      await router.push({ name: "destinationCreate" });
+      await waitFor(() => expect(heading()).toBe("New Destination"));
+      answer({ data: { milesFromCampus: 99 } });
+      await settle();
+
+      expect((await textField("Miles from campus")).props("modelValue")).toBe("");
     });
   });
 });

@@ -44,6 +44,7 @@ globs: "frontend/src/**/*, frontend/vite.config.js"
     *   `public: true` — open without a session (login).
     *   `roles: [...]` — the user needs any one (admins always pass); no `roles` = any signed-in user.
     *   `nav: "Label"`, `icon: "mdi-…"` — adds the page to the MenuBar/Sidebar, shown only when `canOpen(route)` is true. Never hand-add nav links.
+    *   `navGroup: "Trips" | "Fleet" | "Administration"` — the Sidebar section for that link (`NAV_GROUPS` in `composables/useAppNav.js`). Links keep the order routes are defined in `router.js`; `pinned: true` sits above the profile instead.
 *   `router.beforeEach` enforces these per `auth-patterns.mdc`.
 
 ## Shared State (Pinia)

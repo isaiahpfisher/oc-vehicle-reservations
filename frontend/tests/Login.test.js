@@ -70,7 +70,8 @@ beforeEach(() => {
   signInAs(null);
   vi.resetAllMocks();
   // The first navigation refreshes roles from GET users/:id (Feature 3 FR-009)
-  apiClient.get.mockResolvedValue({ data: { roles: [] } });
+  // Feature 8 (US-8.2): home now loads `me/requests`, so only the role refresh gets a user back.
+  apiClient.get.mockImplementation(async (url) => (url.startsWith("users/") ? { data: { roles: [] } } : { data: [] }));
 });
 
 afterEach(() => {

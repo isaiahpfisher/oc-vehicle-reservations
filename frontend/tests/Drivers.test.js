@@ -75,8 +75,11 @@ const field = (name, label) =>
 
 const rows = () => [...document.body.querySelectorAll(".v-data-table tbody tr")];
 const rowTexts = () => rows().map((row) => row.textContent);
+// Feature 8 (US-8.2): home is My Requests, pinned at the bottom of the Sidebar.
 const navLabels = () =>
-  [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
+  [...document.body.querySelectorAll('[aria-label="Main navigation"] a, [aria-label="Pinned navigation"] a')].map((link) =>
+    link.textContent.trim(),
+  );
 
 const search = async (text) => {
   await wrapper.find('input[aria-label="Search drivers"]').setValue(text);
@@ -104,7 +107,8 @@ beforeEach(async () => {
   roles = adminRoles;
   signInAs(null);
   vi.resetAllMocks();
-  apiClient.get.mockImplementation(async () => ({ data: { roles } }));
+  // Feature 8 (US-8.2): home loads `me/requests`, so only the role refresh gets a user back.
+  apiClient.get.mockImplementation(async (url) => (String(url).startsWith("users/") ? { data: { roles } } : { data: [] }));
   driverServices.getDrivers.mockResolvedValue({ data: [] });
   driverServices.getDriver.mockResolvedValue({ data: john });
   driverServices.getAvailableUsers.mockResolvedValue({ data: [] });
@@ -373,7 +377,7 @@ describe("Feature 7 — Drivers", () => {
     it("Non (area) admins cannot access", async () => {
       signIn(maintenanceRoles);
       await mountAppAt("/");
-      await waitFor(() => expect(navLabels()).toContain("Home"));
+      await waitFor(() => expect(navLabels()).toContain("My Requests"));
       expect(navLabels()).not.toContain("Drivers");
 
       for (const path of ["/drivers", "/drivers/new", "/drivers/1"]) {
