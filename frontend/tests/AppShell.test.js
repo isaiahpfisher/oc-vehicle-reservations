@@ -69,6 +69,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     // Feature 6 (US-6.5) adds Destinations for admin and area admin.
     // Feature 12 (US-12.5) adds Service Types for admin, area admin, and maintenance.
     // Feature 7 (US-7.5) adds Drivers for admin and area admin.
+    // Feature 10 adds Issue Reports for every signed-in user.
     expect([...content.querySelectorAll('[aria-label="Main navigation"] a')].map((a) => a.textContent.trim())).toEqual([
       "Home",
       "Users",
@@ -77,6 +78,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Destinations",
       "Vehicles",
       "Drivers",
+      "Issue Reports",
       "Service Types",
     ]);
 

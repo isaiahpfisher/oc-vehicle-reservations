@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 9 mileage log routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 10 issue report routes, Feature 9 mileage log routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -241,6 +241,53 @@ Success body: `{ "id", "name", "address_line_1", "address_line_2", "city", "stat
 | `miles_from_campus` is negative or not a whole number | `400` | `{ "message": "Miles from campus must be a whole number of 0 or more." }` |
 | `destinationId` is not an integer | `400` | `{ "message": "Invalid destination id." }` |
 | Destination id does not exist | `404` | `{ "message": "Destination with id=… not found." }` |
+
+## Issue reports
+
+Every route requires a Bearer token. Role checks are in the controller. A missing or invalid session is `401` `{ "message": "Unauthorized." }`. A signed-in user who is not allowed is `403` `{ "message": "Forbidden." }`.
+
+`authorId` is the signed-in user on create and is ignored in the body. It does not change on update. `vehicleRequestId` and `assigneeId` are optional and may be `null`. `type` is `low_gas`, `dirty`, `maintenance`, or `other`. `status` is `pending`, `resolved`, or `cancelled`. `resolvedAt` is `YYYY-MM-DD` when status is `resolved`, and must be omitted or `null` otherwise. `description` is trimmed.
+
+`GET /api/issue-reports` with no query returns every report for an admin and area-scoped reports for an area admin, newest id first. Another signed-in user receives `403`. `?userId=` returns reports whose `authorId` is that user. An admin may request any user. An area admin's results stay inside their areas. Any other signed-in user may request only their own id. `?vehicleId=` returns reports for that vehicle. An admin may request any vehicle. An area admin may request it only when the vehicle is in an area they administer. Both query filters apply together. A missing report is `404`, not `403`. The author may `GET` their own report. `PUT` and `DELETE` do not allow an author who is not an admin or area admin for that vehicle's area.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/issue-reports` | Bearer | `200` array. Admin: every report. Area admin: reports whose vehicle is in an area they administer. |
+| `GET` | `/api/issue-reports?userId=` | Bearer | `200` array of that author's reports, still limited by the caller's role. |
+| `GET` | `/api/issue-reports?vehicleId=` | Bearer | `200` array for that vehicle when the caller may see it. |
+| `GET` | `/api/issue-reports/:issueReportId` | Bearer | `200` with one issue report. Admin, area admin for that vehicle's area, or the author. |
+| `POST` | `/api/issue-reports` | Bearer | `201` with the created issue report. Any signed-in user. |
+| `PUT` | `/api/issue-reports/:issueReportId` | Bearer | `200` with the updated issue report. Admin, or area admin for the report's current vehicle and the vehicle in the body. |
+| `DELETE` | `/api/issue-reports/:issueReportId` | Bearer | `200` `{ "message": "Issue report deleted successfully." }`. |
+
+Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId", "type", "description", "status", "resolvedAt", "author", "assignee", "vehicle", "vehicleRequest", "createdAt", "updatedAt" }`. `author` and `assignee` are `{ "id", "firstName", "lastName" }` or `null`. `vehicle` is `{ "id", "universityId" }`. `vehicleRequest` is `{ "id", "purpose" }` or `null`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token, or the session is missing or expired | `401` | `{ "message": "Unauthorized." }` |
+| Signed-in user is not allowed to read or change that report | `403` | `{ "message": "Forbidden." }` |
+| Missing `vehicleId` | `400` | `{ "message": "Missing vehicle." }` |
+| Missing `type` | `400` | `{ "message": "Missing type." }` |
+| `type` is not one of the allowed values | `400` | `{ "message": "Invalid type." }` |
+| Missing or whitespace-only `description` | `400` | `{ "message": "Missing description." }` |
+| Missing `status` | `400` | `{ "message": "Missing status." }` |
+| `status` is not one of the allowed values | `400` | `{ "message": "Invalid status." }` |
+| `status` is `resolved` and `resolvedAt` is missing | `400` | `{ "message": "Missing resolved date." }` |
+| `resolvedAt` is not a real `YYYY-MM-DD` date | `400` | `{ "message": "Invalid resolved date." }` |
+| `resolvedAt` is sent when `status` is not `resolved` | `400` | `{ "message": "Resolved date must be empty." }` |
+| `vehicleId` does not exist | `404` | `{ "message": "Vehicle not found." }` |
+| `vehicleRequestId` does not exist | `404` | `{ "message": "Vehicle request not found." }` |
+| `assigneeId` does not exist | `404` | `{ "message": "Assignee not found." }` |
+| `userId` query is not an integer | `400` | `{ "message": "Invalid user id." }` |
+| `userId` query does not match a user, for an admin or area admin | `404` | `{ "message": "User not found." }` |
+| `vehicleId` query is not an integer | `400` | `{ "message": "Invalid vehicle id." }` |
+| `vehicleId` query does not match a vehicle | `404` | `{ "message": "Vehicle not found." }` |
+| `:issueReportId` is not an integer | `400` | `{ "message": "Invalid issue report id." }` |
+| Issue report id does not exist | `404` | `{ "message": "Issue report with id=… not found." }` |
+
+## Vehicle requests (interim)
+
+`GET /api/vehicle-requests` requires a Bearer token and returns `{ "id", "purpose" }` for every row, ordered by `id`. This route is a stand-in until Feature 8. A missing session uses the shared auth `401` messages, not the issue-report `Unauthorized.` body.
 
 ## Mileage logs
 

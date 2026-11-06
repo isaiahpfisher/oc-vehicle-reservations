@@ -103,6 +103,12 @@ const router = createRouter({
       meta: { roles: ["admin", "area_admin"] },
     },
     {
+      path: "/issue-reports",
+      name: "issue-reports",
+      component: () => import("./views/IssueReports.vue"),
+      meta: { nav: "Issue Reports", icon: "mdi-alert-circle-outline" },
+    },
+    {
       path: "/service-types",
       name: "service-types",
       component: () => import("./views/ServiceTypes.vue"),

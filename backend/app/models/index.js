@@ -9,6 +9,8 @@ import serviceTypeModel from "./serviceType.model.js";
 import destinationModel from "./destination.model.js";
 import vehicleModel from "./vehicle.model.js";
 import driverModel from "./driver.model.js";
+import vehicleRequestModel from "./vehicleRequest.model.js";
+import issueReportModel from "./issueReport.model.js";
 import mileageLogModel from "./mileageLog.model.js";
 
 const db = {};
@@ -25,6 +27,8 @@ db.serviceType = serviceTypeModel(sequelize, Sequelize);
 db.destination = destinationModel(sequelize, Sequelize);
 db.vehicle = vehicleModel(sequelize, Sequelize);
 db.driver = driverModel(sequelize, Sequelize);
+db.vehicleRequest = vehicleRequestModel(sequelize, Sequelize);
+db.issueReport = issueReportModel(sequelize, Sequelize);
 db.mileageLog = mileageLogModel(sequelize, Sequelize);
 
 db.user.hasMany(db.session, {
@@ -118,6 +122,54 @@ db.mileageLog.belongsTo(db.user, {
   foreignKey: "userId",
   as: "user",
   onDelete: "RESTRICT",
+});
+
+db.vehicle.hasMany(db.issueReport, {
+  foreignKey: "vehicleId",
+  as: "issueReports",
+  onDelete: "RESTRICT",
+});
+
+db.issueReport.belongsTo(db.vehicle, {
+  foreignKey: "vehicleId",
+  as: "vehicle",
+  onDelete: "RESTRICT",
+});
+
+db.vehicleRequest.hasMany(db.issueReport, {
+  foreignKey: "vehicleRequestId",
+  as: "issueReports",
+  onDelete: "SET NULL",
+});
+
+db.issueReport.belongsTo(db.vehicleRequest, {
+  foreignKey: "vehicleRequestId",
+  as: "vehicleRequest",
+  onDelete: "SET NULL",
+});
+
+db.user.hasMany(db.issueReport, {
+  foreignKey: "authorId",
+  as: "authoredIssueReports",
+  onDelete: "RESTRICT",
+});
+
+db.issueReport.belongsTo(db.user, {
+  foreignKey: "authorId",
+  as: "author",
+  onDelete: "RESTRICT",
+});
+
+db.user.hasMany(db.issueReport, {
+  foreignKey: "assigneeId",
+  as: "assignedIssueReports",
+  onDelete: "SET NULL",
+});
+
+db.issueReport.belongsTo(db.user, {
+  foreignKey: "assigneeId",
+  as: "assignee",
+  onDelete: "SET NULL",
 });
 
 export default db;
