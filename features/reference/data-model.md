@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 12 adds `service_types`. Feature 8 adds `vehicle_requests` and its stop, driver, and vehicle tables. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 8 adds `vehicle_requests` and its stop, driver, and vehicle tables. Feature 9 adds `mileage_logs`. Feature 10 adds `issue_reports`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -132,16 +132,37 @@ The JSON body uses `service_frequency_days` and `service_frequency_miles`.
 
 The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, and `miles_from_campus`. There is no `area_id`.
 
-## Associations
+## `mileage_logs`
 
-- A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
-- A user has many roles. A role belongs to one user. Deleting the user deletes their roles.
-- An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
-- An area has many vehicles. A vehicle belongs to one area. The area cannot be deleted while it still has vehicles.
-- A vehicle type has many vehicles. A vehicle belongs to one vehicle type. The vehicle type cannot be deleted while it still has vehicles.
-- A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
-- Service types have no associations.
-- A destination has many request stops (Feature 8). It can't be deleted while a request uses it.
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `vehicle_id` | INTEGER | Required. References `vehicles.id`. |
+| `user_id` | INTEGER | Required. The user who added the reading. Set from the session. References `users.id`. |
+| `odometer_reading` | INTEGER | Required. Whole number of 0 or more. |
+| `recorded_at` | DATEONLY | Required. Calendar date `YYYY-MM-DD`. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+JSON keys are `vehicleId`, `userId`, `odometerReading`, and `recordedAt`.
+
+## `issue_reports`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `vehicle_id` | INTEGER | Required. Existing vehicle. |
+| `vehicle_request_id` | INTEGER | Null when omitted. Existing vehicle request when present. |
+| `author_id` | INTEGER | Required. Set from the signed-in user. Not taken from the body. |
+| `assignee_id` | INTEGER | Null when omitted. Existing user when present. |
+| `type` | ENUM | `low_gas`, `dirty`, `maintenance`, or `other` |
+| `description` | TEXT | Required, trimmed. Whitespace-only is rejected. |
+| `status` | ENUM | `pending`, `resolved`, or `cancelled` |
+| `resolved_at` | DATEONLY | Required when `status` is `resolved`. Null otherwise. |
+| `created_at` | DATE | Sequelize timestamp |
+| `updated_at` | DATE | Sequelize timestamp |
+
+JSON keys are camelCase: `vehicleId`, `vehicleRequestId`, `authorId`, `assigneeId`, `resolvedAt`, `createdAt`, `updatedAt`.
 
 ## `vehicle_requests` (Feature 8)
 
@@ -170,3 +191,20 @@ The JSON body uses `address_line_1`, `address_line_2`, `zip_code`, `is_saved`, a
 Deleting a request cascades to its stops, drivers, and vehicles (requests are never deleted by the API; only `npm run seed` clears them).
 
 Requests restrict deleting the user who made them and the area, destinations, drivers, and vehicles they use (`onDelete: RESTRICT`). Deleting an approver sets `approverId` to `null`.
+
+## Associations
+
+- A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
+- A user has many roles. A role belongs to one user. Deleting the user deletes their roles.
+- An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
+- An area has many vehicles. A vehicle belongs to one area. The area cannot be deleted while it still has vehicles.
+- A vehicle type has many vehicles. A vehicle belongs to one vehicle type. The vehicle type cannot be deleted while it still has vehicles.
+- A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
+- Service types have no associations.
+- A destination has many request stops (Feature 8). It can't be deleted while a request uses it.
+- A vehicle has many mileage logs. A mileage log belongs to one vehicle. The vehicle cannot be deleted while it still has mileage logs.
+- A user has many mileage logs. A mileage log belongs to one user. The user cannot be deleted while they still have mileage logs.
+- A vehicle has many issue reports. An issue report belongs to one vehicle. The vehicle cannot be deleted while it still has issue reports.
+- A vehicle request has many issue reports. An issue report optionally belongs to one vehicle request. Deleting the vehicle request keeps the issue report with no linked request.
+- A user has many issue reports as author. An issue report belongs to one author. The author cannot be deleted while they still have issue reports.
+- A user has many issue reports as assignee. An issue report optionally belongs to one assignee. Deleting the assignee keeps the issue report with no assignee.

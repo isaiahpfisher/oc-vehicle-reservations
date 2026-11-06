@@ -48,6 +48,13 @@ const router = createRouter({
       props: true,
     },
     {
+      path: "/vehicles/:vehicleId/mileage-logs",
+      name: "vehicle-mileage-logs",
+      component: () => import("./views/MileageLogs.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
       path: "/drivers",
       name: "drivers",
       component: () => import("./views/Drivers.vue"),
@@ -110,6 +117,12 @@ const router = createRouter({
       name: "vehicle-types",
       component: () => import("./views/VehicleTypes.vue"),
       meta: { nav: "Vehicle Types", navGroup: "Fleet", icon: "mdi-shape-outline", roles: ["admin"] },
+    },
+    {
+      path: "/issue-reports",
+      name: "issue-reports",
+      component: () => import("./views/IssueReports.vue"),
+      meta: { nav: "Issue Reports", navGroup: "Fleet", icon: "mdi-alert-circle-outline" },
     },
     {
       path: "/service-types",

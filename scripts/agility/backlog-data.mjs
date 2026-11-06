@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const rootDir = join(__dirname, "..", "..");
 
-export const DEFAULT_PROJECT = "Courses App";
+export const DEFAULT_PROJECT = "Vehicles App";
 
 const FEATURE_FILE_RE = /^feature-(\d+)-.+\.md$/i;
 
@@ -90,8 +90,7 @@ function stripMarkdown(line) {
 }
 
 export function parseUserStories(content) {
-  const lines =
-    sectionLines(content, "User Stories") ?? content.split("## Acceptance Criteria")[0].split("\n");
+  const lines = sectionLines(content, "User Stories") ?? content.split("## Acceptance Criteria")[0].split("\n");
 
   const stories = [];
   let current = null;
@@ -207,9 +206,7 @@ export function buildBacklog(project = DEFAULT_PROJECT, options = {}) {
   }
 
   const selectedFeatures =
-    featureNums?.length > 0
-      ? featureFiles.filter((feature) => featureNums.includes(feature.num))
-      : featureFiles;
+    featureNums?.length > 0 ? featureFiles.filter((feature) => featureNums.includes(feature.num)) : featureFiles;
 
   if (featureNums?.length > 0 && selectedFeatures.length === 0) {
     const valid = featureFiles.map((feature) => feature.num).join(", ");

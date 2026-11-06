@@ -70,7 +70,7 @@ describe("App shell (ui-style-system.mdc)", () => {
 
     const content = sidebar.querySelector(".v-navigation-drawer__content");
     expect(content.textContent).toContain("OC");
-    // Pages come from route `meta.nav` (Features 3–8, 12), grouped into sections by `meta.navGroup`.
+    // Pages come from route `meta.nav` (Features 3–8, 10, 12), grouped into sections by `meta.navGroup`.
     const mainNav = content.querySelector('[aria-label="Main navigation"]');
     expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
       "Requests",
@@ -78,6 +78,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Destinations",
       "Vehicles",
       "Vehicle Types",
+      "Issue Reports",
       "Service Types",
       "Users",
       "Areas",

@@ -124,8 +124,8 @@ describe("Feature 3 — User Role Management UI", () => {
     it("Navigation hides unauthorized links", async () => {
       await pageLoad(storedUser([]));
       await openApp("/");
-      // Feature 8 (US-8.2) made home the My Requests page and added Requests for area admins.
-      expect(navLabels()).toEqual(["My Requests"]);
+      // Feature 8 (US-8.2) made home the My Requests page; Feature 10 adds Issue Reports for every signed-in user.
+      expect(navLabels()).toEqual(["My Requests", "Issue Reports"]);
 
       wrapper.unmount();
       await pageLoad(storedUser([admin]));

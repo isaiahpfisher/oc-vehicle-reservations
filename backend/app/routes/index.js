@@ -9,6 +9,8 @@ import vehicleRoutes from "./vehicle.routes.js";
 import driverRoutes from "./driver.routes.js";
 import vehicleRequestRoutes from "./vehicleRequest.routes.js";
 import placeRoutes from "./place.routes.js";
+import issueReportRoutes from "./issueReport.routes.js";
+import mileageLogRoutes from "./mileageLog.routes.js";
 
 const router = Router();
 
@@ -27,5 +29,7 @@ router.use("/vehicles", vehicleRoutes);
 router.use("/drivers", driverRoutes);
 router.use("/", vehicleRequestRoutes);
 router.use("/places", placeRoutes);
+router.use("/issue-reports", issueReportRoutes);
+router.use("/mileage-logs", mileageLogRoutes);
 
 export default router;
