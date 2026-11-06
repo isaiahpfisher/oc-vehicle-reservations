@@ -170,6 +170,7 @@ An admin may create, view, edit, and delete mileage logs for any vehicle. An are
 - Heading: **Mileage Log** for that vehicle's `universityId`.
 - The list loads `GET /api/mileage-logs?vehicleId=:vehicleId` and shows only that vehicle's readings.
 - Primary action: **+ New Mileage Log** opens a `<v-dialog>` with **Odometer reading** and **Recorded date**, plus **Create** / **Cancel**.
+  - **Recorded date** is a calendar field. The browser shows the date in its local format, such as MM/DD/YYYY, and the saved value is `YYYY-MM-DD`.
   - There is no vehicle field and no user field. The route supplies `vehicleId`. The signed-in user is stored by the API.
 - Display mileage logs as rows. Each row shows the **odometer reading**, the **recorded date**, and the first and last name of the user who added it.
 - **Edit** icon opens a `<v-dialog>` pre-filled with the current odometer reading and recorded date; **Save** / **Cancel**.
@@ -700,13 +701,13 @@ An admin may create, view, edit, and delete mileage logs for any vehicle. An are
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-006** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-006** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

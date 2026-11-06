@@ -77,6 +77,13 @@ const router = createRouter({
       meta: { roles: ["admin", "area_admin"] },
     },
     {
+      path: "/vehicles/:vehicleId/mileage-logs",
+      name: "vehicle-mileage-logs",
+      component: () => import("./views/MileageLogs.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin"] },
+    },
+    {
       path: "/drivers",
       name: "drivers",
       component: () => import("./views/Drivers.vue"),

@@ -11,6 +11,7 @@ import vehicleModel from "./vehicle.model.js";
 import driverModel from "./driver.model.js";
 import vehicleRequestModel from "./vehicleRequest.model.js";
 import issueReportModel from "./issueReport.model.js";
+import mileageLogModel from "./mileageLog.model.js";
 
 const db = {};
 db.Sequelize = Sequelize;
@@ -28,6 +29,7 @@ db.vehicle = vehicleModel(sequelize, Sequelize);
 db.driver = driverModel(sequelize, Sequelize);
 db.vehicleRequest = vehicleRequestModel(sequelize, Sequelize);
 db.issueReport = issueReportModel(sequelize, Sequelize);
+db.mileageLog = mileageLogModel(sequelize, Sequelize);
 
 db.user.hasMany(db.session, {
   foreignKey: "userId",
@@ -96,6 +98,30 @@ db.driver.belongsTo(db.user, {
   foreignKey: "userId",
   as: "user",
   onDelete: "SET NULL",
+});
+
+db.vehicle.hasMany(db.mileageLog, {
+  foreignKey: "vehicleId",
+  as: "mileageLogs",
+  onDelete: "RESTRICT",
+});
+
+db.mileageLog.belongsTo(db.vehicle, {
+  foreignKey: "vehicleId",
+  as: "vehicle",
+  onDelete: "RESTRICT",
+});
+
+db.user.hasMany(db.mileageLog, {
+  foreignKey: "userId",
+  as: "mileageLogs",
+  onDelete: "RESTRICT",
+});
+
+db.mileageLog.belongsTo(db.user, {
+  foreignKey: "userId",
+  as: "user",
+  onDelete: "RESTRICT",
 });
 
 db.vehicle.hasMany(db.issueReport, {

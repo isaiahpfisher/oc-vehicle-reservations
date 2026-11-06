@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 10 issue report routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 10 issue report routes, Feature 9 mileage log routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -288,6 +288,35 @@ Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId"
 ## Vehicle requests (interim)
 
 `GET /api/vehicle-requests` requires a Bearer token and returns `{ "id", "purpose" }` for every row, ordered by `id`. This route is a stand-in until Feature 8. A missing session uses the shared auth `401` messages, not the issue-report `Unauthorized.` body.
+
+## Mileage logs
+
+Every route requires a Bearer token (`authenticate`). An admin may read and change mileage logs for any vehicle. An area admin may do that only when the vehicle belongs to an area they administer. Any other signed-in user receives `403` `{ "message": "Forbidden." }`. A missing session is `401` `{ "message": "Unauthorized." }`.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/mileage-logs?vehicleId=:vehicleId` | Admin, or area admin for that vehicle | `200` array of that vehicle's mileage logs, newest recorded date first. |
+| `GET` | `/api/mileage-logs/:mileageLogId` | Admin, or area admin for that vehicle | `200` with one mileage log. |
+| `POST` | `/api/mileage-logs` | Admin, or area admin for that vehicle | `201` with the created mileage log. Body is `{ "vehicleId": 3, "odometerReading": 12050, "recordedAt": "2026-10-23" }`. |
+| `PUT` | `/api/mileage-logs/:mileageLogId` | Admin, or area admin for that vehicle | `200` with the updated mileage log. `vehicleId` must be the log's current vehicle. |
+| `DELETE` | `/api/mileage-logs/:mileageLogId` | Admin, or area admin for that vehicle | `200` `{ "message": "Mileage log deleted successfully." }`. |
+
+Success body: `{ "id", "vehicleId", "userId", "odometerReading", "recordedAt", "user": { "id", "firstName", "lastName" }, "vehicle": { "id", "universityId" }, "createdAt", "updatedAt" }`. `userId` is the signed-in user on create and is ignored in the body. An update does not change `userId`. `recordedAt` is `YYYY-MM-DD`. `odometerReading` is an integer of 0 or more.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized." }` |
+| Signed in without access to that vehicle | `403` | `{ "message": "Forbidden." }` |
+| Missing `vehicleId` | `400` | `{ "message": "Missing vehicle." }` |
+| Missing odometer reading | `400` | `{ "message": "Missing odometer reading." }` |
+| Missing recorded date | `400` | `{ "message": "Missing recorded date." }` |
+| Odometer reading is not a whole number | `400` | `{ "message": "Odometer reading must be a whole number." }` |
+| Odometer reading is negative | `400` | `{ "message": "Odometer reading must be zero or greater." }` |
+| Recorded date is not a real `YYYY-MM-DD` date | `400` | `{ "message": "Invalid recorded date." }` |
+| `vehicleId` does not exist | `404` | `{ "message": "Vehicle not found." }` |
+| Update sends a different existing `vehicleId` | `400` | `{ "message": "Vehicle cannot be changed." }` |
+| `:mileageLogId` is not an integer | `400` | `{ "message": "Invalid mileage log id." }` |
+| Mileage log id does not exist | `404` | `{ "message": "Mileage log with id=… not found." }` |
 
 ## Conventions
 
