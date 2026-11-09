@@ -168,358 +168,161 @@ Each parent list endpoint returns an array of this shape. `DELETE` returns `204`
 
 ## Screen Requirements
 
-### [View: Service Types] — route name `service-types`
+There are no new screens for this feature. The following existing screens should receive a new notes section:
 
-**Single Vue view** (`ServiceTypes.vue`) — no sidebar / main-panel split.
+- Vehicle Request
+- Issue Report
+- Maintenance Need
 
-- Heading: **Service Type Management**
-- Primary action: **+ New Service Type** opens a `<v-dialog>` with **Name**, **Frequency Days**, and **Frequency Miles**. **Cancel** and **Create** sit in the dialog footer.
-- Display service types in a `<v-data-table>` (10 per page). Columns are **Name**, **Frequency Days**, **Frequency Miles**, and **Actions**. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
-- **Edit** icon turns that row into inline fields pre-filled with the current name, frequency days, and frequency miles; **Save** / **Cancel**. Cancel restores the row without saving.
-- **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
-- Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit service type**, **Delete service type**).
-- **Empty state:** **"No service types yet. Create your first service type."** when there are no service types.
-- **Loading state:** skeleton or progress indicator while service types are fetching.
-- **Error state:** `<v-alert type="error">` for API failures.
-
-**Implementation note:** one route/view for service types; delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/serviceTypes`, modeled after existing create dialogs. Edit stays in the table row.
+The UI should look a lot like a standard comment section. Depending on the page in question, this could be a new section at the bottom, or a side panel on the right side of the screen. It should include a textarea to draft a note at the bottom, then show notes like a text thread with avatars and timestamps. If the active user is an admin, area_admin, or maintenance user, then they can toggle `isVisible` before saving new notes. Ignore `includeInEmail` for now. That will be used by a later feature.
 
 ---
 
 ## Key Entities
 
-- **ServiceType**: a type of service such as `Oil Change`, `Tire Rotation`, or `Spark Plug Replacement`.
+- **Note**: a comment left on a vehicle request, issue report, or maintenance need
 
 ---
 
 ## Data Model Requirements
 
-### `serviceTypes` table
+### `notes` table
 
-| Field                     | Type       | Rules                                                                             |
-| ------------------------- | ---------- | --------------------------------------------------------------------------------- |
-| `id`                      | INTEGER PK | Auto-increment                                                                    |
-| `name`                    | STRING     | Required; trimmed; unique; not case-sensitive; max 255                            |
-| `service_frequency_days`  | INT        | Optional; positive when present. At least one of the two frequencies is required. |
-| `service_frequency_miles` | INT        | Optional; positive when present. At least one of the two frequencies is required. |
-| `createdAt`               | DATE       | Sequelize timestamps                                                              |
-| `updatedAt`               | DATE       | Sequelize timestamps                                                              |
+| Field               | Type       | Rules                                                                                           |
+| ------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| `id`                | INTEGER PK | Auto-increment                                                                                  |
+| `vehicleRequestId`  | INTEGER FK | Optional; `null` or must reference `vehicleRequests.id`; deleting the request deletes its notes |
+| `issueReportId`     | INTEGER FK | Optional; `null` or must reference `issueReports.id`; deleting the report deletes its notes     |
+| `maintenanceNeedId` | INTEGER FK | Optional; `null` or must reference `maintenanceNeeds.id`; deleting the need deletes its notes   |
+| `authorId`          | INTEGER FK | Required; set from the session; must reference `users.id`                                       |
+| `content`           | TEXT       | Required; trimmed; sanitized; not whitespace-only                                               |
+| `isVisible`         | BOOLEAN    | Required; defaults to `true`                                                                    |
+| `includeInEmail`    | BOOLEAN    | Required; defaults to `false`; unused until a later feature                                     |
+| `createdAt`         | DATE       | Sequelize timestamps                                                                            |
+| `updatedAt`         | DATE       | Sequelize timestamps                                                                            |
+
+Exactly one of `vehicleRequestId`, `issueReportId`, or `maintenanceNeedId` must be set. The other two are `null`.
 
 ### Associations (in `models/index.js`)
 
-- N/A
+- `Note` belongs to `VehicleRequest`
+- `Note` belongs to `IssueReport`
+- `Note` belongs to `MaintenanceNeed`
+- `Note` belongs to `User` as `author` through `authorId`
+- `VehicleRequest` has many `Note`
+- `IssueReport` has many `Note`
+- `MaintenanceNeed` has many `Note`
+- `User` has many `Note` as author
 
 ---
 
 ## Acceptance Criteria (Gherkin)
 
-### US-14.1 — Create service types
+### US-14.1 — Add notes to entities
 
-#### Scenario: Admin user creates a service type
+#### Scenario: Unauthenticated user cannot create notes
 
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I click **+ New Service Type**
-- **Then** a dialog opens with a **Name** , **Frequency Days** and **Frequency Miles** fields.
+- **Given** I have no valid session token
+- **When** I request to create a note
+- **Then** the API rejects my request
 
-#### Scenario: Admin user saves service type
+Scenario: Unauthorized standard user cannot create notes on requests they don't have access to
 
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog with name `Oil Change`, frequency days `500`, frequence miles `5000`
-- **Then** the API returns `201` with that service type
-- **And** `Oil Change` appears in the service types list
+- **Given** I am sign-in as a standard user
+- **When** I request to create a note on a request I did not make
+- **Then** the API rejects my request
 
-#### Scenario: Admin user creates service type with missing name
+Scenario: Unauthorized area_admin user cannot create notes on requests they don't have access to
 
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog without a name
-- **Then** validation blocks the request and I see a `Required field.` message
+- **Given** I am sign-in as an area_admin
+- **When** I request to create a note on a request that I do not have access to
+- **Then** the API rejects my request
 
-#### Scenario: Admin user creates service type with missing field
+Scenario: Standard user can create notes
 
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog with a name and neither frequency
-- **Then** validation blocks the request and I see a `Required field.` message
+- **Given** I am sign-in as a standard user
+- **When** I request to create a note on a request I made
+- **Then** the request is successful
 
-#### Scenario: Admin user creates a service type with only one frequency
+Scenario: Area admin and maintenance users can create notes
 
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog with name `Oil Change` and frequency days `500`, and leave frequency miles empty
-- **Then** the API returns `201` with that service type and `service_frequency_miles` is `null`
-- **And** `Oil Change` appears in the service types list
+- **Given** I am sign-in as an area_admin or maintenance user
+- **When** I request to create a note on a request I have access to
+- **Then** the request is successful
 
-#### Scenario: Admin user requests to create a service type with a missing name
+Scenario: Admin user can create notes
 
-- **Given** I am signed in as admin, area admin, or maintenance
-- **When** I request `POST /api/service-types` with a missing filed
-- **Then** the API returns `400` with the missing field specified
-
-#### Scenario: Admin user creates service type with a whitespace-only name
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog with name ` `
-- **Then** validation blocks the request and I see a `Required field.` message
-
-#### Scenario: Admin user creates service type with name longer than 255 characters
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **When** I submit the create dialog with a service type name longer than 255 characters
-- **Then** validation blocks the request and I see a `Name too long.` message
-
-#### Scenario: Admin user creates a service type with a non-unique name
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **And** A service type with name `Oil Change` exists
-- **When** I submit the create dialog with name `Oil Change`
-- **Then** validation blocks the request and I see a `Name already taken.` message
-
-#### Scenario: Admin user creates a service type with a non-unique name that is not case-sensitive
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **And** A service type with name `Oil Change` exists
-- **When** I submit the create dialog with name `oil change`
-- **Then** validation blocks the request and I see a `Name already taken.` message
+- **Given** I am sign-in as an admin user
+- **When** I request to create a note on any request
+- **Then** the request is successful
 
 ---
 
-### US-14.2 — View service types
-
-#### Scenario: Service types view lists service types
-
-- **Given** I am signed in as admin , area admin, or maintenance and service types exist
-- **When** I open the service types view
-- **Then** each row shows the service type name, Frequency Days, Frequency Miles
-
-#### Scenario: Service types empty state
-
-- **Given** I am signed in as admin , area admin, or maintenance and there are no service types
-- **When** I open the service types view
-- **Then** I see **"No service types yet. Create your first service type."**
+### US-14.2 — View notes on entities
 
 ---
 
-### US-14.3 — Manage service type rows
+### US-14.3 — Toggle visibility
 
-#### Scenario: Service type rows have edit and delete actions
+Scenario: Admin, area_admins, maintenance users can toggle visibility
 
-- **Given** I am signed in as admin , area admin, or maintenance and at least one service type exists
-- **When** I view the service type list
-- **Then** each row shows **Edit** and **Delete** actions
+- **Given** I am sign-in as a non-standard user
+- **When** I can toggle isVisible when creating a note for a request
+- **Then** that note is only visible to other non-standard users with access to the request
 
----
+Scenario: Standard user cannot toggle note visibility
 
-### US-14.4 — Edit and delete service types
+- **Given** I am sign-in as a standard user
+- **When** I am creating a note
+- **Then** that I cannot toggle note visibility
 
-#### Scenario: Admin user edits a service type name
+Scenario: Standard user cannot see notes with isVisible set to false
 
-- **Given** I am signed in as admin , area admin, or maintenance and a service type named `Oil Change` exists
-- **When** I change the name to `Tire Rotation` and submit
-- **Then** the API returns `200` with the updated service type
-- **And** the list shows `Tire Rotation`
-
-#### Scenario: Admin user edits a service type to have a missing name
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **And** I am editing an existing service type
-- **When** I save the row without a name
-- **Then** validation blocks the request and I see a `Required field.` message
-
-#### Scenario: Admin user edits a service type to have a whitespace-only name
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **And** I am editing an existing service type
-- **When** I save the row with name ` `
-- **Then** validation blocks the request and I see a `Required field.` message
-
-#### Scenario: Admin user updates a service type to have a non-unique name
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **And** Service types with names `Oil Change` and `Tire Rotation` exist
-- **And** I edit `Tire Rotation` to have name `Oil Change`
-- **When** I save the row
-- **Then** validation blocks the request and I see a `Name already taken.` message
-
-#### Scenario: Admin user edits a service type to have a non-unique name that is not case-sensitive
-
-- **Given** I am signed in as admin , area admin, or maintenance on the service types view
-- **And** A service type with name `Oil Change` exists
-- **And** Another service type exists with name `Tire Rotation`
-- **When** I save the `Tire Rotation` row with name `oil change`
-- **Then** validation blocks the request and I see a `Name already taken.` message
-
-#### Scenario: Admin user deletes a service type
-
-- **Given** I am signed in as admin , area admin, or maintenance and a service type named `Oil Change` exists
-- **When** I confirm delete on that row
-- **Then** the API returns `200`
-- **And** that service type is removed from the list
-
-#### Scenario: Admin user updates a service type that does not exist
-
-- **Given** I am signed in as admin, area admin, or maintenance
-- **And** A service type with id `999` does not exist
-- **When** I request `PUT /api/service-types/999` with a valid body
-- **Then** the API returns `404`
-
-#### Scenario: Admin user updates a service type with an invalid serviceTypeId
-
-- **Given** I am signed in as admin, area admin, or maintenance
-- **When** I request `PUT /api/service-types/abc` with a valid body
-- **Then** the API returns `400`
-
-#### Scenario: Admin user deletes a service type that does not exist
-
-- **Given** I am signed in as admin, area admin, or maintenance
-- **And** A service type with id `999` does not exist
-- **When** I request `DELETE /api/service-types/999`
-- **Then** the API returns `404`
-
-#### Scenario: Admin user deletes a service type with an invalid serviceTypeId
-
-- **Given** I am signed in as admin, area admin, or maintenance
-- **When** I request `DELETE /api/service-types/abc`
-- **Then** the API returns `400`
+- **Given** I am sign-in as a standard user
+- **When** viewing a request
+- **Then** I do not see any notes that have isVisible toggled to false
 
 ---
 
-### US-14.5: Signed-in admin , area admin, or maintenance user access only
+### US-14.4 — Admin can delete notes
 
-#### Scenario: Un-signed-in user accesses service types page
+Scenario: Admin can delete all notes
 
-- **Given** I am not signed in
-- **When** I navigate to `/service-types` by URL
-- **Then** I am redirected to `/login`
+- **Given** I am sign-in as an admin user
+- **When** I view notes on requests
+- **Then** I can successfully delete any note
 
-#### Scenario: Unauthenticated API request to service types
+---
 
-- **Given** I have no valid session token
-- **When** I request `GET /api/service-types`
-- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
+### US-14.5 — Users can delete their own notes if no one has responded
 
-#### Scenario: Unauthenticated API request to a particular service type
+Scenario: All sign-in users can delete their own notes if no one has responded
 
-- **Given** I have no valid session token
-- **And** A service type with id `1` exists
-- **When** I request `GET /api/service-types/1`
-- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
-
-#### Scenario: Unauthenticated API request to create a service type
-
-- **Given** I have no valid session token
-- **When** I request `POST /api/service-types` with a valid body
-- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
-
-#### Scenario: Unauthenticated API request to update a service type
-
-- **Given** I have no valid session token
-- **And** A service type with id `1` exists
-- **When** I request `PUT /api/service-types/1` with a valid body
-- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
-
-#### Scenario: Unauthenticated API request to delete a service type
-
-- **Given** I have no valid session token
-- **And** A service type with id `1` exists
-- **When** I request `DELETE /api/service-types/1`
-- **Then** the API returns `401` with `{ message: "Unauthorized! No token provided." }`
-
-#### Scenario: Signed-in user without admin , area admin, or maintenance role accesses service types page
-
-- **Given** I am signed in
-- **And** I do not have role `admin`, area admin, or maintenance
-- **When** I navigate to `/service-types` by URL
-- **Then** I am redirected to `/home`
-
-#### Scenario: Signed-in user without admin , area admin, or maintenance role API request to service types
-
-- **Given** I am signed in
-- **And** I do not have role `admin`, area admin, or maintenance
-- **When** I request `GET /api/service-types`
-- **Then** the API returns `403` with `{ message: "One of these roles is required: admin, area_admin, maintenance." }`
-
-#### Scenario: Signed-in user without admin , area admin, or maintenance role API request to a particular service type
-
-- **Given** I am signed in
-- **And** I do not have role `admin`, area admin, or maintenance
-- **And** A service type with id `1` exists
-- **When** I request `GET /api/service-types/1`
-- **Then** the API returns `403` with `{ message: "One of these roles is required: admin, area_admin, maintenance." }`
-
-#### Scenario: Signed-in user without admin , area admin, or maintenance role API request to create a service type
-
-- **Given** I am signed in
-- **And** I do not have role `admin`, area admin, or maintenance
-- **When** I request `POST /api/service-types` with a valid body
-- **Then** the API returns `403` with `{ message: "One of these roles is required: admin, area_admin, maintenance." }`
-
-#### Scenario: Signed-in user without admin , area admin, or maintenance role API request to update a service type
-
-- **Given** I am signed in
-- **And** I do not have role `admin`, area admin, or maintenance
-- **And** A service type with id `1` exists
-- **When** I request `PUT /api/service-types/1` with a valid body
-- **Then** the API returns `403` with `{ message: "One of these roles is required: admin, area_admin, maintenance." }`
-
-#### Scenario: Signed-in user without admin , area admin, or maintenance role API request to delete a service type
-
-- **Given** I am signed in
-- **And** I do not have role `admin`, area admin, or maintenance
-- **And** A service type with id `1` exists
-- **When** I request `DELETE /api/service-types/1`
-- **Then** the API returns `403` with `{ message: "One of these roles is required: admin, area_admin, maintenance." }`
+- **Given** I am sign-in as any kind of user
+- **When** I view notes on a request
+- **Then** I can delete a note only if it belongs to me and no one has responded to it yet
 
 ---
 
 ## Test Coverage Map
 
-| Story   | Scenario                                                                                                | Test file                             | Test name                                                                                                 |
-| ------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| US-14.1 | Admin user creates a service type                                                                       | `frontend/tests/ServiceTypes.test.js` | `Admin user creates a service type`                                                                       |
-| US-14.1 | Admin user saves service type                                                                           | `backend/tests/serviceTypes.test.js`  | `Admin user saves service type`                                                                           |
-| US-14.1 | Admin user saves service type                                                                           | `frontend/tests/ServiceTypes.test.js` | `Admin user saves service type`                                                                           |
-| US-14.1 | Admin user creates service type with missing name                                                       | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with missing name`                                                       |
-| US-14.1 | Admin user creates service type with missing field                                                      | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with missing field`                                                      |
-| US-14.1 | Admin user creates a service type with only one frequency                                               | `backend/tests/serviceTypes.test.js`  | `Admin user creates a service type with only one frequency`                                               |
-| US-14.1 | Admin user creates a service type with only one frequency                                               | `frontend/tests/ServiceTypes.test.js` | `Admin user creates a service type with only one frequency`                                               |
-| US-14.1 | Admin user requests to create a service type with a missing name                                        | `backend/tests/serviceTypes.test.js`  | `Admin user requests to create a service type with a missing name`                                        |
-| US-14.1 | Admin user creates service type with a whitespace-only name                                             | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with a whitespace-only name`                                             |
-| US-14.1 | Admin user creates service type with a whitespace-only name                                             | `backend/tests/serviceTypes.test.js`  | `Admin user creates service type with a whitespace-only name`                                             |
-| US-14.1 | Admin user creates service type with name longer than 255 characters                                    | `frontend/tests/ServiceTypes.test.js` | `Admin user creates service type with name longer than 255 characters`                                    |
-| US-14.1 | Admin user creates service type with name longer than 255 characters                                    | `backend/tests/serviceTypes.test.js`  | `Admin user creates service type with name longer than 255 characters`                                    |
-| US-14.1 | Admin user creates a service type with a non-unique name                                                | `frontend/tests/ServiceTypes.test.js` | `Admin user creates a service type with a non-unique name`                                                |
-| US-14.1 | Admin user creates a service type with a non-unique name                                                | `backend/tests/serviceTypes.test.js`  | `Admin user creates a service type with a non-unique name`                                                |
-| US-14.1 | Admin user creates a service type with a non-unique name that is not case-sensitive                     | `frontend/tests/ServiceTypes.test.js` | `Admin user creates a service type with a non-unique name that is not case-sensitive`                     |
-| US-14.1 | Admin user creates a service type with a non-unique name that is not case-sensitive                     | `backend/tests/serviceTypes.test.js`  | `Admin user creates a service type with a non-unique name that is not case-sensitive`                     |
-| US-14.2 | Service types view lists service types                                                                  | `frontend/tests/ServiceTypes.test.js` | `Service types view lists service types`                                                                  |
-| US-14.2 | Service types empty state                                                                               | `frontend/tests/ServiceTypes.test.js` | `Service types empty state`                                                                               |
-| US-14.3 | Service type rows have edit and delete actions                                                          | `frontend/tests/ServiceTypes.test.js` | `Service type rows have edit and delete actions`                                                          |
-| US-14.4 | Admin user edits a service type name                                                                    | `backend/tests/serviceTypes.test.js`  | `Admin user edits a service type name`                                                                    |
-| US-14.4 | Admin user edits a service type name                                                                    | `frontend/tests/ServiceTypes.test.js` | `Admin user edits a service type name`                                                                    |
-| US-14.4 | Admin user edits a service type to have a missing name                                                  | `frontend/tests/ServiceTypes.test.js` | `Admin user edits a service type to have a missing name`                                                  |
-| US-14.4 | Admin user edits a service type to have a missing name                                                  | `backend/tests/serviceTypes.test.js`  | `Admin user edits a service type to have a missing name`                                                  |
-| US-14.4 | Admin user edits a service type to have a whitespace-only name                                          | `frontend/tests/ServiceTypes.test.js` | `Admin user edits a service type to have a whitespace-only name`                                          |
-| US-14.4 | Admin user edits a service type to have a whitespace-only name                                          | `backend/tests/serviceTypes.test.js`  | `Admin user edits a service type to have a whitespace-only name`                                          |
-| US-14.4 | Admin user updates a service type to have a non-unique name                                             | `frontend/tests/ServiceTypes.test.js` | `Admin user updates a service type to have a non-unique name`                                             |
-| US-14.4 | Admin user updates a service type to have a non-unique name                                             | `backend/tests/serviceTypes.test.js`  | `Admin user updates a service type to have a non-unique name`                                             |
-| US-14.4 | Admin user edits a service type to have a non-unique name that is not case-sensitive                    | `frontend/tests/ServiceTypes.test.js` | `Admin user edits a service type to have a non-unique name that is not case-sensitive`                    |
-| US-14.4 | Admin user edits a service type to have a non-unique name that is not case-sensitive                    | `backend/tests/serviceTypes.test.js`  | `Admin user edits a service type to have a non-unique name that is not case-sensitive`                    |
-| US-14.4 | Admin user deletes a service type                                                                       | `backend/tests/serviceTypes.test.js`  | `Admin user deletes a service type`                                                                       |
-| US-14.4 | Admin user deletes a service type                                                                       | `frontend/tests/ServiceTypes.test.js` | `Admin user deletes a service type`                                                                       |
-| US-14.4 | Admin user updates a service type that does not exist                                                   | `backend/tests/serviceTypes.test.js`  | `Admin user updates a service type that does not exist`                                                   |
-| US-14.4 | Admin user updates a service type with an invalid serviceTypeId                                         | `backend/tests/serviceTypes.test.js`  | `Admin user updates a service type with an invalid serviceTypeId`                                         |
-| US-14.4 | Admin user deletes a service type that does not exist                                                   | `backend/tests/serviceTypes.test.js`  | `Admin user deletes a service type that does not exist`                                                   |
-| US-14.4 | Admin user deletes a service type with an invalid serviceTypeId                                         | `backend/tests/serviceTypes.test.js`  | `Admin user deletes a service type with an invalid serviceTypeId`                                         |
-| US-14.5 | Un-signed-in user accesses service types page                                                           | `frontend/tests/ServiceTypes.test.js` | `Un-signed-in user accesses service types page`                                                           |
-| US-14.5 | Unauthenticated API request to service types                                                            | `backend/tests/serviceTypes.test.js`  | `Unauthenticated API request to service types`                                                            |
-| US-14.5 | Unauthenticated API request to a particular service type                                                | `backend/tests/serviceTypes.test.js`  | `Unauthenticated API request to a particular service type`                                                |
-| US-14.5 | Unauthenticated API request to create a service type                                                    | `backend/tests/serviceTypes.test.js`  | `Unauthenticated API request to create a service type`                                                    |
-| US-14.5 | Unauthenticated API request to update a service type                                                    | `backend/tests/serviceTypes.test.js`  | `Unauthenticated API request to update a service type`                                                    |
-| US-14.5 | Unauthenticated API request to delete a service type                                                    | `backend/tests/serviceTypes.test.js`  | `Unauthenticated API request to delete a service type`                                                    |
-| US-14.5 | Signed-in user without admin , area admin, or maintenance role accesses service types page              | `frontend/tests/ServiceTypes.test.js` | `Signed-in user without admin , area admin, or maintenance role accesses service types page`              |
-| US-14.5 | Signed-in user without admin , area admin, or maintenance role API request to service types             | `backend/tests/serviceTypes.test.js`  | `Signed-in user without admin , area admin, or maintenance role API request to service types`             |
-| US-14.5 | Signed-in user without admin , area admin, or maintenance role API request to a particular service type | `backend/tests/serviceTypes.test.js`  | `Signed-in user without admin , area admin, or maintenance role API request to a particular service type` |
-| US-14.5 | Signed-in user without admin , area admin, or maintenance role API request to create a service type     | `backend/tests/serviceTypes.test.js`  | `Signed-in user without admin , area admin, or maintenance role API request to create a service type`     |
-| US-14.5 | Signed-in user without admin , area admin, or maintenance role API request to update a service type     | `backend/tests/serviceTypes.test.js`  | `Signed-in user without admin , area admin, or maintenance role API request to update a service type`     |
-| US-14.5 | Signed-in user without admin , area admin, or maintenance role API request to delete a service type     | `backend/tests/serviceTypes.test.js`  | `Signed-in user without admin , area admin, or maintenance role API request to delete a service type`     |
+| Story | Scenario | Test file | Test name |
+|-------|----------|-----------|-----------|
+| US-14.1 | Unauthenticated user cannot create notes | `backend/tests/notes.test.js` | `Unauthenticated user cannot create notes` |
+| US-14.1 | Unauthorized standard user cannot create notes on requests they don't have access to | `backend/tests/notes.test.js` | `Unauthorized standard user cannot create notes on requests they don't have access to` |
+| US-14.1 | Unauthorized area_admin user cannot create notes on requests they don't have access to | `backend/tests/notes.test.js` | `Unauthorized area_admin user cannot create notes on requests they don't have access to` |
+| US-14.1 | Standard user can create notes | `backend/tests/notes.test.js` | `Standard user can create notes` |
+| US-14.1 | Area admin and maintenance users can create notes | `backend/tests/notes.test.js` | `Area admin and maintenance users can create notes` |
+| US-14.1 | Admin user can create notes | `backend/tests/notes.test.js` | `Admin user can create notes` |
+| US-14.3 | Admin, area_admins, maintenance users can toggle visibility | `backend/tests/notes.test.js` | `Admin, area_admins, maintenance users can toggle visibility` |
+| US-14.3 | Admin, area_admins, maintenance users can toggle visibility | `frontend/tests/Notes.test.js` | `Admin, area_admins, maintenance users can toggle visibility` |
+| US-14.3 | Standard user cannot toggle note visibility | `backend/tests/notes.test.js` | `Standard user cannot toggle note visibility` |
+| US-14.3 | Standard user cannot toggle note visibility | `frontend/tests/Notes.test.js` | `Standard user cannot toggle note visibility` |
+| US-14.3 | Standard user cannot see notes with isVisible set to false | `backend/tests/notes.test.js` | `Standard user cannot see notes with isVisible set to false` |
+| US-14.4 | Admin can delete all notes | `backend/tests/notes.test.js` | `Admin can delete all notes` |
+| US-14.4 | Admin can delete all notes | `frontend/tests/Notes.test.js` | `Admin can delete all notes` |
+| US-14.5 | All sign-in users can delete their own notes if no one has responded | `backend/tests/notes.test.js` | `All sign-in users can delete their own notes if no one has responded` |
+| US-14.5 | All sign-in users can delete their own notes if no one has responded | `frontend/tests/Notes.test.js` | `All sign-in users can delete their own notes if no one has responded` |
 
 ## Definition of Done
 
@@ -536,11 +339,10 @@ Each parent list endpoint returns an array of this shape. `DELETE` returns `204`
 ## Out of Scope
 
 - Sending notifications about notes
+- `includeInEmail`: still make the column, but ignore it for now. Let it default to false.
 
 ---
 
 ## Delivered to later features
 
-- A service type row with `id`, `name`, `service_frequency_days`, and `service_frequency_miles`
-- `GET /api/service-types` returns every service type for any valid session with `admin`, `area_admin`, or `maintenance` role
-- Delete removes an existing service type unconditionally and returns `200`
+- `includeInEmail` for emails feature
