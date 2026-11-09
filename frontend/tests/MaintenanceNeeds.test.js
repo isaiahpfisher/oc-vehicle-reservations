@@ -572,7 +572,7 @@ describe("Feature 11 — Maintenance Needs", () => {
     });
   });
 
-  describe("US-11.6 — Edit and delete maintenance needs", () => {
+  describe("US-11.5 — Edit and delete maintenance needs", () => {
     const expectFields = async () => {
       for (const label of ["Title", "Assignee", "Out of Service", "Priority", "Status", "Vehicle", "Description"]) {
         expect(await field(label === "Description" ? "VTextarea" : label === "Title" ? "VTextField" : "VSelect", label)).toBeDefined();
@@ -913,7 +913,7 @@ describe("Feature 11 — Maintenance Needs", () => {
     });
   });
 
-  describe("US-11.7 — Signed-in admin, area admin, or maintenance user access only", () => {
+  describe("US-11.6 — Signed-in admin, area admin, or maintenance user access only", () => {
     const requester = [{ id: 9, role: "requester", areaId: null, area: null }];
 
     it("Signed-out user opens /maintenance-needs and is sent to /login", async () => {

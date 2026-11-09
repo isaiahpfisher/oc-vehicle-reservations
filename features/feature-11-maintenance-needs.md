@@ -51,7 +51,7 @@
 **Independent test:** Each maintenance need row exposes edit and delete icon actions 
 **Acceptance scenarios:** see ### US-11.4 under Acceptance Criteria
 
-### US-11.6: Edit and delete maintenance needs
+### US-11.5: Edit and delete maintenance needs
 
 **As a** signed-in admin, area admin, or maintenance user
 **I want to** edit or delete a maintenance need
@@ -59,9 +59,9 @@
 
 **Priority:** P2
 **Independent test:** Edit a maintenance need from its page and delete it from the table; the maintenance needs table updates
-**Acceptance scenarios:** see ### US-11.6 under Acceptance Criteria
+**Acceptance scenarios:** see ### US-11.5 under Acceptance Criteria
 
-### US-11.7: Signed-in admin, area admin, or maintenance user access only
+### US-11.6: Signed-in admin, area admin, or maintenance user access only
 
 **As a** signed-in admin user
 **I want to** have maintenance needs visible only to signed-in admin, area admin, or maintenance users
@@ -69,7 +69,7 @@
 
 **Priority:** P2
 **Independent test:** Unauthorized access to `/maintenance-needs`, `/maintenance-needs/new`, and `/maintenance-needs/:id` are redirected to `/login`; unauthorized API requests or requests without `admin`, `area_admin`, or `maintenance` role receive errors; signed in user without `admin`, `area_admin`, or `maintenance` role is redirected to `/`; `area_admin` role only receives data corresponding to the area admin's area
-**Acceptance scenarios:** see ### US-11.7 under Acceptance Criteria
+**Acceptance scenarios:** see ### US-11.6 under Acceptance Criteria
 
 ---
 
@@ -771,7 +771,7 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 
 ---
 
-### US-11.6: Edit and delete maintenance needs
+### US-11.5: Edit and delete maintenance needs
 
 #### Scenario: Admin user opens the maintenance needs page
 
@@ -1145,7 +1145,7 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 
 ---
 
-### US-11.7: Signed-in admin, area admin, or maintenance user access only
+### US-11.6: Signed-in admin, area admin, or maintenance user access only
 
 #### Scenario: Signed-out user opens /maintenance-needs and is sent to /login
 
@@ -1344,76 +1344,76 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 | US-11.3 | Maintenance needs table Resolved tab | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance needs table Resolved tab |
 | US-11.3 | Maintenance needs table shows 10 rows per page | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance needs table shows 10 rows per page |
 | US-11.4 | Maintenance need rows have edit and delete actions | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance need rows have edit and delete actions |
-| US-11.6 | Admin user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Admin user opens the maintenance needs page |
-| US-11.6 | Area admin user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Area admin user opens the maintenance needs page |
-| US-11.6 | Maintenance user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance user opens the maintenance needs page |
-| US-11.6 | View issue report is not clickable when there is no issue report | `frontend/tests/MaintenanceNeeds.test.js` | View issue report is not clickable when there is no issue report |
-| US-11.6 | View issue report opens the issue report when issueReportId is set | `frontend/tests/MaintenanceNeeds.test.js` | View issue report opens the issue report when issueReportId is set |
-| US-11.6 | Mark in progress shows when status is Open | `frontend/tests/MaintenanceNeeds.test.js` | Mark in progress shows when status is Open |
-| US-11.6 | Mark in progress sets status to In Progress | `frontend/tests/MaintenanceNeeds.test.js` | Mark in progress sets status to In Progress |
-| US-11.6 | Mark completed shows when status is In Progress | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed shows when status is In Progress |
-| US-11.6 | Mark completed sets status to Completed | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed sets status to Completed |
-| US-11.6 | The button updates when status changes before saving | `frontend/tests/MaintenanceNeeds.test.js` | The button updates when status changes before saving |
-| US-11.6 | Mark completed is grayed out when status is Completed or Canceled | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed is grayed out when status is Completed or Canceled |
-| US-11.6 | Admin user edits a maintenance need title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need title |
-| US-11.6 | Admin user edits a maintenance need vehicle | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need vehicle |
-| US-11.6 | Admin user edits a maintenance need assignee | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need assignee |
-| US-11.6 | Admin user edits a maintenance need description | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need description |
-| US-11.6 | Admin user edits a maintenance need out of service | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need out of service |
-| US-11.6 | Admin user edits a maintenance need priority | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need priority |
-| US-11.6 | Admin user edits a maintenance need status | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need status |
-| US-11.6 | Admin user edits a maintenance need resolve date | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need resolve date |
-| US-11.6 | Admin user cancels editing a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Admin user cancels editing a maintenance need |
-| US-11.6 | Area admin user edits a maintenance need in their area | `frontend/tests/MaintenanceNeeds.test.js` | Area admin user edits a maintenance need in their area |
-| US-11.6 | Maintenance user edits a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance user edits a maintenance need |
-| US-11.6 | Admin user edits a maintenance need with a missing title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need with a missing title |
-| US-11.6 | Admin user edits a maintenance need with a whitespace-only title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need with a whitespace-only title |
-| US-11.6 | Admin user deletes a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Admin user deletes a maintenance need |
-| US-11.6 | Admin user requests to edit a maintenance need with a missing title | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing title |
-| US-11.6 | Admin user requests to edit a maintenance need with a whitespace-only title | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a whitespace-only title |
-| US-11.6 | Admin user requests to edit a maintenance need with a title longer than 50 characters | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a title longer than 50 characters |
-| US-11.6 | Admin user requests to edit a maintenance need with a missing vehicle id | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing vehicle id |
-| US-11.6 | Admin user requests to edit a maintenance need with a vehicle id that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a vehicle id that does not exist |
-| US-11.6 | Admin user requests to edit a maintenance need with an assignee id that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an assignee id that does not exist |
-| US-11.6 | Admin user requests to edit a maintenance need with an assignee who is not a maintenance user | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an assignee who is not a maintenance user |
-| US-11.6 | Admin user requests to edit a maintenance need with a missing out-of-service value | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing out-of-service value |
-| US-11.6 | Admin user requests to edit a maintenance need with a non-boolean out-of-service value | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a non-boolean out-of-service value |
-| US-11.6 | Admin user requests to edit a maintenance need with a missing priority | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing priority |
-| US-11.6 | Admin user requests to edit a maintenance need with an invalid priority | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an invalid priority |
-| US-11.6 | Admin user requests to edit a maintenance need with a missing status | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing status |
-| US-11.6 | Admin user requests to edit a maintenance need with an invalid status | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an invalid status |
-| US-11.6 | Admin user requests to edit a maintenance need with a resolved date before 1950 | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date before 1950 |
-| US-11.6 | Admin user requests to edit a maintenance need with a resolved date after today | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date after today |
-| US-11.6 | Admin user requests to edit a maintenance need with a resolved date that is not yyyy-mm-dd | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date that is not yyyy-mm-dd |
-| US-11.6 | Admin user requests to edit a maintenance need with a resolved date while status is Open | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date while status is Open |
-| US-11.6 | Admin user requests to edit a maintenance need with a resolved date while status is In Progress | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date while status is In Progress |
-| US-11.6 | Admin user requests to edit a maintenance need with status Completed and no resolved date | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with status Completed and no resolved date |
-| US-11.6 | Admin user requests to edit a maintenance need with status Canceled and no resolved date | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with status Canceled and no resolved date |
-| US-11.6 | Area admin user requests to edit a maintenance need outside their area | `backend/tests/maintenanceNeeds.test.js` | Area admin user requests to edit a maintenance need outside their area |
-| US-11.6 | Area admin user requests to delete a maintenance need outside their area | `backend/tests/maintenanceNeeds.test.js` | Area admin user requests to delete a maintenance need outside their area |
-| US-11.6 | Admin user requests to edit a maintenance need that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need that does not exist |
-| US-11.6 | Admin user requests to delete a maintenance need that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to delete a maintenance need that does not exist |
-| US-11.6 | Admin user requests to delete a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to delete a maintenance need |
-| US-11.7 | Signed-out user opens /maintenance-needs and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs and is sent to /login |
-| US-11.7 | Signed-out user opens /maintenance-needs/new and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/new and is sent to /login |
-| US-11.7 | Signed-out user opens /maintenance-needs/:id and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/:id and is sent to /login |
-| US-11.7 | Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to / |
-| US-11.7 | Signed-in user without those roles opens /maintenance-needs/new and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/new and is sent to / |
-| US-11.7 | Signed-in user without those roles opens /maintenance-needs/:id and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/:id and is sent to / |
-| US-11.7 | Signed-in admin user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in admin user sees the Maintenance Needs nav link |
-| US-11.7 | Signed-in area admin user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in area admin user sees the Maintenance Needs nav link |
-| US-11.7 | Signed-in maintenance user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in maintenance user sees the Maintenance Needs nav link |
-| US-11.7 | Signed-in user without those roles does not see the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles does not see the Maintenance Needs nav link |
-| US-11.7 | Unauthenticated API request to maintenance needs | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to maintenance needs |
-| US-11.7 | Unauthenticated API request to a particular maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to a particular maintenance need |
-| US-11.7 | Unauthenticated API request to create a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to create a maintenance need |
-| US-11.7 | Unauthenticated API request to update a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to update a maintenance need |
-| US-11.7 | Unauthenticated API request to delete a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to delete a maintenance need |
-| US-11.7 | Signed-in user without admin, area admin, or maintenance role API request to maintenance needs | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to maintenance needs |
-| US-11.7 | Signed-in user without admin, area admin, or maintenance role API request to a particular maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to a particular maintenance need |
-| US-11.7 | Signed-in user without admin, area admin, or maintenance role API request to create a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to create a maintenance need |
-| US-11.7 | Signed-in user without admin, area admin, or maintenance role API request to update a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to update a maintenance need |
-| US-11.7 | Signed-in user without admin, area admin, or maintenance role API request to delete a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to delete a maintenance need |
+| US-11.5 | Admin user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Admin user opens the maintenance needs page |
+| US-11.5 | Area admin user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Area admin user opens the maintenance needs page |
+| US-11.5 | Maintenance user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance user opens the maintenance needs page |
+| US-11.5 | View issue report is not clickable when there is no issue report | `frontend/tests/MaintenanceNeeds.test.js` | View issue report is not clickable when there is no issue report |
+| US-11.5 | View issue report opens the issue report when issueReportId is set | `frontend/tests/MaintenanceNeeds.test.js` | View issue report opens the issue report when issueReportId is set |
+| US-11.5 | Mark in progress shows when status is Open | `frontend/tests/MaintenanceNeeds.test.js` | Mark in progress shows when status is Open |
+| US-11.5 | Mark in progress sets status to In Progress | `frontend/tests/MaintenanceNeeds.test.js` | Mark in progress sets status to In Progress |
+| US-11.5 | Mark completed shows when status is In Progress | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed shows when status is In Progress |
+| US-11.5 | Mark completed sets status to Completed | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed sets status to Completed |
+| US-11.5 | The button updates when status changes before saving | `frontend/tests/MaintenanceNeeds.test.js` | The button updates when status changes before saving |
+| US-11.5 | Mark completed is grayed out when status is Completed or Canceled | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed is grayed out when status is Completed or Canceled |
+| US-11.5 | Admin user edits a maintenance need title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need title |
+| US-11.5 | Admin user edits a maintenance need vehicle | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need vehicle |
+| US-11.5 | Admin user edits a maintenance need assignee | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need assignee |
+| US-11.5 | Admin user edits a maintenance need description | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need description |
+| US-11.5 | Admin user edits a maintenance need out of service | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need out of service |
+| US-11.5 | Admin user edits a maintenance need priority | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need priority |
+| US-11.5 | Admin user edits a maintenance need status | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need status |
+| US-11.5 | Admin user edits a maintenance need resolve date | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need resolve date |
+| US-11.5 | Admin user cancels editing a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Admin user cancels editing a maintenance need |
+| US-11.5 | Area admin user edits a maintenance need in their area | `frontend/tests/MaintenanceNeeds.test.js` | Area admin user edits a maintenance need in their area |
+| US-11.5 | Maintenance user edits a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance user edits a maintenance need |
+| US-11.5 | Admin user edits a maintenance need with a missing title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need with a missing title |
+| US-11.5 | Admin user edits a maintenance need with a whitespace-only title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need with a whitespace-only title |
+| US-11.5 | Admin user deletes a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Admin user deletes a maintenance need |
+| US-11.5 | Admin user requests to edit a maintenance need with a missing title | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing title |
+| US-11.5 | Admin user requests to edit a maintenance need with a whitespace-only title | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a whitespace-only title |
+| US-11.5 | Admin user requests to edit a maintenance need with a title longer than 50 characters | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a title longer than 50 characters |
+| US-11.5 | Admin user requests to edit a maintenance need with a missing vehicle id | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing vehicle id |
+| US-11.5 | Admin user requests to edit a maintenance need with a vehicle id that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a vehicle id that does not exist |
+| US-11.5 | Admin user requests to edit a maintenance need with an assignee id that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an assignee id that does not exist |
+| US-11.5 | Admin user requests to edit a maintenance need with an assignee who is not a maintenance user | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an assignee who is not a maintenance user |
+| US-11.5 | Admin user requests to edit a maintenance need with a missing out-of-service value | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing out-of-service value |
+| US-11.5 | Admin user requests to edit a maintenance need with a non-boolean out-of-service value | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a non-boolean out-of-service value |
+| US-11.5 | Admin user requests to edit a maintenance need with a missing priority | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing priority |
+| US-11.5 | Admin user requests to edit a maintenance need with an invalid priority | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an invalid priority |
+| US-11.5 | Admin user requests to edit a maintenance need with a missing status | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a missing status |
+| US-11.5 | Admin user requests to edit a maintenance need with an invalid status | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with an invalid status |
+| US-11.5 | Admin user requests to edit a maintenance need with a resolved date before 1950 | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date before 1950 |
+| US-11.5 | Admin user requests to edit a maintenance need with a resolved date after today | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date after today |
+| US-11.5 | Admin user requests to edit a maintenance need with a resolved date that is not yyyy-mm-dd | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date that is not yyyy-mm-dd |
+| US-11.5 | Admin user requests to edit a maintenance need with a resolved date while status is Open | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date while status is Open |
+| US-11.5 | Admin user requests to edit a maintenance need with a resolved date while status is In Progress | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with a resolved date while status is In Progress |
+| US-11.5 | Admin user requests to edit a maintenance need with status Completed and no resolved date | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with status Completed and no resolved date |
+| US-11.5 | Admin user requests to edit a maintenance need with status Canceled and no resolved date | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need with status Canceled and no resolved date |
+| US-11.5 | Area admin user requests to edit a maintenance need outside their area | `backend/tests/maintenanceNeeds.test.js` | Area admin user requests to edit a maintenance need outside their area |
+| US-11.5 | Area admin user requests to delete a maintenance need outside their area | `backend/tests/maintenanceNeeds.test.js` | Area admin user requests to delete a maintenance need outside their area |
+| US-11.5 | Admin user requests to edit a maintenance need that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to edit a maintenance need that does not exist |
+| US-11.5 | Admin user requests to delete a maintenance need that does not exist | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to delete a maintenance need that does not exist |
+| US-11.5 | Admin user requests to delete a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Admin user requests to delete a maintenance need |
+| US-11.6 | Signed-out user opens /maintenance-needs and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs and is sent to /login |
+| US-11.6 | Signed-out user opens /maintenance-needs/new and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/new and is sent to /login |
+| US-11.6 | Signed-out user opens /maintenance-needs/:id and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/:id and is sent to /login |
+| US-11.6 | Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to / |
+| US-11.6 | Signed-in user without those roles opens /maintenance-needs/new and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/new and is sent to / |
+| US-11.6 | Signed-in user without those roles opens /maintenance-needs/:id and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/:id and is sent to / |
+| US-11.6 | Signed-in admin user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in admin user sees the Maintenance Needs nav link |
+| US-11.6 | Signed-in area admin user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in area admin user sees the Maintenance Needs nav link |
+| US-11.6 | Signed-in maintenance user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in maintenance user sees the Maintenance Needs nav link |
+| US-11.6 | Signed-in user without those roles does not see the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles does not see the Maintenance Needs nav link |
+| US-11.6 | Unauthenticated API request to maintenance needs | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to maintenance needs |
+| US-11.6 | Unauthenticated API request to a particular maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to a particular maintenance need |
+| US-11.6 | Unauthenticated API request to create a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to create a maintenance need |
+| US-11.6 | Unauthenticated API request to update a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to update a maintenance need |
+| US-11.6 | Unauthenticated API request to delete a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Unauthenticated API request to delete a maintenance need |
+| US-11.6 | Signed-in user without admin, area admin, or maintenance role API request to maintenance needs | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to maintenance needs |
+| US-11.6 | Signed-in user without admin, area admin, or maintenance role API request to a particular maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to a particular maintenance need |
+| US-11.6 | Signed-in user without admin, area admin, or maintenance role API request to create a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to create a maintenance need |
+| US-11.6 | Signed-in user without admin, area admin, or maintenance role API request to update a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to update a maintenance need |
+| US-11.6 | Signed-in user without admin, area admin, or maintenance role API request to delete a maintenance need | `backend/tests/maintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role API request to delete a maintenance need |
 
 
 ## Agent implementation request

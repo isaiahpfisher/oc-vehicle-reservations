@@ -331,7 +331,7 @@ describe("Feature 11 — Maintenance Needs", () => {
     });
   });
 
-  describe("US-11.6 — Edit and delete maintenance needs", () => {
+  describe("US-11.5 — Edit and delete maintenance needs", () => {
     const rejected = [
       ["Admin user requests to edit a maintenance need with a missing title", { title: "" }, "Missing title."],
       ["Admin user requests to edit a maintenance need with a whitespace-only title", { title: " " }, "Missing title."],
@@ -507,7 +507,7 @@ describe("Feature 11 — Maintenance Needs", () => {
     });
   });
 
-  describe("US-11.7 — Signed-in admin, area admin, or maintenance user access only", () => {
+  describe("US-11.6 — Signed-in admin, area admin, or maintenance user access only", () => {
     const open = [
       ["Unauthenticated API request to maintenance needs", "get", "/api/maintenance-needs"],
       ["Unauthenticated API request to a particular maintenance need", "get", "/api/maintenance-needs/1"],
