@@ -456,6 +456,13 @@ exports.remove = async (req, res) => {
       return res.status(403).send({ message: WRONG_AREA });
     }
 
+    // Feature 8: requests are never deleted, so a vehicle they used stays.
+    if ((await db.vehicleRequestVehicle.count({ where: { vehicleId } })) > 0) {
+      return res.status(400).send({
+        message: "Vehicle is assigned to vehicle requests and can't be deleted. Set its status to retired instead.",
+      });
+    }
+
     await existing.destroy();
     return res.status(200).send({ message: "Vehicle deleted successfully." });
   } catch (err) {

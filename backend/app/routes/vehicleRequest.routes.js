@@ -1,10 +1,18 @@
 import { Router } from "express";
 import vehicleRequestController from "../controllers/vehicleRequest.controller.js";
-import { authenticate } from "../authorization/authorization.js";
+import { authenticate, authenticateAreaAdmin } from "../authorization/authorization.js";
 
 const router = Router();
 
-// INTERIM: remove when Feature 8 serves vehicle requests.
-router.get("/", [authenticate], vehicleRequestController.findAll);
+router.get("/me/requests", [authenticate], vehicleRequestController.findMine);
+router.get("/requests", [authenticateAreaAdmin], vehicleRequestController.findAll);
+router.post("/requests", [authenticate], vehicleRequestController.create);
+router.get("/requests/:requestId", [authenticate], vehicleRequestController.findOne);
+router.put("/requests/:requestId", [authenticate], vehicleRequestController.update);
+router.get(
+  "/requests/:requestId/vehicle-options",
+  [authenticateAreaAdmin],
+  vehicleRequestController.vehicleOptions,
+);
 
 export default router;

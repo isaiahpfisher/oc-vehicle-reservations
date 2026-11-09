@@ -5,6 +5,11 @@ const driverServices = {
     return apiClient.get("drivers");
   },
 
+  /** Feature 7, FR-015: approved drivers with a current license, by name. Any signed-in user (the request form). */
+  getSelectableDrivers() {
+    return apiClient.get("drivers/selectable");
+  },
+
   getDriver(driverId) {
     return apiClient.get(`drivers/${driverId}`);
   },

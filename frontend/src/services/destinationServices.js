@@ -5,6 +5,11 @@ const destinationServices = {
     return apiClient.get("destinations");
   },
 
+  /** Feature 8: official destinations for the request form. Any signed-in user. */
+  getSelectableDestinations() {
+    return apiClient.get("destinations/selectable");
+  },
+
   getDestinationById(destinationId) {
     return apiClient.get(`destinations/${destinationId}`);
   },

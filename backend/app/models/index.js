@@ -10,6 +10,9 @@ import destinationModel from "./destination.model.js";
 import vehicleModel from "./vehicle.model.js";
 import driverModel from "./driver.model.js";
 import vehicleRequestModel from "./vehicleRequest.model.js";
+import vehicleRequestDestinationModel from "./vehicleRequestDestination.model.js";
+import vehicleRequestDriverModel from "./vehicleRequestDriver.model.js";
+import vehicleRequestVehicleModel from "./vehicleRequestVehicle.model.js";
 import issueReportModel from "./issueReport.model.js";
 import mileageLogModel from "./mileageLog.model.js";
 import maintenanceNeedModel from "./maintenanceNeed.model.js";
@@ -29,6 +32,9 @@ db.destination = destinationModel(sequelize, Sequelize);
 db.vehicle = vehicleModel(sequelize, Sequelize);
 db.driver = driverModel(sequelize, Sequelize);
 db.vehicleRequest = vehicleRequestModel(sequelize, Sequelize);
+db.vehicleRequestDestination = vehicleRequestDestinationModel(sequelize, Sequelize);
+db.vehicleRequestDriver = vehicleRequestDriverModel(sequelize, Sequelize);
+db.vehicleRequestVehicle = vehicleRequestVehicleModel(sequelize, Sequelize);
 db.issueReport = issueReportModel(sequelize, Sequelize);
 db.mileageLog = mileageLogModel(sequelize, Sequelize);
 db.maintenanceNeed = maintenanceNeedModel(sequelize, Sequelize);
@@ -101,6 +107,61 @@ db.driver.belongsTo(db.user, {
   as: "user",
   onDelete: "SET NULL",
 });
+
+// Feature 8: requests are never deleted, so the rows they point at can't be either (controllers answer 400 first).
+db.user.hasMany(db.vehicleRequest, { foreignKey: "userId", as: "vehicleRequests", onDelete: "RESTRICT" });
+db.vehicleRequest.belongsTo(db.user, { foreignKey: "userId", as: "user", onDelete: "RESTRICT" });
+db.user.hasMany(db.vehicleRequest, { foreignKey: "approverId", as: "approvedVehicleRequests", onDelete: "SET NULL" });
+db.vehicleRequest.belongsTo(db.user, { foreignKey: "approverId", as: "approver", onDelete: "SET NULL" });
+db.area.hasMany(db.vehicleRequest, { foreignKey: "areaId", as: "vehicleRequests", onDelete: "RESTRICT" });
+db.vehicleRequest.belongsTo(db.area, { foreignKey: "areaId", as: "area", onDelete: "RESTRICT" });
+
+db.vehicleRequest.hasMany(db.vehicleRequestDestination, {
+  foreignKey: "vehicleRequestId",
+  as: "stops",
+  onDelete: "CASCADE",
+});
+db.vehicleRequestDestination.belongsTo(db.vehicleRequest, {
+  foreignKey: "vehicleRequestId",
+  as: "vehicleRequest",
+  onDelete: "CASCADE",
+});
+db.destination.hasMany(db.vehicleRequestDestination, {
+  foreignKey: "destinationId",
+  as: "requestStops",
+  onDelete: "RESTRICT",
+});
+db.vehicleRequestDestination.belongsTo(db.destination, {
+  foreignKey: "destinationId",
+  as: "destination",
+  onDelete: "RESTRICT",
+});
+
+db.vehicleRequest.hasMany(db.vehicleRequestVehicle, {
+  foreignKey: "vehicleRequestId",
+  as: "requestVehicles",
+  onDelete: "CASCADE",
+});
+db.vehicleRequestVehicle.belongsTo(db.vehicleRequest, {
+  foreignKey: "vehicleRequestId",
+  as: "vehicleRequest",
+  onDelete: "CASCADE",
+});
+db.vehicle.hasMany(db.vehicleRequestVehicle, { foreignKey: "vehicleId", as: "requestVehicles", onDelete: "RESTRICT" });
+db.vehicleRequestVehicle.belongsTo(db.vehicle, { foreignKey: "vehicleId", as: "vehicle", onDelete: "RESTRICT" });
+
+db.vehicleRequest.hasMany(db.vehicleRequestDriver, {
+  foreignKey: "vehicleRequestId",
+  as: "requestDrivers",
+  onDelete: "CASCADE",
+});
+db.vehicleRequestDriver.belongsTo(db.vehicleRequest, {
+  foreignKey: "vehicleRequestId",
+  as: "vehicleRequest",
+  onDelete: "CASCADE",
+});
+db.driver.hasMany(db.vehicleRequestDriver, { foreignKey: "driverId", as: "requestDrivers", onDelete: "RESTRICT" });
+db.vehicleRequestDriver.belongsTo(db.driver, { foreignKey: "driverId", as: "driver", onDelete: "RESTRICT" });
 
 db.vehicle.hasMany(db.mileageLog, {
   foreignKey: "vehicleId",

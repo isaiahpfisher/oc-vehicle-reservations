@@ -4,6 +4,7 @@
  */
 import db from "../app/models/index.js";
 import { SEED_AREAS, SEED_USERS, seed } from "../scripts/seed.mjs";
+import { TEAM_ADMINS } from "../app/config/teamAdmins.js";
 import { createArea, createUserWithRoles, registerUser, syncTestDatabase } from "./helpers.js";
 
 beforeEach(async () => {
@@ -39,8 +40,14 @@ describe("Feature 3 — User Role Management seed script", () => {
       expect(await db.user.findOne({ where: { email: "stale@students.oc.edu" } })).toBeNull();
       expect((await db.area.findAll()).map((area) => area.name).sort()).toEqual([...SEED_AREAS].sort());
       expect(await db.user.count()).toBe(SEED_USERS.length + 1);
-      const seededEmails = (await db.user.findAll()).map((user) => user.email).filter((email) => email !== "me@eagles.oc.edu");
+      const teamEmails = TEAM_ADMINS.map(({ email }) => email);
+      const seededEmails = (await db.user.findAll())
+        .map((user) => user.email)
+        .filter((email) => email !== "me@eagles.oc.edu" && !teamEmails.includes(email));
       expect(seededEmails.every((email) => email.endsWith("@oc.edu"))).toBe(true);
+
+      // The project team are admins, so they can sign in with Google without make-admin.
+      for (const email of teamEmails) expect(await rolesOf(email)).toEqual(["admin"]);
 
       // One test account per role.
       expect(await rolesOf("admin@oc.edu")).toEqual(["admin"]);

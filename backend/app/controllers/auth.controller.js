@@ -4,6 +4,7 @@ import db from "../models/index.js";
 import authConfig from "../config/auth.config.js";
 import logger from "../config/logger.js";
 import { verifyGoogleIdToken } from "../authorization/googleToken.js";
+import { isTeamAdmin } from "../config/teamAdmins.js";
 import { rolesInclude, toRolesResponse } from "../helpers/users.js";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -87,6 +88,11 @@ exports.login = async (req, res) => {
       user.firstName = firstName;
       user.lastName = lastName;
       await user.save();
+    }
+
+    // Feature 3 FR-017: in development the project team is always an admin.
+    if (authConfig.devLogin.enabled() && isTeamAdmin(email)) {
+      await db.role.findOrCreate({ where: { userId: user.id, role: "admin", areaId: null } });
     }
 
     return await sendSignedIn(res, user);

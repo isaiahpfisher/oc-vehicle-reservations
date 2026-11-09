@@ -84,7 +84,7 @@
 ### US-8.8: Assign vehicles to requests
 
 **As a** signed-in admin or area_admin user
-**I want to** assign vehicles to requests, with helpful filters for meeting the criteria of the request (number of passengers, if drivers have cdls to drive cdl vehicle types, if the vehicle is already reserved or under maintenance, how many miles until the vehicle needs to be serviced (to compare to estimated miles of trip))
+**I want to** assign vehicles to requests, with helpful filters for meeting the criteria of the request (number of passengers, if the vehicle is already reserved or under maintenance, how many miles until the vehicle needs to be serviced (to compare to estimated miles of trip))
 **So that** I can fulfill vehicle requests
 
 **Priority:** P1
@@ -101,6 +101,16 @@
 **Independent test:** Vehicles can be assigned to vehicle requests
 **Acceptance scenarios:** see ### US-8.9 under Acceptance Criteria
 
+### US-8.10: Destination Management updates
+
+**As a** signed-in admin or area_admin user
+**I want** Feature 6's destination form on its own page with address search, and a way to search and filter the destinations list
+**So that** saved destinations have accurate addresses and distances, and I can find them quickly
+
+**Priority:** P2
+**Independent test:** Search Destination Management, open a destination, and pick an address from Google Maps.
+**Acceptance scenarios:** see ### US-8.10 under Acceptance Criteria
+
 ---
 
 ## Requirements
@@ -113,7 +123,11 @@
 - **FR-004**: The system must flag if the total capacity of the assigned vehicles does not meet the number of people on the request. It can still be saved like this though.
 - **FR-005**: Approving a request should change its status to awaiting vehicle.
 - **FR-006**: Assigning a vehicle to a request should change the request's status to reserved, regardless of it was approved already. Removing all vehicles should set it back to awaiting vehicle.
-- **FR-007**: Estimated mileage will be calculated using Google APIs.
+- **FR-007**: Estimated mileage will be calculated using Google APIs. Without them (no `GOOGLE_MAPS_API_KEY`, or the request fails), only a trip to a single saved destination is estimated (twice its saved distance from campus); any other trip's mileage is unknown (`null`, shown as "Unknown") rather than an understated guess. An unknown estimate is retried the next time the request is edited.
+- **FR-008**: The custom address dialog offers address search (Google Places Autocomplete), proxied through the backend so the key stays server-side. Searches wait for 3+ characters and a pause in typing, share one session token per address, and end with a Place Details lookup of address fields only (Essentials tier). Picking a result fills the address fields, which stay editable. Without a key, or when Google fails, the fields are filled in by hand as before.
+- **FR-009**: A trip has at most 10 destinations (Google Routes bills more than 10 intermediate stops at a higher tier). The form stops offering more, and the API rejects more with a 400.
+- **FR-010**: The Destination Management form (Feature 6) moves from the create and edit dialogs to its own page, laid out like the Driver form (Feature 7), and uses the same address search as FR-008. Picking a result fills the address fields and name (keeping a name already typed), and fills **Miles from campus** with the one-way driving distance from campus through a separate Google Routes lookup limited to admins and area admins. All fields stay editable; without a key, or when Google fails, they are typed in as before. Feature 6's fields, validation messages, and API are unchanged.
+- **FR-011**: Destination Management (Feature 6) gets a search box and an availability filter, like the Drivers list (Feature 7). Search matches every word against the name, address lines, city, state, and ZIP code; the filter shows **Official** or **Unofficial** destinations. Both apply together, reset the table to its first page, and show **"No destinations match your search."** when nothing matches. Filtering happens in the browser on Feature 6's list; the API is unchanged.
 
 ---
 
@@ -121,6 +135,14 @@
 
 - Every trip starts and ends at OC's campus. It does not need to be specified as a destination.
 - Each request belongs to an area.
+- API payloads use camelCase field names (`areaId`, `startAt`, …) per `api-conventions.mdc`; table columns stay snake_case.
+- Home (route `home`, `/`) is **My Requests**. This replaces Feature 3's welcome page; Feature 3's nav tests were updated to match. The admin list lives at `/requests` and shows in the nav for admins and area admins.
+- On the request page, Trip details, Destinations, and Drivers each save on their own (`ui-style-system.mdc` → Detail page conventions). A new request is one form with one submit.
+- Requests use Features 4–6 directly. Any signed-in user can list official destinations through `GET /api/destinations/selectable`; Feature 6's own routes stay limited to admins and area admins.
+- A custom stop follows Feature 6's rules: it needs a street address, and it is saved as an unofficial destination (`is_saved` false) that admins can review. An unofficial destination can't be chosen for a request unless the request already has it.
+- Since requests are never deleted, deleting something a request uses returns `400`: a destination, vehicle, or area, or the user who made the request. This changes Feature 6's "delete doesn't check other rows" and Feature 3's user deletion. Deleting an approver clears `approver_id`.
+- Drivers come from Feature 7: the request form lists `GET /api/drivers/selectable` (its FR-015), and a request shows drivers by name only. Deleting a driver on any request returns `400`.
+- **INTERIM** (until Features 9, 11, and 13 merge): every vehicle reports as in service with unknown miles until service (`backend/app/helpers/vehicleService.js`).
 
 ## Edge Cases
 
@@ -128,6 +150,7 @@
 - Number of people is not a non-negative integer -> 400 bad request
 - End date before start data -> 400 bad request
 - Destination is listed twice in a row on a trip -> 400 bad request
+- More than 10 destinations on a trip -> 400 bad request (FR-009)
 - A driver is not approved or has an expired license -> 400 bad request
 - A driver's license expires during a trip -> 400 bad request
 - Deleting a driver attached to any vehicle request (`DELETE /api/drivers/:driverId` from Feature 7) -> 400 bad request
@@ -159,25 +182,30 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 ## API Requirements
 
-| Method | Endpoint                   | Auth        | Purpose                                 |
-| ------ | -------------------------- | ----------- | --------------------------------------- |
-| `GET`  | `/api/requests`            | Yes - Admin | Fetch all requests based on users roles |
-| `GET`  | `/api/requests`            | Yes - Admin | Fetch all requests based on users roles |
-| `GET`  | `/api/me/requests`         | Yes - Admin | Fetch requests created by a user        |
-| `GET`  | `/api/requests/:requestId` | Yes         | Fetch a single request                  |
-| `POST` | `/api/requests`            | Yes - Admin | Create a request for the current user   |
-| `PUT`  | `/api/requests/:requestId` | Yes         | Update a request                        |
+| Method | Endpoint                                 | Auth                    | Purpose                                    |
+| ------ | ---------------------------------------- | ----------------------- | ------------------------------------------ |
+| `GET`  | `/api/requests`                          | Yes - Admin             | Fetch all requests based on users roles    |
+| `GET`  | `/api/requests`                          | Yes - Admin             | Fetch all requests based on users roles    |
+| `GET`  | `/api/me/requests`                       | Yes - Admin             | Fetch requests created by a user           |
+| `GET`  | `/api/requests/:requestId`               | Yes                     | Fetch a single request                     |
+| `POST` | `/api/requests`                          | Yes - Admin             | Create a request for the current user      |
+| `PUT`  | `/api/requests/:requestId`               | Yes                     | Update a request                           |
+| `GET`  | `/api/places/autocomplete`               | Yes                     | Address suggestions (FR-008)               |
+| `GET`  | `/api/places/:placeId`                   | Yes                     | Address fields for a suggestion (FR-008)   |
+| `GET`  | `/api/places/:placeId/miles-from-campus` | Yes - Admin, Area Admin | One-way miles from campus (FR-010)         |
+| `GET`  | `/api/destinations/selectable`           | Yes                     | Official destinations for the request form |
+| `GET`  | `/api/drivers/selectable`                | Yes                     | Selectable drivers (Feature 7, FR-015)     |
 
 **Create request body:**
 
 ```json
 {
-  "area_id": 1,
+  "areaId": 1,
   "purpose": "Lorem ipsum dolor sit amet.",
-  "start_at": "2026-12-18",
-  "end_at": "2026-12-21",
-  "all_day": true,
-  "number_of_people": 9,
+  "startAt": "2026-12-18",
+  "endAt": "2026-12-21",
+  "allDay": true,
+  "numberOfPeople": 9,
   "drivers": [],
   "destinations": []
 }
@@ -188,15 +216,15 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 ```json
 {
   "id": 1,
-  "area_id": 1,
+  "areaId": 1,
   "purpose": "Lorem ipsum dolor sit amet.",
-  "start_at": "2026-12-18",
-  "end_at": "2026-12-21",
-  "all_day": true,
-  "number_of_people": 9,
+  "startAt": "2026-12-18",
+  "endAt": "2026-12-21",
+  "allDay": true,
+  "numberOfPeople": 9,
   "drivers": [],
   "destinations": [],
-  "estimated_miles": 0,
+  "estimatedMiles": 0,
   "status": "pending",
   "createdAt": "2026-07-02T12:00:00.000Z",
   "updatedAt": "2026-07-02T12:00:00.000Z"
@@ -216,8 +244,9 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 - Heading: **My Requests**
 - Primary action: **+ New Request** opens `CreateRequest.vue`
-- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar
+- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar. The monthly calendar is shown first.
 - Each row/calendar event displays important information about the request, and can be clicked to view the request `Request.vue`
+- Calendar events are colored by status, with a key above the calendar naming each status's color.
 - **Empty state:** **"You have not submitted any requests."**.
 - **Loading state:** skeleton or progress indicator while requests are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
@@ -227,8 +256,9 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 **Single Vue view** (`Admin/Requests.vue`)
 
 - Heading: **Requests**
-- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar
+- Requests can be viewed in a searchable/filterable table, or a weekly/monthly calendar. The monthly calendar is shown first.
 - Each row/calendar event displays important information about the request, and can be clicked to view the request `Request.vue`
+- Calendar events are colored by status, with a key above the calendar naming each status's color.
 - It should be easy to filter out requests that don't need the user's attention.
 - **Empty state:** **"No one has any submitted requests."**.
 - **Loading state:** skeleton or progress indicator while requests are fetching.
@@ -255,8 +285,20 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - Section for destinations (can add multiple, reorderable)
 - Vehicle assignment (can add multiple, only by admins, only after it's been created)
 - Creating and editing happen on this screen. Certain fields are hidden during creation.
+- The header names the trip by its first destination ("Trip to BOK Center +2 more"), not its purpose. Purpose is long-form text and shows in the basic fields section, editable or not.
 
 - **Error state:** `<v-alert type="error">` for API failures.
+
+### [View: Destination Form] — route names `destinationCreate` (`/destinations/new`) and `destinationDetails` (`/destinations/:id`) (`DestinationForm.vue`)
+
+Replaces Feature 6's create and edit dialogs (FR-010). Admins and area admins only, like Feature 6's view.
+
+- Register `/destinations/new` before `/destinations/:id`
+- On Destination Management, **+ New Destination** opens `/destinations/new`; a row's name and its **Edit destination** icon open `/destinations/:id`. Delete stays a confirmation dialog on the list.
+- Destination Management has a search box (**Search destinations by name or address...**) and a **Filter by availability** select above the table (FR-011).
+- Heading: **New Destination**, or the destination's name when editing. Breadcrumbs lead back to **Destinations**.
+- The form is grouped into `FormSection`s like the Driver form: **Find on Google Maps** (address search, FR-008), **Name**, **Address** (address line 1 and 2, city, state, ZIP code), **Distance** (miles from campus, filled by FR-010's lookup), **Availability** (**Official** switch, on for a new destination). **Cancel** and **Save** sit below the last section and return to Destination Management.
+- Field errors use Feature 6's messages and show under the field; an API failure shows in a `<v-alert type="error">` and the page stays open.
 
 ---
 
@@ -269,7 +311,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **Driver**: must be approved with an unexpired license to be added to a request.
 - **Vehicle Request Vehicle**: a vehicle an admin assigned to a request (can have multiple)
 - **Vehicle**: an area's vehicle that can be assigned to requests in that area
-- **Vehicle Type**: includes whether a vehicle type requires a CDL to drive (check if driver has cdl)
+- **Vehicle Type**: the kind of vehicle, shown when assigning vehicles. CDL checks were dropped with Feature 7's `has_cdl`.
 - **Area**: the area a request is for, used to route requests to proper area_admins and to limit available vehicles
 - **User**: the requester who owns a request, or the admin who approves it.
 - **Role**: decides what requests are shown to which users
@@ -281,22 +323,22 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 ### `vehicle_requests` table
 
-| Field              | Type      | Rules                                                                                       |
-| ------------------ | --------- | ------------------------------------------------------------------------------------------- |
-| `id`               | int PK    | Auto-increment                                                                              |
-| `user_id`          | int FK    |                                                                                             |
-| `area_id`          | int FK    |                                                                                             |
-| `purpose`          | text      |                                                                                             |
-| `start_at`         | timestamp |                                                                                             |
-| `end_at`           | timestamp |                                                                                             |
-| `all_day`          | boolean   | Used to account for time being optional on start/end dates                                  |
-| `number_of_people` | int       |                                                                                             |
-| `estimated_miles`  | int       | Recalculated when destinations change, using Google APIs or saved distances on destinations |
-| `approver_id`      | int FK    | Optional                                                                                    |
-| `approved_at`      | timestamp | Optional                                                                                    |
-| `status`           | enum      | `pending`, `awaiting_vehicle`, `reserved`, `returned`, `cancelled`, `denied`                |
-| `created_at`       | timestamp | Sequelize timestamps                                                                        |
-| `updated_at`       | timestamp | Sequelize timestamps                                                                        |
+| Field              | Type      | Rules                                                                                                                   |
+| ------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | int PK    | Auto-increment                                                                                                          |
+| `user_id`          | int FK    |                                                                                                                         |
+| `area_id`          | int FK    |                                                                                                                         |
+| `purpose`          | text      |                                                                                                                         |
+| `start_at`         | timestamp |                                                                                                                         |
+| `end_at`           | timestamp |                                                                                                                         |
+| `all_day`          | boolean   | Used to account for time being optional on start/end dates                                                              |
+| `number_of_people` | int       |                                                                                                                         |
+| `estimated_miles`  | int       | Recalculated when destinations change, using Google APIs or saved distances on destinations. Null when unknown (FR-007) |
+| `approver_id`      | int FK    | Optional                                                                                                                |
+| `approved_at`      | timestamp | Optional                                                                                                                |
+| `status`           | enum      | `pending`, `awaiting_vehicle`, `reserved`, `returned`, `cancelled`, `denied`                                            |
+| `created_at`       | timestamp | Sequelize timestamps                                                                                                    |
+| `updated_at`       | timestamp | Sequelize timestamps                                                                                                    |
 
 ### `vehicle_request_destinations` table
 
@@ -390,6 +432,19 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **Then** the destinations display in the new order
 - **And** they are saved with the request in that order
 
+#### Scenario: User searches for a custom address
+
+- **Given** I am signed in and adding a custom address to a request
+- **When** I type at least 3 characters of an address and pick a suggestion
+- **Then** the street, city, state, and ZIP fields are filled in from it
+- **And** I can still edit them before adding the stop
+
+#### Scenario: User adds more than ten destinations
+
+- **Given** I am signed in and my request already has 10 destinations
+- **Then** I can't add another destination
+- **And** the API rejects a request with more than 10 destinations
+
 #### Scenario: Vehicle assignment is hidden during creation
 
 - **Given** I am signed in
@@ -401,6 +456,27 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **Given** I am signed in
 - **When** I send `POST /api/requests` without one of the required fields
 - **Then** the API returns `400` with a message naming the missing field
+
+#### Scenario: Request form offers only official destinations
+
+- **Given** I am signed in without an `admin` or `area_admin` role and both official and unofficial destinations exist
+- **When** I send `GET /api/destinations/selectable`
+- **Then** the API returns `200` with only the official destinations and their addresses
+- **And** Feature 6's `GET /api/destinations` still returns `403` for me
+
+#### Scenario: Request form offers only approved drivers with current licenses
+
+- **Given** I am signed in and some drivers are pending, former, or have an expired license
+- **When** I send `GET /api/drivers/selectable`
+- **Then** the API returns `200` with only approved drivers whose licenses are current
+- **And** each driver shows only their id and name
+
+#### Scenario: User cannot choose an unofficial destination
+
+- **Given** I am signed in and an unofficial destination exists that is not on my request
+- **When** I send `POST /api/requests` with that destination
+- **Then** the API returns `400` with a message naming the destination as unavailable
+- **And** a custom stop I add instead is saved as an unofficial destination that stays on my request when I edit it
 
 ---
 
@@ -427,7 +503,7 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 #### Scenario: User views requests as a monthly calendar
 
 - **Given** I am signed in and I have submitted requests
-- **When** I open the **My Requests** view and choose the monthly calendar display
+- **When** I open the **My Requests** view (the monthly calendar is the default display)
 - **Then** my requests that fall in the selected month appear as calendar events
 
 #### Scenario: User searches and filters requests
@@ -457,6 +533,13 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 - **Given** I am signed in without an `admin` or `area_admin` role and a request exists that I did not create
 - **When** I send `GET /api/requests/:requestId` for that request
 - **Then** the API returns `404`
+
+#### Scenario: Requester sees drivers and vehicles without their private details
+
+- **Given** I am signed in without an `admin` or `area_admin` role and an admin has assigned a vehicle to my request
+- **When** I send `GET /api/requests/:requestId` for that request
+- **Then** its drivers are listed by name only
+- **And** its vehicles show their university ID, passenger capacity, and type, but not their VIN
 
 ---
 
@@ -555,20 +638,76 @@ Only signed-in admin users may create, edit, or delete vehicle . Any signed-in u
 
 ---
 
-### Feature 7 follow-up — Driver deletion guard
+### US-8.10 — Destination Management updates
 
-#### Scenario: Cannot delete driver with requests
+Feature 6's scenarios still apply; "dialog" in them now means the destination page (FR-010).
 
-- **Given** I am signed in as admin or an area_admin on the drivers view
-- **When** I try to delete a driver that is attached to any vehicle requests
-- **Then** the API returns `400` with a helpful message explaining why I can't delete them and suggesting changing their status to `former`
+#### Scenario: Destination name opens its page
+
+- **Given** I am signed in with the `admin` or `area_admin` role on Destination Management
+- **When** I click a destination's name
+- **Then** its page opens at `/destinations/:id`
+
+#### Scenario: Picking an address fills the form and looks up miles from campus
+
+- **Given** I am signed in with the `admin` or `area_admin` role on a destination's page
+- **When** I search for an address and pick a suggestion
+- **Then** the name, address fields, and miles from campus are filled in, and stay editable
+
+#### Scenario: Search destinations by name or address
+
+- **Given** I am signed in with the `admin` or `area_admin` role on Destination Management
+- **When** I type in the search box
+- **Then** only matching destinations are shown
+
+#### Scenario: Filter destinations by availability
+
+- **Given** I am signed in with the `admin` or `area_admin` role on Destination Management
+- **When** I choose **Official** or **Unofficial**
+- **Then** only destinations with that availability are shown
 
 ---
 
 ## Test Coverage Map
 
-| Story | Scenario | Test file | Test name |
-| ----- | -------- | --------- | --------- |
+| Story   | Scenario                                                          | Test file                                                                         | Test name                                                         |
+| ------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| US-8.1  | Unauthenticated user cannot create a request                      | `backend/tests/vehicleRequests.test.js`                                           | Unauthenticated user cannot create a request                      |
+| US-8.1  | Authenticated user creates a request                              | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Authenticated user creates a request                              |
+| US-8.1  | User adds drivers to a new request                                | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds drivers to a new request                                |
+| US-8.1  | User adds destinations to a new request                           | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds destinations to a new request                           |
+| US-8.1  | User reorders destinations on a new request                       | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User reorders destinations on a new request                       |
+| US-8.1  | User searches for a custom address                                | `backend/tests/places.test.js`, `frontend/tests/VehicleRequests.test.js`          | User searches for a custom address                                |
+| US-8.1  | User adds more than ten destinations                              | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User adds more than ten destinations                              |
+| US-8.1  | Vehicle assignment is hidden during creation                      | `frontend/tests/VehicleRequests.test.js`                                          | Vehicle assignment is hidden during creation                      |
+| US-8.1  | User submits a request with missing required fields               | `backend/tests/vehicleRequests.test.js`                                           | User submits a request with missing required fields               |
+| US-8.1  | Request form offers only official destinations                    | `backend/tests/vehicleRequests.test.js`                                           | Request form offers only official destinations                    |
+| US-8.1  | Request form offers only approved drivers with current licenses   | `backend/tests/vehicleRequests.test.js`                                           | Request form offers only approved drivers with current licenses   |
+| US-8.1  | User cannot choose an unofficial destination                      | `backend/tests/vehicleRequests.test.js`                                           | User cannot choose an unofficial destination                      |
+| US-8.2  | Unauthenticated user cannot view requests                         | `backend/tests/vehicleRequests.test.js`                                           | Unauthenticated user cannot view requests                         |
+| US-8.2  | User views requests as a table                                    | `frontend/tests/VehicleRequests.test.js`                                          | User views requests as a table                                    |
+| US-8.2  | User views requests as a weekly calendar                          | `frontend/tests/VehicleRequests.test.js`                                          | User views requests as a weekly calendar                          |
+| US-8.2  | User views requests as a monthly calendar                         | `frontend/tests/VehicleRequests.test.js`                                          | User views requests as a monthly calendar                         |
+| US-8.2  | User searches and filters requests                                | `frontend/tests/VehicleRequests.test.js`                                          | User searches and filters requests                                |
+| US-8.2  | Regular user only sees their own requests                         | `backend/tests/vehicleRequests.test.js`                                           | Regular user only sees their own requests                         |
+| US-8.3  | User views the details of their own request                       | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | User views the details of their own request                       |
+| US-8.3  | User cannot view another user's request                           | `backend/tests/vehicleRequests.test.js`                                           | User cannot view another user's request                           |
+| US-8.3  | Requester sees drivers and vehicles without their private details | `backend/tests/vehicleRequests.test.js`                                           | Requester sees drivers and vehicles without their private details |
+| US-8.4  | Admin sees all requests                                           | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin sees all requests                                           |
+| US-8.4  | Area admin sees requests from the areas they manage               | `backend/tests/vehicleRequests.test.js`                                           | Area admin sees requests from the areas they manage               |
+| US-8.5  | Admin searches and filters requests                               | `frontend/tests/VehicleRequests.test.js`                                          | Admin searches and filters requests                               |
+| US-8.5  | Admin filters to requests awaiting their action                   | `frontend/tests/VehicleRequests.test.js`                                          | Admin filters to requests awaiting their action                   |
+| US-8.6  | Admin views the details of a request                              | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin views the details of a request                              |
+| US-8.7  | Admin changes a request's status                                  | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin changes a request's status                                  |
+| US-8.7  | Changing an approval-affecting field resets status                | `backend/tests/vehicleRequests.test.js`                                           | Changing an approval-affecting field resets status                |
+| US-8.7  | Updating a request with missing required fields                   | `backend/tests/vehicleRequests.test.js`                                           | Updating a request with missing required fields                   |
+| US-8.8  | Admin assigns vehicles to a request                               | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Admin assigns vehicles to a request                               |
+| US-8.9  | Estimated mileage is added when a request is created              | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Estimated mileage is added when a request is created              |
+| US-8.9  | Estimated mileage updates when destinations change                | `backend/tests/vehicleRequests.test.js`, `frontend/tests/VehicleRequests.test.js` | Estimated mileage updates when destinations change                |
+| US-8.10 | Destination name opens its page                                   | `frontend/tests/Destinations.test.js`                                             | Destination name opens its page                                   |
+| US-8.10 | Picking an address fills the form and looks up miles from campus  | `backend/tests/places.test.js`, `frontend/tests/Destinations.test.js`             | Picking an address fills the form and looks up miles from campus  |
+| US-8.10 | Search destinations by name or address                            | `frontend/tests/Destinations.test.js`                                             | Search destinations by name or address                            |
+| US-8.10 | Filter destinations by availability                               | `frontend/tests/Destinations.test.js`                                             | Filter destinations by availability                               |
 
 ## Definition of Done
 

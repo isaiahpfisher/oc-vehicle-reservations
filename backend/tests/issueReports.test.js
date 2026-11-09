@@ -83,15 +83,22 @@ describe("Feature 10 — Issue Report", () => {
     });
 
     it("User saves issue report with a vehicle request and assignee", async () => {
-      await seedFleet();
-      for (let index = 0; index < 11; index += 1) {
-        await db.vehicleRequest.create({ purpose: `Filler ${index}` });
-      }
-      const campusVisit = await db.vehicleRequest.create({ purpose: "Campus visit" });
+      const { athletics } = await seedFleet();
       for (let index = 1; index <= 4; index += 1) {
         await registerUser({ email: `pad${index}@example.com`, firstName: "Pad", lastName: String(index) });
       }
       const alex = await registerUser({ email: "alex@example.com", firstName: "Alex", lastName: "Kim" });
+      const requestDetails = {
+        userId: alex.body.userId,
+        areaId: athletics.id,
+        startAt: new Date("2030-12-18T00:00:00.000Z"),
+        endAt: new Date("2030-12-21T00:00:00.000Z"),
+        numberOfPeople: 1,
+      };
+      for (let index = 0; index < 11; index += 1) {
+        await db.vehicleRequest.create({ ...requestDetails, purpose: `Filler ${index}` });
+      }
+      const campusVisit = await db.vehicleRequest.create({ ...requestDetails, purpose: "Campus visit" });
       const { headers } = await signIn(["admin"], { email: "jane@example.com", firstName: "Jane", lastName: "Doe" });
 
       expect(campusVisit.id).toBe(12);

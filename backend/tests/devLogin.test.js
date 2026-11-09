@@ -2,15 +2,23 @@
  * Feature 3 — User Role Management
  * Spec: features/feature-3-user-role-management.md
  */
+import jwt from "jsonwebtoken";
 import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
+import authConfig from "../app/config/auth.config.js";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 const ENV_KEYS = ["DEV_LOGIN", "DEV_LOGIN_PASSWORD", "NODE_ENV"];
 let savedEnv;
 
 const devLogin = (email, password = "password") => request(app).post("/api/dev-login").send({ email, password });
+// Tests sign a stand-in Google token with AUTH_SECRET (see googleToken.js).
+const googleLogin = (email) =>
+  request(app)
+    .post("/api/login")
+    .send({ googleCredentials: jwt.sign({ email, given_name: "Isaiah", family_name: "Fisher" }, authConfig.secret) });
+const rolesOf = (response) => response.body.roles.map(({ role }) => role);
 
 beforeEach(async () => {
   savedEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
@@ -104,6 +112,32 @@ describe("Feature 3 — User Role Management API", () => {
       const response = await devLogin("admin@oc.edu");
 
       expect(response.status).toBe(404);
+    });
+
+    // FR-017
+    it("Team admin signs in with Google in development", async () => {
+      const first = await googleLogin("Isaiah.Fisher@eagles.oc.edu");
+      expect(first.status).toBe(200);
+      expect(rolesOf(first)).toEqual(["admin"]);
+
+      // An existing account without the role gets it back, once.
+      await db.role.destroy({ where: { userId: first.body.userId } });
+      expect(rolesOf(await googleLogin("isaiah.fisher@eagles.oc.edu"))).toEqual(["admin"]);
+      expect(rolesOf(await googleLogin("isaiah.fisher@eagles.oc.edu"))).toEqual(["admin"]);
+      expect(await db.role.count()).toBe(1);
+
+      // Anyone else signs in with no roles.
+      expect(rolesOf(await googleLogin("someone.else@eagles.oc.edu"))).toEqual([]);
+    });
+
+    // FR-017
+    it("Team admin gets no role when developer sign-in is off", async () => {
+      delete process.env.DEV_LOGIN;
+
+      const response = await googleLogin("isaiah.fisher@eagles.oc.edu");
+
+      expect(response.status).toBe(200);
+      expect(rolesOf(response)).toEqual([]);
     });
   });
 });

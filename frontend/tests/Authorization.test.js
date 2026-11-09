@@ -81,9 +81,11 @@ const openApp = async (path) => {
   return wrapper;
 };
 
-/** Page links in the app shell's main navigation (MenuBar or Sidebar). */
+/** Page links in the app shell's navigation (MenuBar, or the Sidebar's main and pinned lists). */
 const navLabels = () =>
-  [...document.body.querySelectorAll('[aria-label="Main navigation"] a')].map((link) => link.textContent.trim());
+  [...document.body.querySelectorAll('[aria-label="Main navigation"] a, [aria-label="Pinned navigation"] a')].map(
+    (link) => link.textContent.trim(),
+  );
 
 beforeEach(() => {
   localStorage.clear();
@@ -101,7 +103,8 @@ describe("Feature 3 — User Role Management UI", () => {
       await pageLoad(storedUser([maintenance, athleticsAdmin]));
       await openApp("/");
 
-      expect(navLabels()).toContain("Home");
+      // Feature 8 (US-8.2) made home the My Requests page and added Requests for area admins.
+      expect(navLabels()).toContain("My Requests");
       expect(navLabels()).not.toContain("Users");
     });
   });
@@ -121,13 +124,13 @@ describe("Feature 3 — User Role Management UI", () => {
     it("Navigation hides unauthorized links", async () => {
       await pageLoad(storedUser([]));
       await openApp("/");
-      // Feature 10 adds Issue Reports for every signed-in user, including one with no roles.
-      expect(navLabels()).toEqual(["Home", "Issue Reports"]);
+      // Feature 8 (US-8.2) made home the My Requests page; Feature 10 adds Issue Reports for every signed-in user.
+      expect(navLabels()).toEqual(["My Requests", "Issue Reports"]);
 
       wrapper.unmount();
       await pageLoad(storedUser([admin]));
       await openApp("/");
-      expect(navLabels()).toEqual(expect.arrayContaining(["Home", "Users", "Maintenance"]));
+      expect(navLabels()).toEqual(expect.arrayContaining(["My Requests", "Users", "Maintenance"]));
     });
   });
 
@@ -204,10 +207,10 @@ describe("Feature 3 — User Role Management UI", () => {
       expect(readStoredUser().roles).toEqual([maintenance]);
       expect(navLabels()).toContain("Maintenance");
 
-      // Only once per page load.
+      // Only once per page load. Feature 8 (US-8.2): home also loads `me/requests`, so count role refreshes only.
       await app.router.push("/");
       await settle();
-      expect(app.apiClient.get).toHaveBeenCalledTimes(1);
+      expect(app.apiClient.get.mock.calls.filter(([url]) => url === "users/1")).toHaveLength(1);
     });
 
     it("Removed role is dropped on page load", async () => {

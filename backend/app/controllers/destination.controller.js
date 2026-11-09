@@ -125,6 +125,21 @@ exports.findAll = async (req, res) => {
   }
 };
 
+/** Feature 8: official destinations for the request form, in the same camelCase shape as a request's `destinations`. */
+exports.findSelectable = async (req, res) => {
+  try {
+    const destinations = await db.destination.findAll({
+      attributes: ["id", "name", "addressLine1", "addressLine2", "city", "state", "zipCode", "milesFromCampus"],
+      where: { isSaved: true },
+      order: [["name", "ASC"]],
+    });
+    return res.send(destinations);
+  } catch (err) {
+    logger.error(`destination findSelectable failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to fetch destinations." });
+  }
+};
+
 exports.findOne = async (req, res) => {
   try {
     const id = destinationId(req.params.destinationId);
@@ -194,6 +209,13 @@ exports.remove = async (req, res) => {
     const existing = await db.destination.findByPk(id);
     if (!existing) {
       return res.status(404).send({ message: `Destination with id=${id} not found.` });
+    }
+
+    // Feature 8: requests are never deleted, so a destination they visit stays.
+    if ((await db.vehicleRequestDestination.count({ where: { destinationId: id } })) > 0) {
+      return res.status(400).send({
+        message: "Destination is on vehicle requests and can't be deleted. Mark it Unofficial to stop offering it.",
+      });
     }
 
     await existing.destroy();

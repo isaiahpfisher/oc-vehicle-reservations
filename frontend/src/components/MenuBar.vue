@@ -3,7 +3,7 @@ import AppLogo from "./AppLogo.vue";
 import ProfileMenu from "./ProfileMenu.vue";
 import { useAppNav } from "../composables/useAppNav.js";
 
-const { navLinks } = useAppNav();
+const { navLinks, isCurrent } = useAppNav();
 </script>
 
 <template>
@@ -14,7 +14,14 @@ const { navLinks } = useAppNav();
     </template>
 
     <nav aria-label="Main navigation" class="d-flex ml-4">
-      <v-btn v-for="link in navLinks" :key="link.name" variant="text" color="white" :to="{ name: link.name }">
+      <v-btn
+        v-for="link in navLinks"
+        :key="link.name"
+        variant="text"
+        color="white"
+        :to="{ name: link.name }"
+        :active="isCurrent(link)"
+      >
         {{ link.meta.nav }}
       </v-btn>
     </nav>
