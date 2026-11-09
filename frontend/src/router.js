@@ -109,6 +109,15 @@ const router = createRouter({
       meta: { nav: "Issue Reports", icon: "mdi-alert-circle-outline" },
     },
     {
+      path: "/issue-reports/:id",
+      redirect: (to) => ({
+        path: "/issue-reports",
+        query: {
+          notice: `There is no page for /issue-reports/${to.params.id}. This is a placeholder for when such a page comes into existence.`,
+        },
+      }),
+    },
+    {
       path: "/service-types",
       name: "service-types",
       component: () => import("./views/ServiceTypes.vue"),
@@ -117,6 +126,36 @@ const router = createRouter({
         icon: "mdi-wrench-outline",
         roles: ["admin", "area_admin", "maintenance"],
       },
+    },
+    {
+      path: "/maintenance-needs",
+      name: "maintenance-needs",
+      component: () => import("./views/MaintenanceNeeds.vue"),
+      meta: {
+        nav: "Maintenance Needs",
+        icon: "mdi-tools",
+        roles: ["admin", "area_admin", "maintenance"],
+      },
+    },
+    {
+      path: "/maintenance-needs/new",
+      name: "maintenanceNeedCreate",
+      component: () => import("./views/MaintenanceNeedsForm.vue"),
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
+    },
+    {
+      path: "/maintenance-needs/:id/edit",
+      name: "maintenanceNeedEdit",
+      component: () => import("./views/MaintenanceNeedsForm.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
+    },
+    {
+      path: "/maintenance-needs/:id",
+      name: "maintenanceNeedDetails",
+      component: () => import("./views/MaintenanceNeedsView.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
     },
     {
       path: "/:pathMatch(.*)*",

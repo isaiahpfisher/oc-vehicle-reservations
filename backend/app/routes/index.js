@@ -10,6 +10,7 @@ import driverRoutes from "./driver.routes.js";
 import vehicleRequestRoutes from "./vehicleRequest.routes.js";
 import issueReportRoutes from "./issueReport.routes.js";
 import mileageLogRoutes from "./mileageLog.routes.js";
+import maintenanceNeedRoutes from "./maintenanceNeed.routes.js";
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.use("/drivers", driverRoutes);
 router.use("/vehicle-requests", vehicleRequestRoutes);
 router.use("/issue-reports", issueReportRoutes);
 router.use("/mileage-logs", mileageLogRoutes);
+router.use("/maintenance-needs", maintenanceNeedRoutes);
 
 export default router;

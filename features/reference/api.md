@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 10 issue report routes, Feature 9 mileage log routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 10 issue report routes, Feature 9 mileage log routes, Feature 11 maintenance need routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -317,6 +317,48 @@ Success body: `{ "id", "vehicleId", "userId", "odometerReading", "recordedAt", "
 | Update sends a different existing `vehicleId` | `400` | `{ "message": "Vehicle cannot be changed." }` |
 | `:mileageLogId` is not an integer | `400` | `{ "message": "Invalid mileage log id." }` |
 | Mileage log id does not exist | `404` | `{ "message": "Mileage log with id=… not found." }` |
+
+## Maintenance needs
+
+Every `/api/maintenance-needs` route uses `authorizeRoles("admin", "area_admin", "maintenance")`. Admins and maintenance users see every need and every vehicle. An area admin sees and changes needs only when the vehicle is in an area they administer. A missing token is `401` `{ "message": "Unauthorized! No token provided." }`. A signed-in user without one of those roles is `403` `{ "message": "One of these roles is required: admin, area_admin, maintenance." }`. An area admin using a vehicle outside their areas is `403` `{ "message": "Unauthorized for this area." }`.
+
+`authorId` is always the signed-in user. A body `authorId` is ignored. `issueReportId` must be null unless the signed-in user is an admin or area admin. On create, a non-null `issueReportId` copies the issue report: title `Maintenance Needed`, that report's vehicle, assignee, and description, `outOfService` true, priority `None`, status `Open`, and `resolvedAt` null.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/maintenance-needs` | Admin, area admin, or maintenance | `200` array, newest `createdAt` first. Area admins only receive needs for their vehicles. |
+| `GET` | `/api/maintenance-needs/options` | Admin, area admin, or maintenance | `200` `{ "vehicles", "assignees" }` for the create and edit form. Vehicles follow the same area rule. Assignees are users who hold the maintenance role. |
+| `GET` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for that vehicle, or maintenance | `200` with one maintenance need. |
+| `POST` | `/api/maintenance-needs` | Admin, area admin for that vehicle, or maintenance | `201` with the created maintenance need. |
+| `PUT` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for the current vehicle and the vehicle in the body, or maintenance | `200` with the updated maintenance need. |
+| `DELETE` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for that vehicle, or maintenance | `200` `{ "message": "Maintenance need deleted." }`. |
+
+Success body: `{ "id", "issueReportId", "authorId", "vehicleId", "assigneeId", "title", "description", "outOfService", "priority", "status", "resolvedAt", "author", "assignee", "vehicle", "createdAt", "updatedAt" }`. `author` and `assignee` are `{ "id", "firstName", "lastName" }` (`assignee` is null when unset). `vehicle` is `{ "id", "color", "make", "model", "licensePlate", "areaId", "universityId" }`. `resolvedAt` is `yyyy-mm-dd` or null.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without admin, area admin, or maintenance | `403` | `{ "message": "One of these roles is required: admin, area_admin, maintenance." }` |
+| Area admin and the vehicle is outside their areas | `403` | `{ "message": "Unauthorized for this area." }` |
+| Missing or whitespace-only title | `400` | `{ "message": "Missing title." }` |
+| Title longer than 50 characters | `400` | `{ "message": "Title cannot be longer than 50 characters." }` |
+| Missing `vehicleId` | `400` | `{ "message": "Missing vehicle id." }` |
+| `vehicleId` does not exist | `400` | `{ "message": "Vehicle does not exist." }` |
+| `assigneeId` does not exist | `400` | `{ "message": "User does not exist." }` |
+| Assignee does not have the maintenance role | `400` | `{ "message": "User does not have maintenance role." }` |
+| Missing `outOfService` | `400` | `{ "message": "Out of service boolean is required." }` |
+| `outOfService` is not a boolean | `400` | `{ "message": "Out of service boolean must be a boolean." }` |
+| Missing `priority` | `400` | `{ "message": "Priority is required." }` |
+| `priority` is not High, Medium, Low, or None | `400` | `{ "message": "Priority must be Low, Medium, High, or None." }` |
+| Missing `status` | `400` | `{ "message": "Status is required." }` |
+| `status` is not Open, In Progress, Completed, or Canceled | `400` | `{ "message": "Status must be Open, In Progress, Completed, or Canceled." }` |
+| `resolvedAt` is not `yyyy-mm-dd` | `400` | `{ "message": "Resolved at date must be in format yyyy-mm-dd." }` |
+| `resolvedAt` is before 1950-01-01 or after today | `400` | `{ "message": "Resolved at date must be between 1950 and today." }` |
+| Status is Open or In Progress and a valid `resolvedAt` was sent | `201` or `200` | `resolvedAt` is stored as null. |
+| Status is Completed or Canceled and `resolvedAt` is null | `201` or `200` | `resolvedAt` is stored as today's date. |
+| `issueReportId` does not exist | `400` | `{ "message": "Issue report id does not exist." }` |
+| `issueReportId` is already used by a maintenance need | `400` | `{ "message": "Issue report already belongs to a maintenance need." }` |
+| Maintenance need id does not exist | `404` | `{ "message": "Maintenance need does not exist." }` |
 
 ## Conventions
 

@@ -11,6 +11,7 @@ import issueReportServices from "../src/services/issueReportServices.js";
 import vehicleServices from "../src/services/vehicleServices.js";
 import userServices from "../src/services/userServices.js";
 import vehicleRequestServices from "../src/services/vehicleRequestServices.js";
+import maintenanceNeedServices from "../src/services/maintenanceNeedServices.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
@@ -37,6 +38,17 @@ vi.mock("../src/services/userServices.js", () => ({
 
 vi.mock("../src/services/vehicleRequestServices.js", () => ({
   default: { getVehicleRequests: vi.fn() },
+}));
+
+vi.mock("../src/services/maintenanceNeedServices.js", () => ({
+  default: {
+    getMaintenanceNeeds: vi.fn(),
+    getMaintenanceNeed: vi.fn(),
+    getMaintenanceNeedOptions: vi.fn(),
+    createMaintenanceNeed: vi.fn(),
+    updateMaintenanceNeed: vi.fn(),
+    removeMaintenanceNeed: vi.fn(),
+  },
 }));
 
 const signedInUser = {
@@ -165,6 +177,8 @@ beforeEach(async () => {
   vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle, musicVehicle] });
   userServices.getUsers.mockResolvedValue({ data: [alex, { id: 2, firstName: "Jane", lastName: "Doe" }] });
   vehicleRequestServices.getVehicleRequests.mockResolvedValue({ data: [campusVisit] });
+  maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [] });
+  maintenanceNeedServices.createMaintenanceNeed.mockResolvedValue({ status: 201, data: { id: 1, title: "Maintenance Needed" } });
   await router.push("/login");
   await router.isReady();
 });
@@ -543,6 +557,109 @@ describe("Feature 10 — Issue Report", () => {
       await mountAppAt("/issue-reports");
 
       expect(router.currentRoute.value.path).toBe("/login");
+    });
+  });
+});
+
+const maintenanceButtons = () =>
+  [...document.body.querySelectorAll("button")].filter((button) => button.textContent.trim() === "Create Maintenance Need");
+
+describe("Feature 11 — Maintenance Needs", () => {
+  describe("US-11.2 — Create maintenance need from issue report", () => {
+    it("Admin user sees Create Maintenance Need on a maintenance issue report", async () => {
+      signIn();
+      const reports = [
+        { ...janeReport, id: 1, type: "maintenance" },
+        { ...janeReport, id: 2, type: "maintenance", description: "Brakes." },
+      ];
+      issueReportServices.getIssueReports.mockResolvedValue({ data: reports });
+      await mountAppAt("/issue-reports");
+
+      await waitFor(() => expect(maintenanceButtons()).toHaveLength(2));
+    });
+
+    it("Create Maintenance Need is unavailable when the issue type is not maintenance", async () => {
+      signIn();
+      issueReportServices.getIssueReports.mockResolvedValue({
+        data: [
+          { ...janeReport, id: 1, type: "low_gas" },
+          { ...janeReport, id: 2, type: "dirty", description: "Muddy." },
+        ],
+      });
+      await mountAppAt("/issue-reports");
+
+      await waitFor(() => {
+        const buttons = maintenanceButtons();
+        expect(buttons).toHaveLength(2);
+        expect(buttons.every((button) => button.disabled)).toBe(true);
+      });
+    });
+
+    it("Create Maintenance Need is unavailable when that issue report already has a maintenance need", async () => {
+      signIn();
+      issueReportServices.getIssueReports.mockResolvedValue({
+        data: [{ ...janeReport, id: 7, type: "maintenance" }],
+      });
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [{ id: 1, issueReportId: 7 }] });
+      await mountAppAt("/issue-reports");
+
+      await waitFor(() => {
+        const buttons = maintenanceButtons();
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0].disabled).toBe(true);
+      });
+    });
+
+    it("Admin user creates a maintenance need from an issue report", async () => {
+      signIn();
+      const report = {
+        ...janeReport,
+        id: 4,
+        type: "maintenance",
+        vehicleId: 3,
+        assigneeId: 5,
+        description: "Oil change needed.",
+      };
+      const created = {
+        id: 9,
+        title: "Maintenance Needed",
+        vehicleId: 3,
+        assigneeId: 5,
+        description: "Oil change needed.",
+        status: "Open",
+        priority: "None",
+        outOfService: true,
+        author: janeReport.author,
+        assignee: alex,
+        vehicle: { ...vehicle, areaId: 1 },
+        createdAt: "2026-11-06T12:00:00.000Z",
+      };
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [report] });
+      maintenanceNeedServices.createMaintenanceNeed.mockResolvedValue({ status: 201, data: created });
+      await mountAppAt("/issue-reports");
+
+      await waitFor(() => expect(maintenanceButtons()[0]?.disabled).toBe(false));
+      maintenanceButtons()[0].click();
+
+      await waitFor(() => expect(maintenanceNeedServices.createMaintenanceNeed).toHaveBeenCalledTimes(1));
+      expect(maintenanceNeedServices.createMaintenanceNeed).toHaveBeenCalledWith({
+        issueReportId: 4,
+        vehicleId: 3,
+        assigneeId: 5,
+        description: "Oil change needed.",
+        title: "Maintenance Needed",
+        outOfService: true,
+        priority: "None",
+        status: "Open",
+        resolvedAt: null,
+        authorId: 2,
+      });
+      await waitFor(() => expect(maintenanceButtons()[0].disabled).toBe(true));
+
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [created] });
+      await router.push("/maintenance-needs");
+      await settle();
+      await waitFor(() => expect(document.body.textContent).toContain("Maintenance Needed"));
     });
   });
 });

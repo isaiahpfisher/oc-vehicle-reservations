@@ -169,8 +169,8 @@ erDiagram
       string title
       text description "optional"
       boolean out_of_service
-      enum priority "high, medium, low, none"
-      enum status "open, in_progress, completed, cancelled"
+      enum priority "High, Medium, Low, None"
+      enum status "Open, In Progress, Completed, Canceled"
       date resolved_at
     }
 

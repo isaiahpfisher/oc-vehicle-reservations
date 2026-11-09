@@ -57,7 +57,8 @@ describe("Feature 3 — User Role Management seed script", () => {
       // Running it again gives the same result.
       expect((await seed({ keep: ["me@eagles.oc.edu"] })).exitCode).toBe(0);
       expect(await db.user.count()).toBe(SEED_USERS.length + 1);
-    });
+      // Feature 8 seed inserts 280 vehicle requests, and this test runs that seed twice.
+    }, 20000);
 
     it("Seed refuses to run in production", async () => {
       await registerUser({ email: "real@oc.edu" });
