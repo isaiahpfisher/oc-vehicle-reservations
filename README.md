@@ -75,6 +75,16 @@ npm run make-admin -- you@oc.edu
 
 Reload the app; you now hold the `admin` role and can grant roles to others from **Users**. The email is matched case-insensitively. The script exits `1` and changes nothing if no account has that email.
 
+These scripts replace every role that account holds:
+
+```bash
+npm run make-maintenance -- you@oc.edu
+npm run make-requester -- you@oc.edu
+npm run make-area-admin -- you@oc.edu Athletics
+```
+
+`make-requester` removes every role row. `make-area-admin` keeps only area admin for that area. The area can be its name (`Athletics`) or its id (`2`). An unknown email or area exits `1` and changes nothing.
+
 ### Seed test data and sign in as other users (development only)
 
 To test role-based access, seed realistic users and sign in as them without Google. From the repo root or `backend/`:

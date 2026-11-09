@@ -562,7 +562,7 @@ describe("Feature 10 — Issue Report", () => {
 });
 
 const maintenanceButtons = () =>
-  [...document.body.querySelectorAll("button")].filter((button) => button.textContent.trim() === "Create Maintenance Need");
+  [...document.body.querySelectorAll('button[aria-label="Create maintenance need"]')];
 
 describe("Feature 11 — Maintenance Needs", () => {
   describe("US-11.2 — Create maintenance need from issue report", () => {
@@ -576,6 +576,8 @@ describe("Feature 11 — Maintenance Needs", () => {
       await mountAppAt("/issue-reports");
 
       await waitFor(() => expect(maintenanceButtons()).toHaveLength(2));
+      const tooltips = wrapper.findAllComponents({ name: "VTooltip" }).filter((tooltip) => tooltip.props("text") === "Create maintenance need");
+      expect(tooltips).toHaveLength(2);
     });
 
     it("Create Maintenance Need is unavailable when the issue type is not maintenance", async () => {

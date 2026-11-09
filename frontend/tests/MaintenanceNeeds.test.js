@@ -152,10 +152,35 @@ const selectedTab = () => document.body.querySelector(".v-tab--selected, [aria-s
 
 const rowText = () => document.body.textContent;
 
+const expectMaintenanceNeedsInFleet = () => {
+  const mainNav = document.body.querySelector('[aria-label="Main navigation"]');
+  const headers = [...mainNav.querySelectorAll(".v-list-subheader")];
+  const fleetHeader = headers.find((header) => header.textContent.trim() === "Fleet");
+  const links = [...mainNav.querySelectorAll("a")];
+  const link = links.find((anchor) => anchor.textContent.trim() === "Maintenance Needs");
+  const serviceTypes = links.find((anchor) => anchor.textContent.trim() === "Service Types");
+  expect(fleetHeader).toBeDefined();
+  expect(link).toBeDefined();
+  expect(serviceTypes).toBeDefined();
+  expect(fleetHeader.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(serviceTypes.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const nextHeader = headers.find(
+    (header) => header !== fleetHeader && (fleetHeader.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING),
+  );
+  if (nextHeader) {
+    expect(link.compareDocumentPosition(nextHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }
+};
+
 beforeEach(async () => {
   signInAs(null);
   vi.resetAllMocks();
-  apiClient.get.mockResolvedValue({ data: { roles: adminRoles } });
+  apiClient.get.mockImplementation((url) => {
+    if (String(url).includes("users")) {
+      return Promise.resolve({ data: { roles: adminRoles } });
+    }
+    return Promise.resolve({ data: [] });
+  });
   issueReportServices.getIssueReports.mockResolvedValue({ data: [] });
   vehicleServices.getVehicles.mockResolvedValue({ data: [] });
   userServices.getUsers.mockResolvedValue({ data: [] });
@@ -537,119 +562,13 @@ describe("Feature 11 — Maintenance Needs", () => {
   });
 
   describe("US-11.4 — Maintenance need actions", () => {
-    it("Maintenance need rows have view and delete actions", async () => {
+    it("Maintenance need rows have edit and delete actions", async () => {
       signIn();
       maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [need] });
       await mountAppAt("/maintenance-needs");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="View maintenance need"]')).toBeTruthy());
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit maintenance need"]')).toBeTruthy());
       expect(document.body.querySelector('[aria-label="Delete maintenance need"]')).toBeTruthy();
-    });
-  });
-
-  describe("US-11.5 — View a particular maintenance need", () => {
-    const openDetails = async (roles = adminRoles, current = need) => {
-      signIn(roles);
-      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [current] });
-      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: current });
-      await mountAppAt("/maintenance-needs");
-      if (roles.some((role) => role.role === "maintenance")) {
-        await clickNamed("Open");
-      }
-      await waitFor(() => expect(document.body.querySelector('[aria-label="View maintenance need"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="View maintenance need"]').click();
-      await settle();
-      await waitFor(() => expect(rowText()).toContain("Author:"));
-    };
-
-    it("Admin user opens the maintenance need page", async () => {
-      await openDetails();
-
-      expect(router.currentRoute.value.path).toBe("/maintenance-needs/1");
-      expect(rowText()).toContain("Author: Jane Doe");
-      expect(rowText()).toContain("Assignee: John Doe");
-      expect(rowText()).toContain("Out of Service: No");
-      expect(rowText()).toContain("Priority: None");
-      expect(rowText()).toContain("Status: Open");
-      expect(rowText()).toContain("Resolve Date:");
-      expect(rowText()).toContain("Vehicle Information:");
-      expect(rowText()).toContain("Black Toyota Sienna (ABC-123)");
-      expect(rowText()).toContain("Description:");
-      expect(rowText()).toContain(need.description);
-    });
-
-    it("Area admin user opens a maintenance need in their area", async () => {
-      await openDetails(areaAdminRoles);
-
-      expect(router.currentRoute.value.path).toBe("/maintenance-needs/1");
-      expect(rowText()).toContain("Vehicle Information:");
-      expect(rowText()).toContain("Description:");
-    });
-
-    it("Maintenance user opens a maintenance need", async () => {
-      await openDetails(maintenanceRoles);
-
-      expect(router.currentRoute.value.path).toBe("/maintenance-needs/1");
-      expect(rowText()).toContain("Author: Jane Doe");
-      expect(rowText()).toContain("Vehicle Information:");
-    });
-
-    it("Maintenance need page shows no assignee as None", async () => {
-      await openDetails(adminRoles, { ...need, assigneeId: null, assignee: null });
-
-      expect(rowText()).toContain("Assignee: None");
-    });
-
-    it("Maintenance need page shows no resolve date when resolvedAt is null", async () => {
-      await openDetails();
-
-      expect(rowText()).toContain("Resolve Date: None");
-    });
-
-    it("View issue report is not clickable when there is no issue report", async () => {
-      await openDetails();
-
-      const button = namedButton("View issue report");
-      expect(button).toBeDefined();
-      expect(button.disabled).toBe(true);
-    });
-
-    it("View issue report opens the issue report when issueReportId is set", async () => {
-      await openDetails(adminRoles, { ...need, issueReportId: 4 });
-      await clickNamed("View issue report");
-
-      await waitFor(() => {
-        expect(router.currentRoute.value.path).toBe("/issue-reports");
-        expect(rowText()).toContain(
-          "There is no page for /issue-reports/4. This is a placeholder for when such a page comes into existence.",
-        );
-      });
-    });
-
-    it("Back to list returns to the maintenance needs list", async () => {
-      signIn();
-      const done = { ...need, id: 4, title: "Already done", status: "Completed", createdAt: "2026-11-04T12:00:00.000Z" };
-      const open = { ...need, id: 2, title: "Still open", status: "Open", createdAt: "2026-11-06T12:00:00.000Z" };
-      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [open, done] });
-      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: done });
-      await mountAppAt("/maintenance-needs");
-      await clickNamed("Resolved");
-      await waitFor(() => expect(document.body.querySelector('[aria-label="View maintenance need"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="View maintenance need"]').click();
-      await settle();
-      await clickNamed("Back to list");
-
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
-      expect(selectedTab()).toBe("Resolved");
-      expect(rowText()).toContain("Already done");
-      expect(rowText()).not.toContain("Still open");
-    });
-
-    it("Edit opens /maintenance-needs/:id/edit", async () => {
-      await openDetails();
-      await clickNamed("Edit");
-
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1/edit"));
     });
   });
 
@@ -660,13 +579,23 @@ describe("Feature 11 — Maintenance Needs", () => {
       }
     };
 
-    it("Admin user opens the maintenance needs page", async () => {
-      signIn();
+    const openEdit = async (roles = adminRoles) => {
+      signIn(roles);
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [need] });
       maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: need });
-      await mountAppAt("/maintenance-needs/1");
-      await clickNamed("Edit");
+      await mountAppAt("/maintenance-needs");
+      if (roles.some((role) => role.role === "maintenance")) {
+        await clickNamed("Open");
+      }
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit maintenance need"]')).toBeTruthy());
+      document.body.querySelector('[aria-label="Edit maintenance need"]').click();
+      await settle();
+    };
 
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1/edit"));
+    it("Admin user opens the maintenance needs page", async () => {
+      await openEdit();
+
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
       await expectFields();
       expect((await textField("Title")).props("modelValue")).toBe("Oil Change");
       expect((await selectField("Vehicle")).props("items")).toHaveLength(2);
@@ -676,9 +605,9 @@ describe("Feature 11 — Maintenance Needs", () => {
     });
 
     it("Area admin user opens the maintenance needs page", async () => {
-      signIn(areaAdminRoles);
-      await mountAppAt("/maintenance-needs/1/edit");
+      await openEdit(areaAdminRoles);
 
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
       await expectFields();
       expect((await textField("Title")).props("modelValue")).toBe("Oil Change");
       expect((await selectField("Vehicle")).props("items").map((item) => item.value)).toEqual([1]);
@@ -687,9 +616,9 @@ describe("Feature 11 — Maintenance Needs", () => {
     });
 
     it("Maintenance user opens the maintenance needs page", async () => {
-      signIn(maintenanceRoles);
-      await mountAppAt("/maintenance-needs/1/edit");
+      await openEdit(maintenanceRoles);
 
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
       await expectFields();
       expect((await selectField("Vehicle")).props("items")).toHaveLength(2);
       expect((await textField("Title")).props("modelValue")).toBe(need.title);
@@ -697,15 +626,130 @@ describe("Feature 11 — Maintenance Needs", () => {
       expect(await textField("Resolve Date")).toBeDefined();
     });
 
+    it("View issue report is not clickable when there is no issue report", async () => {
+      signIn();
+      await mountAppAt("/maintenance-needs/1");
+
+      const button = await waitFor(() => {
+        const match = namedButton("View issue report");
+        expect(match).toBeDefined();
+        return match;
+      });
+      expect(button.disabled).toBe(true);
+    });
+
+    it("View issue report opens the issue report when issueReportId is set", async () => {
+      signIn();
+      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: { ...need, issueReportId: 4 } });
+      await mountAppAt("/maintenance-needs/1");
+      await clickNamed("View issue report");
+
+      await waitFor(() => {
+        expect(router.currentRoute.value.path).toBe("/issue-reports");
+        expect(rowText()).toContain(
+          "There is no page for /issue-reports/4. This is a placeholder for when such a page comes into existence.",
+        );
+      });
+    });
+
+    it("Mark in progress shows when status is Open", async () => {
+      signIn();
+      await mountAppAt("/maintenance-needs/1");
+
+      const button = await waitFor(() => {
+        const match = namedButton("Mark in progress");
+        expect(match).toBeDefined();
+        return match;
+      });
+      expect(button.disabled).toBe(false);
+      expect(namedButton("View issue report")).toBeDefined();
+    });
+
+    it("Mark in progress sets status to In Progress", async () => {
+      signIn();
+      const updated = { ...need, status: "In Progress" };
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [updated] });
+      maintenanceNeedServices.updateMaintenanceNeed.mockResolvedValue({ status: 200, data: updated });
+      await mountAppAt("/maintenance-needs/1");
+      await clickNamed("Mark in progress");
+
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
+      expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalledWith("1", expect.objectContaining({ status: "In Progress" }));
+      expect(rowText()).toContain("Oil Change");
+      expect(rowText()).toContain("In Progress");
+    });
+
+    it("Mark completed shows when status is In Progress", async () => {
+      signIn();
+      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: { ...need, status: "In Progress" } });
+      await mountAppAt("/maintenance-needs/1");
+
+      const button = await waitFor(() => {
+        const match = namedButton("Mark completed");
+        expect(match).toBeDefined();
+        return match;
+      });
+      expect(button.disabled).toBe(false);
+      expect(namedButton("View issue report")).toBeDefined();
+    });
+
+    it("Mark completed sets status to Completed", async () => {
+      signIn();
+      const updated = { ...need, status: "Completed", resolvedAt: "2026-11-09" };
+      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: { ...need, status: "In Progress" } });
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [updated] });
+      maintenanceNeedServices.updateMaintenanceNeed.mockResolvedValue({ status: 200, data: updated });
+      await mountAppAt("/maintenance-needs/1");
+      await clickNamed("Mark completed");
+
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
+      expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalledWith("1", expect.objectContaining({ status: "Completed" }));
+      await clickNamed("Resolved");
+      expect(rowText()).toContain("Oil Change");
+      expect(rowText()).toContain("Completed");
+    });
+
+    it("Mark completed is grayed out when status is Completed or Canceled", async () => {
+      signIn();
+      for (const status of ["Completed", "Canceled"]) {
+        maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: { ...need, status, resolvedAt: "2026-11-01" } });
+        wrapper?.unmount();
+        await mountAppAt("/maintenance-needs/1");
+        const button = await waitFor(() => {
+          const match = namedButton("Mark completed");
+          expect(match).toBeDefined();
+          return match;
+        });
+        expect(button.disabled).toBe(true);
+      }
+    });
+
+    it("The button updates when status changes before saving", async () => {
+      signIn();
+      await mountAppAt("/maintenance-needs/1");
+      await (await selectField("Status")).setValue("In Progress");
+      expect(namedButton("Mark completed")?.disabled).toBe(false);
+
+      await (await selectField("Status")).setValue("Completed");
+      expect(namedButton("Mark completed")?.disabled).toBe(true);
+
+      await (await selectField("Status")).setValue("Canceled");
+      expect(namedButton("Mark completed")?.disabled).toBe(true);
+
+      await (await selectField("Status")).setValue("Open");
+      expect(namedButton("Mark in progress")?.disabled).toBe(false);
+      expect(maintenanceNeedServices.updateMaintenanceNeed).not.toHaveBeenCalled();
+    });
+
     const saveEdit = async (apply, updated) => {
       signIn();
       maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: need });
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [updated] });
       maintenanceNeedServices.updateMaintenanceNeed.mockResolvedValue({ status: 200, data: updated });
-      await mountAppAt("/maintenance-needs/1/edit");
+      await mountAppAt("/maintenance-needs/1");
       await apply();
-      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: updated });
       await clickNamed("Save");
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
       await waitFor(() => expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalled());
     };
 
@@ -724,7 +768,8 @@ describe("Feature 11 — Maintenance Needs", () => {
         await (await selectField("Vehicle")).setValue(2);
       }, updated);
 
-      expect(rowText()).toContain("Black Toyota Sienna (ABC-124)");
+      expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalledWith("1", expect.objectContaining({ vehicleId: 2 }));
+      expect(rowText()).toContain("Oil Change");
     });
 
     it("Admin user edits a maintenance need assignee", async () => {
@@ -733,7 +778,7 @@ describe("Feature 11 — Maintenance Needs", () => {
         await (await selectField("Assignee")).setValue(4);
       }, updated);
 
-      expect(rowText()).toContain("Assignee: Jane Jello");
+      expect(rowText()).toContain("Jane Jello");
     });
 
     it("Admin user edits a maintenance need description", async () => {
@@ -742,7 +787,11 @@ describe("Feature 11 — Maintenance Needs", () => {
         await (await field("VTextarea", "Description")).setValue("Tires need balancing");
       }, updated);
 
-      expect(rowText()).toContain("Tires need balancing");
+      expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalledWith(
+        "1",
+        expect.objectContaining({ description: "Tires need balancing" }),
+      );
+      expect(rowText()).toContain("Oil Change");
     });
 
     it("Admin user edits a maintenance need out of service", async () => {
@@ -751,7 +800,8 @@ describe("Feature 11 — Maintenance Needs", () => {
         await (await selectField("Out of Service")).setValue(true);
       }, updated);
 
-      expect(rowText()).toContain("Out of Service: Yes");
+      expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalledWith("1", expect.objectContaining({ outOfService: true }));
+      expect(rowText()).toContain("Oil Change");
     });
 
     it("Admin user edits a maintenance need priority", async () => {
@@ -760,7 +810,7 @@ describe("Feature 11 — Maintenance Needs", () => {
         await (await selectField("Priority")).setValue("Medium");
       }, updated);
 
-      expect(rowText()).toContain("Priority: Medium");
+      expect(rowText()).toContain("Medium");
     });
 
     it("Admin user edits a maintenance need status", async () => {
@@ -769,7 +819,7 @@ describe("Feature 11 — Maintenance Needs", () => {
         await (await selectField("Status")).setValue("In Progress");
       }, updated);
 
-      expect(rowText()).toContain("Status: In Progress");
+      expect(rowText()).toContain("In Progress");
     });
 
     it("Admin user edits a maintenance need resolve date", async () => {
@@ -777,35 +827,38 @@ describe("Feature 11 — Maintenance Needs", () => {
       const updated = { ...current, resolvedAt: "2026-11-03" };
       signIn();
       maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: current });
-      await mountAppAt("/maintenance-needs/1/edit");
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [updated] });
+      await mountAppAt("/maintenance-needs/1");
       await (await textField("Resolve Date")).setValue("2026-11-03");
-      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: updated });
       maintenanceNeedServices.updateMaintenanceNeed.mockResolvedValue({ status: 200, data: updated });
       await clickNamed("Save");
 
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
-      expect(rowText()).toContain("Resolve Date: 2026-11-03");
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
+      expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalledWith("1", expect.objectContaining({ resolvedAt: "2026-11-03" }));
+      await clickNamed("Resolved");
+      expect(rowText()).toContain("Oil Change");
+      expect(rowText()).toContain("Completed");
     });
 
     it("Admin user cancels editing a maintenance need", async () => {
       signIn();
-      await mountAppAt("/maintenance-needs/1/edit");
+      await mountAppAt("/maintenance-needs/1");
       await clickNamed("Cancel");
 
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
       expect(maintenanceNeedServices.updateMaintenanceNeed).not.toHaveBeenCalled();
     });
 
     it("Area admin user edits a maintenance need in their area", async () => {
       signIn(areaAdminRoles);
       const updated = { ...need, title: "Area title" };
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [updated] });
       maintenanceNeedServices.updateMaintenanceNeed.mockResolvedValue({ status: 200, data: updated });
-      await mountAppAt("/maintenance-needs/1/edit");
+      await mountAppAt("/maintenance-needs/1");
       await (await textField("Title")).setValue("Area title");
-      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: updated });
       await clickNamed("Save");
 
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
       expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalled();
       expect(rowText()).toContain("Area title");
     });
@@ -813,20 +866,21 @@ describe("Feature 11 — Maintenance Needs", () => {
     it("Maintenance user edits a maintenance need", async () => {
       signIn(maintenanceRoles);
       const updated = { ...need, title: "Shop title" };
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [updated] });
       maintenanceNeedServices.updateMaintenanceNeed.mockResolvedValue({ status: 200, data: updated });
-      await mountAppAt("/maintenance-needs/1/edit");
+      await mountAppAt("/maintenance-needs/1");
       await (await textField("Title")).setValue("Shop title");
-      maintenanceNeedServices.getMaintenanceNeed.mockResolvedValue({ data: updated });
       await clickNamed("Save");
 
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs/1"));
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/maintenance-needs"));
       expect(maintenanceNeedServices.updateMaintenanceNeed).toHaveBeenCalled();
+      await clickNamed("Open");
       expect(rowText()).toContain("Shop title");
     });
 
     it("Admin user edits a maintenance need with a missing title", async () => {
       signIn();
-      await mountAppAt("/maintenance-needs/1/edit");
+      await mountAppAt("/maintenance-needs/1");
       await (await textField("Title")).setValue("");
       await clickNamed("Save");
 
@@ -836,7 +890,7 @@ describe("Feature 11 — Maintenance Needs", () => {
 
     it("Admin user edits a maintenance need with a whitespace-only title", async () => {
       signIn();
-      await mountAppAt("/maintenance-needs/1/edit");
+      await mountAppAt("/maintenance-needs/1");
       await (await textField("Title")).setValue(" ");
       await clickNamed("Save");
 
@@ -877,11 +931,6 @@ describe("Feature 11 — Maintenance Needs", () => {
       expect(router.currentRoute.value.path).toBe("/login");
     });
 
-    it("Signed-out user opens /maintenance-needs/:id/edit and is sent to /login", async () => {
-      await mountAppAt("/maintenance-needs/1/edit");
-      expect(router.currentRoute.value.path).toBe("/login");
-    });
-
     it("Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to /", async () => {
       signIn(requester);
       await mountAppAt("/maintenance-needs");
@@ -900,28 +949,22 @@ describe("Feature 11 — Maintenance Needs", () => {
       expect(router.currentRoute.value.path).toBe("/");
     });
 
-    it("Signed-in user without those roles opens /maintenance-needs/:id/edit and is sent to /", async () => {
-      signIn(requester);
-      await mountAppAt("/maintenance-needs/1/edit");
-      expect(router.currentRoute.value.path).toBe("/");
-    });
-
     it("Signed-in admin user sees the Maintenance Needs nav link", async () => {
       signIn();
       await mountAppAt("/");
-      await waitFor(() => expect(rowText()).toContain("Maintenance Needs"));
+      await waitFor(expectMaintenanceNeedsInFleet);
     });
 
     it("Signed-in area admin user sees the Maintenance Needs nav link", async () => {
       signIn(areaAdminRoles);
       await mountAppAt("/");
-      await waitFor(() => expect(rowText()).toContain("Maintenance Needs"));
+      await waitFor(expectMaintenanceNeedsInFleet);
     });
 
     it("Signed-in maintenance user sees the Maintenance Needs nav link", async () => {
       signIn(maintenanceRoles);
       await mountAppAt("/");
-      await waitFor(() => expect(rowText()).toContain("Maintenance Needs"));
+      await waitFor(expectMaintenanceNeedsInFleet);
     });
 
     it("Signed-in user without those roles does not see the Maintenance Needs nav link", async () => {

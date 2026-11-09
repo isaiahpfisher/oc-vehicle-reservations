@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import { useRoles } from "../composables/useRoles.js";
@@ -78,17 +78,32 @@ const limitTitle = (value) => {
   form.value.title = String(value ?? "").slice(0, 50);
 };
 
-const backToDetails = () => {
-  router.push({ name: "maintenanceNeedDetails", params: { id: needId.value }, query: { tab: route.query.tab } });
+const cancel = () => {
+  router.push({ name: "maintenance-needs" });
 };
 
-const cancel = () => {
-  if (isCreate.value) {
-    router.push({ name: "maintenance-needs" });
+const viewReport = () => {
+  if (!form.value.issueReportId) {
     return;
   }
 
-  backToDetails();
+  router.push(`/issue-reports/${form.value.issueReportId}`);
+};
+
+const statusActionLabel = computed(() => (form.value.status === "Open" ? "Mark in progress" : "Mark completed"));
+const statusActionDisabled = computed(() => form.value.status !== "Open" && form.value.status !== "In Progress");
+
+const markStatus = async () => {
+  if (form.value.status === "Open") {
+    form.value.status = "In Progress";
+  } else if (form.value.status === "In Progress") {
+    form.value.status = "Completed";
+  } else {
+    return;
+  }
+
+  await nextTick();
+  await submit();
 };
 
 const submit = async () => {
@@ -125,7 +140,7 @@ const submit = async () => {
     }
 
     await maintenanceNeedServices.updateMaintenanceNeed(needId.value, payload);
-    backToDetails();
+    await router.push({ name: "maintenance-needs" });
   } catch (error) {
     if (error.response?.status === 403) {
       await router.push({ name: "home" });
@@ -188,6 +203,14 @@ load();
 
 <template>
   <PageShell :title="isCreate ? 'New maintenance need' : heading" :loading :error="loadError" :max-width="720">
+    <template v-if="!isCreate" #actions>
+      <v-btn color="primary" variant="elevated" class="oc-cta" :disabled="!form.issueReportId" @click="viewReport">
+        View issue report
+      </v-btn>
+      <v-btn color="primary" variant="elevated" class="oc-cta" :disabled="statusActionDisabled" @click="markStatus">
+        {{ statusActionLabel }}
+      </v-btn>
+    </template>
     <v-form @submit.prevent="submit">
       <v-text-field :model-value="form.title" label="Title" maxlength="50" @update:model-value="limitTitle" />
       <v-select v-model="form.assigneeId" :items="assigneeItems" item-title="title" item-value="value" label="Assignee" clearable />
@@ -202,7 +225,7 @@ load();
       <v-select v-model="form.status" :items="statuses" label="Status" />
       <v-text-field v-if="resolveDateVisible" v-model="form.resolvedAt" label="Resolve Date" type="date" />
       <v-select v-model="form.vehicleId" :items="vehicleItems" item-title="title" item-value="value" label="Vehicle" />
-      <v-textarea v-model="form.description" label="Description" />
+      <v-textarea v-model="form.description" label="Description" rows="4" no-resize />
 
       <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
 
@@ -215,3 +238,12 @@ load();
     </v-form>
   </PageShell>
 </template>
+
+<style scoped>
+.v-btn.oc-cta:disabled {
+  opacity: 1;
+  background-color: rgba(var(--v-theme-on-surface), 0.12) !important;
+  color: rgba(var(--v-theme-on-surface), 0.38) !important;
+  box-shadow: none !important;
+}
+</style>

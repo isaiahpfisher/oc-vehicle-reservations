@@ -186,9 +186,19 @@ onMounted(async () => {
         <template #[`item.assignee`]="{ item }">{{ personName(item.assignee) }}</template>
         <template #[`item.actions`]="{ item }">
           <div v-if="canManage" class="d-flex justify-end ga-1">
-            <v-btn size="small" variant="text" :disabled="maintenanceBlocked(item)" @click="createMaintenanceNeed(item)">
-              Create Maintenance Need
-            </v-btn>
+            <v-tooltip text="Create maintenance need" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-plus"
+                  size="small"
+                  variant="text"
+                  aria-label="Create maintenance need"
+                  :disabled="maintenanceBlocked(item)"
+                  @click="createMaintenanceNeed(item)"
+                />
+              </template>
+            </v-tooltip>
             <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit issue report" @click="openEdit(item)" />
             <v-btn
               icon="mdi-delete"

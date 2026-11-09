@@ -3,7 +3,7 @@
  * Spec: features/feature-8-vehicle-requests.md → Assumptions
  */
 import db from "../app/models/index.js";
-import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
+import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_ISSUE_REPORTS, SEED_MAINTENANCE_NEEDS, SEED_MILEAGE_LOGS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 beforeEach(async () => {
@@ -25,6 +25,13 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     expect(await db.serviceType.count()).toBe(SEED_SERVICE_TYPES.length);
     expect(await db.driver.count()).toBe(SEED_DRIVERS.length);
     expect(await db.destination.count()).toBe(SEED_DESTINATIONS.length);
+    expect(await db.issueReport.count()).toBe(SEED_ISSUE_REPORTS.length);
+    expect(await db.maintenanceNeed.count()).toBe(SEED_MAINTENANCE_NEEDS.length);
+    expect(await db.mileageLog.count()).toBe(SEED_MILEAGE_LOGS.length);
+    expect(new Set(SEED_ISSUE_REPORTS.map(({ type }) => type))).toEqual(new Set(["low_gas", "dirty", "maintenance", "other"]));
+    expect(new Set(SEED_MAINTENANCE_NEEDS.map(({ status }) => status))).toEqual(new Set(["Open", "In Progress", "Completed", "Canceled"]));
+    expect(SEED_MAINTENANCE_NEEDS.some(({ issueReportIndex }) => issueReportIndex != null)).toBe(true);
+    expect(SEED_MAINTENANCE_NEEDS.some(({ issueReportIndex }) => issueReportIndex == null)).toBe(true);
 
     // Enough rows to page through, and every driver status and both kinds of destination.
     expect(SEED_VEHICLES.length).toBeGreaterThanOrEqual(50);
@@ -69,5 +76,8 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     expect(await db.vehicleRequest.findOne({ where: { purpose: "Old trip" } })).toBeNull();
     expect(await db.vehicle.count()).toBe(SEED_VEHICLES.length);
     expect(await db.driver.count()).toBe(SEED_DRIVERS.length);
+    expect(await db.issueReport.count()).toBe(SEED_ISSUE_REPORTS.length);
+    expect(await db.maintenanceNeed.count()).toBe(SEED_MAINTENANCE_NEEDS.length);
+    expect(await db.mileageLog.count()).toBe(SEED_MILEAGE_LOGS.length);
   });
 });

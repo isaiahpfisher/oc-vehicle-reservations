@@ -170,6 +170,7 @@ const router = createRouter({
       component: () => import("./views/MaintenanceNeeds.vue"),
       meta: {
         nav: "Maintenance Needs",
+        navGroup: "Fleet",
         icon: "mdi-tools",
         roles: ["admin", "area_admin", "maintenance"],
       },
@@ -181,16 +182,9 @@ const router = createRouter({
       meta: { roles: ["admin", "area_admin", "maintenance"] },
     },
     {
-      path: "/maintenance-needs/:id/edit",
+      path: "/maintenance-needs/:id",
       name: "maintenanceNeedEdit",
       component: () => import("./views/MaintenanceNeedsForm.vue"),
-      props: true,
-      meta: { roles: ["admin", "area_admin", "maintenance"] },
-    },
-    {
-      path: "/maintenance-needs/:id",
-      name: "maintenanceNeedDetails",
-      component: () => import("./views/MaintenanceNeedsView.vue"),
       props: true,
       meta: { roles: ["admin", "area_admin", "maintenance"] },
     },

@@ -44,22 +44,12 @@
 ### US-11.4: Maintenance need actions
 
 **As a** signed-in admin, area admin, or maintenance user
-**I want** each maintenance need row to have **view** and **delete** actions
+**I want** each maintenance need row to have **edit** and **delete** actions
 **So that** I can manage maintenance needs from the maintenance needs view
 
 **Priority:** P1
-**Independent test:** Each maintenance need row exposes view and delete icon actions 
+**Independent test:** Each maintenance need row exposes edit and delete icon actions 
 **Acceptance scenarios:** see ### US-11.4 under Acceptance Criteria
-
-### US-11.5: View a particular maintenance need
-
-**As a** signed-in admin, area admin, or maintenance user
-**I want** to view each maintenance need
-**So that** I can see maintenance need details
-
-**Priority:** P1
-**Independent test:** View button on a maintenance need leads to a details page
-**Acceptance scenarios:** see ### US-11.5 under Acceptance Criteria
 
 ### US-11.6: Edit and delete maintenance needs
 
@@ -78,7 +68,7 @@
 **So that** Unauthorized persons cannot tamper with the data
 
 **Priority:** P2
-**Independent test:** Unauthorized access to `/maintenance-needs`, `/maintenance-needs/new`, `/maintenance-needs/:id`, and `/maintenance-needs/:id/edit` are redirected to `/login`; unauthorized API requests or requests without `admin`, `area_admin`, or `maintenance` role receive errors; signed in user without `admin`, `area_admin`, or `maintenance` role is redirected to `/`; `area_admin` role only receives data corresponding to the area admin's area
+**Independent test:** Unauthorized access to `/maintenance-needs`, `/maintenance-needs/new`, and `/maintenance-needs/:id` are redirected to `/login`; unauthorized API requests or requests without `admin`, `area_admin`, or `maintenance` role receive errors; signed in user without `admin`, `area_admin`, or `maintenance` role is redirected to `/`; `area_admin` role only receives data corresponding to the area admin's area
 **Acceptance scenarios:** see ### US-11.7 under Acceptance Criteria
 
 ---
@@ -106,9 +96,10 @@
 
 ## Assumptions
 
-- The maintenance needs list is a table. Create is the page `/maintenance-needs/new`. View is the page `/maintenance-needs/:id`. Edit is the page `/maintenance-needs/:id/edit`. Delete uses a confirmation dialog. There is no split sidebar/main panel.
+- The maintenance needs list is a table. Create is the page `/maintenance-needs/new`. Edit is the page `/maintenance-needs/:id`. Delete uses a confirmation dialog. There is no split sidebar/main panel.
 - Request and response JSON uses camelCase (`issueReportId`, `resolvedAt`), matching the rest of the API. 
 - If assignee for an issue report is not null, and a maintenance need is created from the issue report, then it is assumed that the assignee has role `maintenance`.
+- `npm run seed` also inserts issue reports, maintenance needs, and mileage logs, and replaces those rows on the next seed.
 
 ## Edge Cases
 
@@ -141,9 +132,9 @@
 ## Success Criteria
 
 - **SC-001**: Every Gherkin scenario has at least one automated test before merge.
-- **SC-002**: Signed-in admin user can view and delete maintenance needs from the table, create a maintenance need on `/maintenance-needs/new`, create a maintenance need from an issue report, view a maintenance need on `/maintenance-needs/:id`, and edit a maintenance need on `/maintenance-needs/:id/edit`.
-- **SC-003**: Signed-in area admin user can view and delete maintenance needs for their areas from the table, create a maintenance need on `/maintenance-needs/new`, create a maintenance need from an issue report, view a maintenance need on `/maintenance-needs/:id`, and edit a maintenance need on `/maintenance-needs/:id/edit`.
-- **SC-004**: Signed-in maintenance user can view and delete maintenance needs from the table, create a maintenance need on `/maintenance-needs/new`, view a maintenance need on `/maintenance-needs/:id`, and edit a maintenance need on `/maintenance-needs/:id/edit`.
+- **SC-002**: Signed-in admin user can edit and delete maintenance needs from the table, create a maintenance need on `/maintenance-needs/new`, create a maintenance need from an issue report, and edit a maintenance need on `/maintenance-needs/:id`.
+- **SC-003**: Signed-in area admin user can edit and delete maintenance needs for their areas from the table, create a maintenance need on `/maintenance-needs/new`, create a maintenance need from an issue report, and edit a maintenance need on `/maintenance-needs/:id`.
+- **SC-004**: Signed-in maintenance user can edit and delete maintenance needs from the table, create a maintenance need on `/maintenance-needs/new`, and edit a maintenance need on `/maintenance-needs/:id`.
 - **SC-005**: `npm test` passes for maintenance needs API and maintenance needs view behavior.
 
 ---
@@ -279,13 +270,13 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 - **All** lists all maintenance needs.
 - All of the above tabs are ordered from most recent to oldest.
 - Display maintenance needs in a `<v-data-table>` (10 per page), matching the users table. Columns are **Title**, **Priority**, **Assignee**, **Status**, and **Actions**. 
-- The **View maintenance need** icon (same view icon as Users) opens `/maintenance-needs/:id`.
+- The **Edit maintenance need** icon (`mdi-pencil`) opens `/maintenance-needs/:id`.
 - **Delete maintenance need** opens a confirmation `<ConfirmModal>` from `components/common`.
-- Icon-only row actions use `size="small"`, `variant="text"`, and `aria-label`s **View maintenance need** and **Delete maintenance need**.
+- Icon-only row actions use `size="small"`, `variant="text"`, and `aria-label`s **Edit maintenance need** and **Delete maintenance need**.
 - **Empty state:** **"No maintenance needs yet. Create a maintenance need."**
 - **Loading state:** skeleton or progress indicator while maintenance needs are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
-- **App chrome:** the list route has `meta.nav: "Maintenance Needs"` and `meta.roles: ["admin", "area_admin", "maintenance"]`, so the **Maintenance Needs** link shows for admins, maintenance, and area admins and is hidden for everyone else. Create, view, and edit do not add a nav link.
+- **App chrome:** the list route has `meta.nav: "Maintenance Needs"`, `meta.navGroup: "Fleet"`, and `meta.roles: ["admin", "area_admin", "maintenance"]`, so the **Maintenance Needs** link shows in the Sidebar **Fleet** section for admins, maintenance, and area admins and is hidden for everyone else. Create and edit do not add a nav link.
 
 ### [View: New maintenance need] — route name `maintenanceNeedCreate` (`/maintenance-needs/new`)
 
@@ -305,35 +296,15 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 - **Cancel** returns to `/maintenance-needs` without saving.
 - Same loading and error states as the list.
 
-### [View: View maintenance need] — route name `maintenanceNeedDetails` (`/maintenance-needs/:id`)
-
-**MaintenanceNeedsView.vue** (`/maintenance-needs/:id`)
-
-Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
-
-- Heading: The maintenance need's `title`.
-- **Edit**, **Back to list**, and **View issue report** are buttons at the top of this page. 
-- **Edit** opens the edit view.
-- **Back to list** returns to `/maintenance-needs` and the previous tab. It does not call the API.
-- **View issue report** is grayed out and not clickable if `issue_report_id` is null. Else, it redirects to `/issue-reports/:id`.
-- The first section has **Author**, **Assignee**, **Out of Service**, **Priority**, **Status**, and **Resolve Date**. These are labels followed by `: ` and then the value.
-- **Author:** is the author's name in format `First Last`.
-- **Assignee:** is either `None` or the assignee's name in format `First Last`. 
-- **Out of Service:** shows out of service state as `Yes` or `No`
-- **Status**: shows the status
-- **Resolve Date**: shows `None` if null
-- **Vehicle Information:**: this is the second section modeled after the sections for Users which shows the vehicle information underneath the label.
-- **Description:** has the description underneath the label.
-- An area admin opening a maintenance need outside their areas is redirected to `/`.
-- Same loading and error states as the list.
-
-### [View: Edit maintenance need] — route name `maintenanceNeedEdit` (`/maintenance-needs/:id/edit`)
+### [View: Edit maintenance need] — route name `maintenanceNeedEdit` (`/maintenance-needs/:id`)
 
 **MaintenanceNeedsForm.vue**, same fields as the create page, pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 
 - Heading: the maintenance need heading.
-- **Save** and **Cancel** are buttons on this page. **Save** submits `PUT /api/maintenance-needs/:id`. On success, return to view this particular maintenance need. **Save** shows **Saving…** while that request is in progress.
-- **Cancel** returns to view this particular maintenance need without saving. It does not call the API.
+- **View issue report** is at the top of this page. It is grayed out and not clickable if `issue_report_id` is null. Else, it redirects to `/issue-reports/:id`.
+- Beside it, a button reads **Mark in progress** when **Status** is `Open` and **Mark completed** when **Status** is `In Progress`. For any other status it reads **Mark completed** and is grayed out. The label and grayed-out state follow **Status** as it changes on this page, before **Save**. Clicking the active button sets **Status** to `In Progress` or `Completed` and saves the same way **Save** does. The grayed-out button does not save.
+- **Save** and **Cancel** are buttons on this page. **Save** submits `PUT /api/maintenance-needs/:id`. On success, go to `/maintenance-needs`. **Save** shows **Saving…** while that request is in progress.
+- **Cancel** returns to `/maintenance-needs` without saving. It does not call the API.
 - If **Save** fails, the message is shown directly above **Save** and **Cancel**.
 - The fields behave the same as on the create page.
 - An area admin opening a maintenance need outside their areas is redirected to `/`.
@@ -342,10 +313,10 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 ### [View: Issue Reports] — route name `issue-reports`
 
 - Same view as in Feature 10 [feature-10-issue-report.md] with the following changes
-- On the list page, in Actions, there is a button **Create Maintenance Need** visible to admin and area admin. This button is grayed out if the type of issue is not `maintenance` or a maintenance need for that issue report has already been created.
-- This button submits `POST /api/maintenance-needs` with title `Maintenance Needed`; issue report id, vehicle id, assignee id, and description from the issue report; resolved at as null; and all other fields their default values.
+- On the list page, in Actions, there is an icon visible to admin and area admin. Hovering shows **Create maintenance need**. This icon is grayed out if the type of issue is not `maintenance` or a maintenance need for that issue report has already been created.
+- This icon submits `POST /api/maintenance-needs` with title `Maintenance Needed`; issue report id, vehicle id, assignee id, and description from the issue report; resolved at as null; and all other fields their default values.
 
-**Implementation note:** three routes. The table is `MaintenanceNeeds.vue`. Create and edit share `MaintenanceNeedsForm.vue`. Delete uses the shared confirm dialog. The **Maintenance Needs** nav link is only on the list route.
+**Implementation note:** three routes. The table is `MaintenanceNeeds.vue`. Create and edit share `MaintenanceNeedsForm.vue`. Delete uses the shared confirm dialog. The **Maintenance Needs** nav link is only on the list route, in the Sidebar **Fleet** section.
 **Routing note:** Page `/issue-reports/:id` does not exist and is redirected to `/issue-reports` with an alert `There is no page for /issue-reports/:id. This is a placeholder for when such a page comes into existence.`
 
 ---
@@ -658,30 +629,30 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 - **Given** I am signed in as admin
 - **And** Issue reports exist
 - **When** I navigate to the issue reports view
-- **Then** I see a button **Create Maintenance Need** on every row
+- **Then** I see an icon on every row. Hovering shows **Create maintenance need**
 
 #### Scenario: Create Maintenance Need is unavailable when the issue type is not maintenance
 
 - **Given** I am signed in as admin
 - **And** Issue reports exist that have type other than `maintenance`
 - **When** I navigate to the issue reports view
-- **Then** The button **Create Maintenance Need** is grayed out on each such row
+- **Then** The icon is grayed out on each such row
 
 #### Scenario: Create Maintenance Need is unavailable when that issue report already has a maintenance need
 
 - **Given** I am signed in as admin
 - **And** Issue reports exist that have a matching maintenance need
 - **When** I navigate to the issue reports view
-- **Then** The button **Create Maintenance Need** is grayed out on each such row
+- **Then** The icon is grayed out on each such row
 
 #### Scenario: Admin user creates a maintenance need from an issue report
 
 - **Given** I am signed in as admin and on the issue reports view
 - **And** An issue report with type `maintenance` and without a maintenance need exists
-- **When** I click **Create Maintenance Need** on that row
+- **When** I click the **Create maintenance need** icon on that row
 - **Then** A maintenance need with title `Maintenance Needed`; vehicle id, assignee id, description from the issue report; and other fields as default values is created
 - **And** The maintenance need appears in the maintenance needs view
-- **And** The **Create Maintenance Need** button is grayed out
+- **And** The **Create maintenance need** icon is grayed out
 
 #### Scenario: Admin user requests to create a maintenance need from an issue report
 
@@ -792,77 +763,11 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 
 ### US-11.4: Maintenance need actions
 
-#### Scenario: Maintenance need rows have view and delete actions
+#### Scenario: Maintenance need rows have edit and delete actions
 
 - **Given** I am signed in as admin and at least one maintenance need exists
 - **When** I view the maintenance need list
-- **Then** each row shows **View maintenance need** and **Delete maintenance need** actions
-
----
-
-### US-11.5: View a particular maintenance need
-
-#### Scenario: Admin user opens the maintenance need page
-
-- **Given** I am signed in as admin and a maintenance need with id `1` exists
-- **When** I click **View maintenance need** for that row
-- **Then** I am redirected to a new page
-- **And** That page has three sections with **Author**, **Assignee**, **Out of Service**, **Priority**, **Status**, and **Resolve Date** in the first section; **Vehicle Information:** with vehicle details in the second section; and **Description:** for the third section.
-
-#### Scenario: Area admin user opens a maintenance need in their area
-
-- **Given** I am signed in as area admin and a maintenance need with id `1` exists for my area
-- **When** I click **View maintenance need** for that row
-- **Then** I am redirected to a new page
-- **And** That page has three sections with **Author**, **Assignee**, **Out of Service**, **Priority**, **Status**, and **Resolve Date** in the first section; **Vehicle Information:** with vehicle details in the second section; and **Description:** for the third section.
-
-#### Scenario: Maintenance user opens a maintenance need
-
-- **Given** I am signed in as maintenance and a maintenance need with id `1` exists
-- **When** I click **View maintenance need** for that row
-- **Then** I am redirected to a new page
-- **And** That page has three sections with **Author**, **Assignee**, **Out of Service**, **Priority**, **Status**, and **Resolve Date** in the first section; **Vehicle Information:** with vehicle details in the second section; and **Description:** for the third section.
-
-#### Scenario: Maintenance need page shows no assignee as None
-
-- **Given** I am signed in as admin 
-- **And** a maintenance need with id `1` and no assignee exists
-- **When** I am on the View maintenance need page for that maintenance need
-- **Then** `Assignee` is listed as `None`
-
-#### Scenario: Maintenance need page shows no resolve date when resolvedAt is null
-
-- **Given** I am signed in as admin 
-- **And** a maintenance need with id `1` and no resolve date exists
-- **When** I am on the View maintenance need page for that maintenance need
-- **Then** `Resolve date` is listed as `None`
-
-#### Scenario: View issue report is not clickable when there is no issue report
-
-- **Given** I am signed in as admin 
-- **And** a maintenance need with id `1` and no issue report exists
-- **When** I am on the View maintenance need page for that maintenance need
-- **Then** The **View issue report** button is grayed out
-
-#### Scenario: View issue report opens the issue report when issueReportId is set
-
-- **Given** I am signed in as admin and am on the View maintenance need page for maintenance need with id `1`
-- **When** I click the **View issue report** button
-- **Then** I am redirected to `/issue-reports/:id`.
-- **And** I am again redirected to `/issue-reports` and see an alert that contains `placeholder`.
-
-#### Scenario: Back to list returns to the maintenance needs list
-
-- **Given** I am signed in as admin and am on the View maintenance need page for maintenance need with id `1`
-- **When** I click the **Back to list** button
-- **Then** I am redirected to the maintenance needs page
-- **And** I am on the tab I was on before I clicked to view the maintenance need
-
-#### Scenario: Edit opens /maintenance-needs/:id/edit
-
-- **Given** I am signed in as admin and am on the View maintenance need page for maintenance need with id `1`
-- **When** I click the **Edit** button
-- **Then** I am redirected to `/maintenance-needs/1/edit`.
+- **Then** each row shows **Edit maintenance need** and **Delete maintenance need** actions
 
 ---
 
@@ -870,113 +775,169 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 
 #### Scenario: Admin user opens the maintenance needs page
 
-- **Given** I am signed in as admin and on the view maintenance need page
-- **When** I click **Edit**
-- **Then** I am on `/maintenance-needs/:id/edit` and I see **Title**, **Assignee**, **Out of Service**, **Priority**, **Status**, **Resolve Date**, **Vehicle**, and **Description**.
+- **Given** I am signed in as admin on the maintenance needs view
+- **When** I open that maintenance need
+- **Then** I am on `/maintenance-needs/:id` and I see **Title**, **Assignee**, **Out of Service**, **Priority**, **Status**, **Resolve Date**, **Vehicle**, and **Description**.
 - **And** The fields are pre-filled with information for that maintenance need
 - **And** The **Vehicle** dropdown lists all vehicles
 - **And** **Resolve Date** is only showing when **Status** gets selected as `Completed` or `Canceled`
 
 #### Scenario: Area admin user opens the maintenance needs page
 
-- **Given** I am signed in as area admin and on the view maintenance need page
-- **When** I click **Edit**
-- **Then** I am on `/maintenance-needs/:id/edit` and I see **Title**, **Assignee**, **Out of Service**, **Priority**, **Status**, **Resolve Date**, **Vehicle**, and **Description**.
+- **Given** I am signed in as area admin on the maintenance needs view
+- **When** I open that maintenance need
+- **Then** I am on `/maintenance-needs/:id` and I see **Title**, **Assignee**, **Out of Service**, **Priority**, **Status**, **Resolve Date**, **Vehicle**, and **Description**.
 - **And** The fields are pre-filled with information for that maintenance need
 - **And** The **Vehicle** dropdown lists only vehicles for my area(s)
 - **And** **Resolve Date** is only showing when **Status** gets selected as `Completed` or `Canceled`
 
 #### Scenario: Maintenance user opens the maintenance needs page
-- **Given** I am signed in as maintenance and on the view maintenance need page
-- **When** I click **Edit**
-- **Then** I am on `/maintenance-needs/:id/edit` and I see **Title**, **Assignee**, **Out of Service**, **Priority**, **Status**, **Resolve Date**, **Vehicle**, and **Description**.
+
+- **Given** I am signed in as maintenance on the maintenance needs view
+- **When** I open that maintenance need
+- **Then** I am on `/maintenance-needs/:id` and I see **Title**, **Assignee**, **Out of Service**, **Priority**, **Status**, **Resolve Date**, **Vehicle**, and **Description**.
 - **And** The fields are pre-filled with information for that maintenance need
 - **And** The **Vehicle** dropdown lists all vehicles
 - **And** **Resolve Date** is only showing when **Status** gets selected as `Completed` or `Canceled`
+
+#### Scenario: View issue report is not clickable when there is no issue report
+
+- **Given** I am signed in as admin
+- **And** a maintenance need with id `1` and no issue report exists
+- **When** I am on the edit page for that maintenance need
+- **Then** The **View issue report** button is grayed out
+
+#### Scenario: Mark in progress shows when status is Open
+
+- **Given** I am signed in as admin and am on the edit page for a maintenance need with status `Open`
+- **Then** I see **Mark in progress** beside **View issue report**
+
+#### Scenario: Mark in progress sets status to In Progress
+
+- **Given** I am signed in as admin and am on the edit page for a maintenance need with status `Open`
+- **When** I click **Mark in progress**
+- **Then** The maintenance need is updated with status `In Progress`
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list
+
+#### Scenario: Mark completed shows when status is In Progress
+
+- **Given** I am signed in as admin and am on the edit page for a maintenance need with status `In Progress`
+- **Then** I see **Mark completed** beside **View issue report**
+
+#### Scenario: Mark completed sets status to Completed
+
+- **Given** I am signed in as admin and am on the edit page for a maintenance need with status `In Progress`
+- **When** I click **Mark completed**
+- **Then** The maintenance need is updated with status `Completed`
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list
+
+#### Scenario: The button updates when status changes before saving
+
+- **Given** I am signed in as admin and am on the edit page for a maintenance need with status `Open`
+- **When** I change **Status** to `In Progress` before saving
+- **Then** the button reads **Mark completed**
+- **When** I change **Status** to `Completed` or `Canceled` before saving
+- **Then** the button is grayed out
+- **When** I change **Status** to `Open` before saving
+- **Then** the button reads **Mark in progress**
+
+#### Scenario: Mark completed is grayed out when status is Completed or Canceled
+
+- **Given** I am signed in as admin and am on the edit page for a maintenance need with status `Completed` or `Canceled`
+- **Then** **Mark completed** is grayed out
+
+#### Scenario: View issue report opens the issue report when issueReportId is set
+
+- **Given** I am signed in as admin and am on the edit page for maintenance need with id `1`
+- **When** I click the **View issue report** button
+- **Then** I am redirected to `/issue-reports/:id`.
+- **And** I am again redirected to `/issue-reports` and see an alert that contains `placeholder`.
 
 #### Scenario: Admin user edits a maintenance need title
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with title `Oil Change`
 - **When** I submit the edit page with title `Oil Filter Change`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need vehicle
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with vehicle `Black Toyota Sienna (ABC-123)`
 - **When** I submit the edit page with vehicle `Black Toyota Sienna (ABC-124)`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need assignee
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with assignee `John Doe`
 - **When** I submit the edit page with assignee `Jane Jello`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need description
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with description `The car is making weird rattling noises as it travels at high speeds`
 - **When** I submit the edit page with description `Tires need balancing`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need out of service
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with out of service `No`
 - **When** I submit the edit page with out of service `Yes`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need priority
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with priority `None`
 - **When** I submit the edit page with priority `Medium`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need status
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with status `Open`
 - **When** I submit the edit page with status `In Progress`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user edits a maintenance need resolve date
 
 - **Given** I am signed in as admin on the edit maintenance needs page for a maintenance need with status `Completed` and resolve date `2026-11-01`
 - **When** I submit the edit page with the same status and resolve date `2026-11-03`
 - **Then** The maintenance need is updated
-- **And** I am redirected to the view page for that maintenance need
-- **And** The updated maintenance need appears in the view with the updated information
+- **And** I am on `/maintenance-needs`
+- **And** The updated maintenance need appears in the list with the updated information
 
 #### Scenario: Admin user cancels editing a maintenance need
 
 - **Given** I am signed in as admin on an edit maintenance need page
 - **When** I click **Cancel**
-- **Then** I am redirected to the view maintenance need for that maintenance need
+- **Then** I am on `/maintenance-needs`
 - **And** the API is not called
 
 #### Scenario: Area admin user edits a maintenance need in their area
 
 - **Given** I am signed in as area admin on an edit maintenance need page
 - **When** I edit the maintenance need and click **Save**
-- **Then** I am redirected to the view maintenance need for that maintenance need
+- **Then** I am on `/maintenance-needs`
 - **And** the maintenance need is updated
 
 #### Scenario: Maintenance user edits a maintenance need
 
 - **Given** I am signed in as maintenance on an edit maintenance need page
 - **When** I edit the maintenance need and click **Save**
-- **Then** I am redirected to the view maintenance need for that maintenance need
+- **Then** I am on `/maintenance-needs`
 - **And** the maintenance need is updated
 
 #### Scenario: Admin user edits a maintenance need with a missing title
@@ -1204,12 +1165,6 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 - **When** I navigate to `/maintenance-needs/:id` by URL
 - **Then** I am redirected to `/login`
 
-#### Scenario: Signed-out user opens /maintenance-needs/:id/edit and is sent to /login
-
-- **Given** I am not signed in
-- **When** I navigate to `/maintenance-needs/:id/edit` by URL
-- **Then** I am redirected to `/login`
-
 #### Scenario: Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to /
 
 - **Given** I am signed in
@@ -1231,30 +1186,23 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 - **When** I navigate to `/maintenance-needs/:id` by URL
 - **Then** I am redirected to `/`
 
-#### Scenario: Signed-in user without those roles opens /maintenance-needs/:id/edit and is sent to /
-
-- **Given** I am signed in
-- **And** I do not have roles `admin`, `area admin`, or `maintenance`
-- **When** I navigate to `/maintenance-needs/:id/edit` by URL
-- **Then** I am redirected to `/`
-
 #### Scenario: Signed-in admin user sees the Maintenance Needs nav link
 
 - **Given** I have admin role
 - **When** I am logged in
-- **Then** I see a nav link for maintenance needs
+- **Then** I see a **Maintenance Needs** nav link in the **Fleet** section
 
 #### Scenario: Signed-in area admin user sees the Maintenance Needs nav link
 
 - **Given** I have area admin role
 - **When** I am logged in
-- **Then** I see a nav link for maintenance needs
+- **Then** I see a **Maintenance Needs** nav link in the **Fleet** section
 
 #### Scenario: Signed-in maintenance user sees the Maintenance Needs nav link
 
 - **Given** I have maintenance role
 - **When** I am logged in
-- **Then** I see a nav link for maintenance needs
+- **Then** I see a **Maintenance Needs** nav link in the **Fleet** section
 
 #### Scenario: Signed-in user without those roles does not see the Maintenance Needs nav link
 
@@ -1395,19 +1343,18 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 | US-11.3 | Maintenance needs table All tab | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance needs table All tab |
 | US-11.3 | Maintenance needs table Resolved tab | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance needs table Resolved tab |
 | US-11.3 | Maintenance needs table shows 10 rows per page | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance needs table shows 10 rows per page |
-| US-11.4 | Maintenance need rows have view and delete actions | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance need rows have view and delete actions |
-| US-11.5 | Admin user opens the maintenance need page | `frontend/tests/MaintenanceNeeds.test.js` | Admin user opens the maintenance need page |
-| US-11.5 | Area admin user opens a maintenance need in their area | `frontend/tests/MaintenanceNeeds.test.js` | Area admin user opens a maintenance need in their area |
-| US-11.5 | Maintenance user opens a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance user opens a maintenance need |
-| US-11.5 | Maintenance need page shows no assignee as None | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance need page shows no assignee as None |
-| US-11.5 | Maintenance need page shows no resolve date when resolvedAt is null | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance need page shows no resolve date when resolvedAt is null |
-| US-11.5 | View issue report is not clickable when there is no issue report | `frontend/tests/MaintenanceNeeds.test.js` | View issue report is not clickable when there is no issue report |
-| US-11.5 | View issue report opens the issue report when issueReportId is set | `frontend/tests/MaintenanceNeeds.test.js` | View issue report opens the issue report when issueReportId is set |
-| US-11.5 | Back to list returns to the maintenance needs list | `frontend/tests/MaintenanceNeeds.test.js` | Back to list returns to the maintenance needs list |
-| US-11.5 | Edit opens /maintenance-needs/:id/edit | `frontend/tests/MaintenanceNeeds.test.js` | Edit opens /maintenance-needs/:id/edit |
+| US-11.4 | Maintenance need rows have edit and delete actions | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance need rows have edit and delete actions |
 | US-11.6 | Admin user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Admin user opens the maintenance needs page |
 | US-11.6 | Area admin user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Area admin user opens the maintenance needs page |
 | US-11.6 | Maintenance user opens the maintenance needs page | `frontend/tests/MaintenanceNeeds.test.js` | Maintenance user opens the maintenance needs page |
+| US-11.6 | View issue report is not clickable when there is no issue report | `frontend/tests/MaintenanceNeeds.test.js` | View issue report is not clickable when there is no issue report |
+| US-11.6 | View issue report opens the issue report when issueReportId is set | `frontend/tests/MaintenanceNeeds.test.js` | View issue report opens the issue report when issueReportId is set |
+| US-11.6 | Mark in progress shows when status is Open | `frontend/tests/MaintenanceNeeds.test.js` | Mark in progress shows when status is Open |
+| US-11.6 | Mark in progress sets status to In Progress | `frontend/tests/MaintenanceNeeds.test.js` | Mark in progress sets status to In Progress |
+| US-11.6 | Mark completed shows when status is In Progress | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed shows when status is In Progress |
+| US-11.6 | Mark completed sets status to Completed | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed sets status to Completed |
+| US-11.6 | The button updates when status changes before saving | `frontend/tests/MaintenanceNeeds.test.js` | The button updates when status changes before saving |
+| US-11.6 | Mark completed is grayed out when status is Completed or Canceled | `frontend/tests/MaintenanceNeeds.test.js` | Mark completed is grayed out when status is Completed or Canceled |
 | US-11.6 | Admin user edits a maintenance need title | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need title |
 | US-11.6 | Admin user edits a maintenance need vehicle | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need vehicle |
 | US-11.6 | Admin user edits a maintenance need assignee | `frontend/tests/MaintenanceNeeds.test.js` | Admin user edits a maintenance need assignee |
@@ -1450,11 +1397,9 @@ Pre-filled from `GET /api/maintenance-needs/:maintenanceNeedId`.
 | US-11.7 | Signed-out user opens /maintenance-needs and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs and is sent to /login |
 | US-11.7 | Signed-out user opens /maintenance-needs/new and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/new and is sent to /login |
 | US-11.7 | Signed-out user opens /maintenance-needs/:id and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/:id and is sent to /login |
-| US-11.7 | Signed-out user opens /maintenance-needs/:id/edit and is sent to /login | `frontend/tests/MaintenanceNeeds.test.js` | Signed-out user opens /maintenance-needs/:id/edit and is sent to /login |
 | US-11.7 | Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without admin, area admin, or maintenance role opens /maintenance-needs and is sent to / |
 | US-11.7 | Signed-in user without those roles opens /maintenance-needs/new and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/new and is sent to / |
 | US-11.7 | Signed-in user without those roles opens /maintenance-needs/:id and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/:id and is sent to / |
-| US-11.7 | Signed-in user without those roles opens /maintenance-needs/:id/edit and is sent to / | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in user without those roles opens /maintenance-needs/:id/edit and is sent to / |
 | US-11.7 | Signed-in admin user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in admin user sees the Maintenance Needs nav link |
 | US-11.7 | Signed-in area admin user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in area admin user sees the Maintenance Needs nav link |
 | US-11.7 | Signed-in maintenance user sees the Maintenance Needs nav link | `frontend/tests/MaintenanceNeeds.test.js` | Signed-in maintenance user sees the Maintenance Needs nav link |

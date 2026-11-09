@@ -81,7 +81,7 @@ const listEmpty = computed(() => !visibleNeeds.value.length);
 const confirmDelete = useConfirm();
 
 const openNeed = (need) => {
-  router.push({ name: "maintenanceNeedDetails", params: { id: need.id }, query: { tab: tab.value } });
+  router.push({ name: "maintenanceNeedEdit", params: { id: need.id } });
 };
 
 const deleteNeed = async (need) => {
@@ -114,14 +114,11 @@ loadNeeds();
       <v-tab value="all">All</v-tab>
     </v-tabs>
 
-    <p v-if="assignedEmpty && !loading">Nothing to do. Enjoy your day!</p>
-
     <ListState
-      v-else
       :loading
       :error
-      :empty="listEmpty"
-      empty-title="No maintenance needs yet. Create a maintenance need."
+      :empty="listEmpty || assignedEmpty"
+      :empty-title="assignedEmpty ? 'Nothing to do. Enjoy your day!' : 'No maintenance needs yet. Create a maintenance need.'"
       empty-icon="mdi-wrench-outline"
     >
       <v-data-table
@@ -134,7 +131,7 @@ loadNeeds();
         <template #[`item.assignee`]="{ item }">{{ personName(item.assignee) }}</template>
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-1">
-            <v-btn icon="mdi-eye-outline" size="small" variant="text" aria-label="View maintenance need" @click="openNeed(item)" />
+            <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit maintenance need" @click="openNeed(item)" />
             <v-btn icon="mdi-delete" size="small" variant="text" aria-label="Delete maintenance need" @click="deleteNeed(item)" />
           </div>
         </template>
