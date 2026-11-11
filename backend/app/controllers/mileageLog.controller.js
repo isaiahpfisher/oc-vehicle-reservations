@@ -282,6 +282,11 @@ exports.remove = async (req, res) => {
       return;
     }
 
+    // Feature 13: a service log points at the reading taken during that service.
+    if ((await db.serviceLog.count({ where: { mileageLogId: log.id } })) > 0) {
+      return res.status(400).send({ message: "Mileage log is used by a service log and can't be deleted." });
+    }
+
     await log.destroy();
 
     return res.status(200).send({ message: "Mileage log deleted successfully." });

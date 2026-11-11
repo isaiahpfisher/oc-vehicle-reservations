@@ -190,7 +190,7 @@ Every route requires a Bearer token and `admin`, `area_admin`, or `maintenance` 
 | `GET` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with one service type. |
 | `POST` | `/api/service-types` | Admin, area admin, or maintenance | `201` with the created service type. Body is `{ "name": "Oil Change", "service_frequency_days": 500, "service_frequency_miles": 5000 }`. Either frequency may be `null`. `name` is trimmed before save. |
 | `PUT` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with the updated service type. Body is the same shape as create. |
-| `DELETE` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200`. The service type row is removed. |
+| `DELETE` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200`. The service type row is removed. A service type used by a service log is `400` `{ "message": "Service type is used by a service log and can't be deleted." }`. |
 
 Success body: `{ "id", "name", "service_frequency_days", "service_frequency_miles", "createdAt", "updatedAt" }`.
 
@@ -313,6 +313,44 @@ Success body: `{ "id", "vehicleId", "userId", "odometerReading", "recordedAt", "
 | Update sends a different existing `vehicleId` | `400` | `{ "message": "Vehicle cannot be changed." }` |
 | `:mileageLogId` is not an integer | `400` | `{ "message": "Invalid mileage log id." }` |
 | Mileage log id does not exist | `404` | `{ "message": "Mileage log with id=… not found." }` |
+| Mileage log is used by a service log | `400` | `{ "message": "Mileage log is used by a service log and can't be deleted." }` |
+
+## Service logs
+
+Every route uses `authorizeRoles("admin", "area_admin", "maintenance")`. A missing session is `401` `{ "message": "Unauthorized! No token provided." }`. A signed-in user without one of those roles is `403` `{ "message": "One of these roles is required: admin, area_admin, maintenance." }`.
+
+An admin or a maintenance user may create, update, and delete a service log for any vehicle. An area admin may do that only when the vehicle belongs to an area they administer. A vehicle outside that scope is `403` `{ "message": "Not authorized for the specified area." }`. `GET` is not limited by area.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/service-logs` | Admin, area admin, or maintenance | `200` array of every service log, newest `servicedAt` first. |
+| `GET` | `/api/service-logs/:serviceLogId` | Admin, area admin, or maintenance | `200` with one service log. |
+| `GET` | `/api/service-logs/vehicle/:vehicleId` | Admin, area admin, or maintenance | `200` array of that vehicle's service logs, newest `servicedAt` first. |
+| `POST` | `/api/service-logs` | Admin, area admin for that vehicle, or maintenance | `201` with the created service log. Also creates the attached mileage log. |
+| `PUT` | `/api/service-logs/:serviceLogId` | Admin, area admin for the current and new vehicle, or maintenance | `200` with the updated service log. Updates the attached mileage log's reading, vehicle, and date. |
+| `DELETE` | `/api/service-logs/:serviceLogId` | Admin, area admin for that vehicle, or maintenance | `200` `{ "message": "Service log deleted successfully." }`. The mileage log stays. |
+
+Create and update body: `{ "userId": 1, "vehicleId": 2, "serviceTypeId": 1, "miles": 12050, "maintenanceNeedId": null, "servicedAt": "2026-07-02" }`. `maintenanceNeedId` may be omitted. `miles` is a whole number of 0 or more and is stored on a new mileage log at create. That mileage log's `userId` is the signed-in user. The service log's `userId` is the user in the body.
+
+Success body: `{ "id", "userId", "vehicleId", "serviceTypeId", "mileageLogId", "maintenanceNeedId", "servicedAt", "user": { "id", "firstName", "lastName" }, "vehicle": { "id", "universityId" }, "serviceType": { "id", "name" }, "mileageLog": { "id", "odometerReading" }, "createdAt", "updatedAt" }`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin`, `area_admin`, or `maintenance` | `403` | `{ "message": "One of these roles is required: admin, area_admin, maintenance." }` |
+| Area admin uses a vehicle outside their areas | `403` | `{ "message": "Not authorized for the specified area." }` |
+| Missing `userId`, `vehicleId`, `serviceTypeId`, `miles`, or `servicedAt` | `400` | `{ "message": "Missing user." }` / `Missing vehicle.` / `Missing service type.` / `Missing mileage.` / `Missing serviced at.` |
+| Id is not a positive integer | `400` | `{ "message": "Invalid user." }` / `Invalid vehicle.` / `Invalid service type.` |
+| `miles` is not a whole number | `400` | `{ "message": "Mileage must be a whole number." }` |
+| `miles` is negative | `400` | `{ "message": "Mileage must be zero or greater." }` |
+| `maintenanceNeedId` is not a positive integer | `400` | `{ "message": "Invalid maintenance need." }` |
+| `servicedAt` is not a real `YYYY-MM-DD` date | `400` | `{ "message": "Invalid serviced at." }` |
+| `servicedAt` is after today | `400` | `{ "message": "serviced_at cannot be after current date." }` |
+| `userId` does not exist | `404` | `{ "message": "User not found." }` |
+| `vehicleId` does not exist | `404` | `{ "message": "Vehicle not found." }` |
+| `serviceTypeId` does not exist | `404` | `{ "message": "Service type not found." }` |
+| `:serviceLogId` or `:vehicleId` is not an integer | `400` | `{ "message": "Invalid service log id." }` / `{ "message": "Invalid vehicle id." }` |
+| Service log id does not exist | `404` | `{ "message": "Service log with id=… not found." }` |
 
 ## Conventions
 

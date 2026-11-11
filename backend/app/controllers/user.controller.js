@@ -138,6 +138,11 @@ exports.remove = async (req, res) => {
       return res.status(400).send({ message: "User has vehicle requests and can't be deleted." });
     }
 
+    // Feature 13: a service log names the user who the service is recorded for.
+    if ((await db.serviceLog.count({ where: { userId } })) > 0) {
+      return res.status(400).send({ message: "User has service logs and can't be deleted." });
+    }
+
     await user.destroy();
     return res.status(204).send();
   } catch (err) {

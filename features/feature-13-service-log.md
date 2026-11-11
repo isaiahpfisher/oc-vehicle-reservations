@@ -75,8 +75,14 @@
 
 ## Assumptions
 
--  There is no split sidebar / main panel.
-- Delete removes the service log row. No other table references `serviceLogs` yet, so this feature does not block a delete.
+- There is no split sidebar / main panel.
+- Delete removes the service log row and leaves its mileage log. A mileage log, service type, or user that a service log still uses cannot be deleted.
+- JSON keys are camelCase (`userId`, `vehicleId`, `serviceTypeId`, `miles`, `mileageLogId`, `maintenanceNeedId`, `servicedAt`), matching the rest of the API. The table is `service_logs`.
+- Creating a service log also creates a mileage log. That mileage log's `userId` is the signed-in user (FR-002). The service log's `userId` is the user chosen on the form and must already exist.
+- `servicedAt` is `YYYY-MM-DD` and cannot be after today. The API message is `serviced_at cannot be after current date.`
+- An area admin may create, update, or delete a service log only when the vehicle is in an area they administer (`403` `{ "message": "Not authorized for the specified area." }`). Reads are not limited by area. Maintenance users are not limited by area.
+- Feature 11 is not implemented. `maintenanceNeedId` is an optional integer with no foreign key. INTERIM: Feature 11 adds the maintenance-need association and replaces this number with a real maintenance need. Until then the form accepts an optional id and does not check that one exists.
+- The create and edit forms do not include a vehicle. The page is already for one vehicle, and it sends that route `vehicleId`. The table still shows the vehicle.
 
 ## Edge Cases
 
@@ -119,26 +125,28 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 
 ```json
 {
-  "user_id" : 1,
-  "vehicle_id": 2,
-  "service_type_id": 1,
-  "miles": 2, //Create new mileage log based off miles entered and attach to service log
-  "maintenance_need_id": 1,// "optional"
-  "serviced_at": "2026-07-02"
+  "userId": 1,
+  "vehicleId": 2,
+  "serviceTypeId": 1,
+  "miles": 2,
+  "maintenanceNeedId": 1,
+  "servicedAt": "2026-07-02"
 }
 ```
+
+`miles` creates a mileage log and stores its id on the service log. `maintenanceNeedId` is optional. Omit it, or send `null`, when there is no maintenance need.
 
 **Service log success response** (`200` / `201`):
 
 ```json
 {
   "id": 1,
-  "user_id" : 1,
-  "vehicle_id": 2,
-  "service_type_id": 1,
-  "mileage_log_id": 2, //"must log miles at every servicing"
-  "maintenance_need_id": 1,// "optional"
-  "serviced_at": "2026-07-02",
+  "userId": 1,
+  "vehicleId": 2,
+  "serviceTypeId": 1,
+  "mileageLogId": 2,
+  "maintenanceNeedId": 1,
+  "servicedAt": "2026-07-02",
   "createdAt": "2026-07-02T12:00:00.000Z",
   "updatedAt": "2026-07-02T12:00:00.000Z"
 }
@@ -157,16 +165,16 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 **Single Vue view** (`ServiceLogs.vue`) — no sidebar / main-panel split.
 
 - Heading: **Service Log Management**
-- Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **Cancel** and **Create** sit in the dialog footer.
+- Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **Cancel** and **Create** sit in the dialog footer. The vehicle is the one in the page route.
 - Display service logs in a `<v-data-table>` (10 per page). Columns are **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, **Serviced At**, and **Actions**. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
-- **Edit** icon turns that row into inline fields pre-filled with the current user, vehicle, service type, mileage, maintenance need, and serviced at; **Save** / **Cancel**. Cancel restores the row without saving.
+- **Edit** icon turns that row into inline fields pre-filled with the current user, service type, mileage, maintenance need, and serviced at; **Save** / **Cancel**. The vehicle stays the page's vehicle. Cancel restores the row without saving.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit service log**, **Delete service log**).
 - **Empty state:** **"No service logs yet. Create your first service log."** when there are no service logs.
 - **Loading state:** skeleton or progress indicator while service logs are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
 
-**Implementation note:** the route/view for service logs is vehicle dependant and should be linked to from the vehicle page; delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/serviceLogs`, modeled after existing create dialogs. Edit stays in the table row.
+**Implementation note:** the route/view for service logs is vehicle dependant. The vehicle page puts **Mileage log**, **Service log**, and **+ New Service Log** in the page header, at the top right. **+ New Service Log** opens the same create dialog and stays on the vehicle page. Delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/serviceLogs`, modeled after existing create dialogs. Edit stays in the table row.
 
 ---
 
@@ -219,7 +227,14 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 
 - **Given** I am signed in as admin , area admin, or maintenance on the service logs view
 - **When** I click **+ New Service Log**
-- **Then** a dialog opens with a **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At** fields.
+- **Then** a dialog opens with a **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At** fields.
+
+#### Scenario: Admin user creates a service log from the vehicle page
+
+- **Given** I am signed in as admin or area admin on a vehicle page
+- **When** I click **+ New Service Log** and submit the dialog
+- **Then** the service log is created for that vehicle
+- **And** I stay on the vehicle page
 
 #### Scenario: Admin user saves service log
 
@@ -275,19 +290,6 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 
 - **Given** I am signed in as admin , area admin, or maintenance and a service log exists for a vehicle
 - **When** I change the `Service Type` to be empty and submit
-- **Then** validation blocks the request and I see a `Required field.` message
-
-#### Scenario: Admin user edits a service log vehicle_id
-
-- **Given** I am signed in as admin , area admin, or maintenance and a service log exists for a vehicle
-- **When** I change the `vehicle_id` and submit
-- **Then** the API returns `200` with the updated service log
-- **And** the list shows the updated service type
-
-#### Scenario: Admin user edits a service log vehicle_id to be empty
-
-- **Given** I am signed in as admin , area admin, or maintenance and a service log exists for a vehicle
-- **When** I change the `vehicle_id` to be empty and submit
 - **Then** validation blocks the request and I see a `Required field.` message
 
 #### Scenario: Admin user edits a service log mileage_log_id
@@ -436,16 +438,53 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 
 | Story | Scenario | Test file | Test name |
 |-------|----------|-----------|-----------|
+| US-13.1 | Admin user creates a service log | `frontend/tests/ServiceLogs.test.js` | `Admin user creates a service log` |
+| US-13.1 | Admin user creates a service log from the vehicle page | `frontend/tests/ServiceLogs.test.js` | `Admin user creates a service log from the vehicle page` |
+| US-13.1 | Admin user saves service log | `backend/tests/serviceLogs.test.js` | `Admin user saves service log` |
+| US-13.1 | Admin user saves service log | `frontend/tests/ServiceLogs.test.js` | `Admin user saves service log` |
+| US-13.1 | Admin user creates service log with missing field | `frontend/tests/ServiceLogs.test.js` | `Admin user creates service log with missing field` |
+| US-13.2 | Service logs view lists service logs | `frontend/tests/ServiceLogs.test.js` | `Service logs view lists service logs` |
+| US-13.2 | Service logs empty state | `frontend/tests/ServiceLogs.test.js` | `Service logs empty state` |
+| US-13.3 | Service log rows have edit and delete actions | `frontend/tests/ServiceLogs.test.js` | `Service log rows have edit and delete actions` |
+| US-13.4 | Admin user edits a service log Service Type | `backend/tests/serviceLogs.test.js` | `Admin user edits a service log Service Type` |
+| US-13.4 | Admin user edits a service log Service Type | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log Service Type` |
+| US-13.4 | Admin user edits a service log Service Type to be empty | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log Service Type to be empty` |
+| US-13.4 | Admin user edits a service log mileage_log_id | `backend/tests/serviceLogs.test.js` | `Admin user edits a service log mileage_log_id` |
+| US-13.4 | Admin user edits a service log mileage_log_id | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log mileage_log_id` |
+| US-13.4 | Admin user edits a service log mileage_log_id to be empty | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log mileage_log_id to be empty` |
+| US-13.4 | Admin user edits a service log maintenance_need_id | `backend/tests/serviceLogs.test.js` | `Admin user edits a service log maintenance_need_id` |
+| US-13.4 | Admin user edits a service log maintenance_need_id | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log maintenance_need_id` |
+| US-13.4 | Admin user deletes a service log | `backend/tests/serviceLogs.test.js` | `Admin user deletes a service log` |
+| US-13.4 | Admin user deletes a service log | `frontend/tests/ServiceLogs.test.js` | `Admin user deletes a service log` |
+| US-13.4 | Admin user deletes a service log that does not exist | `backend/tests/serviceLogs.test.js` | `Admin user deletes a service log that does not exist` |
+| US-13.4 | Admin user deletes a service log with an invalid serviceLogId | `backend/tests/serviceLogs.test.js` | `Admin user deletes a service log with an invalid serviceLogId` |
+| US-13.4 | Admin user edits a service log serviced_at | `backend/tests/serviceLogs.test.js` | `Admin user edits a service log serviced_at` |
+| US-13.4 | Admin user edits a service log serviced_at | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log serviced_at` |
+| US-13.4 | Admin user edits a service log serviced_at to after current date | `backend/tests/serviceLogs.test.js` | `Admin user edits a service log serviced_at to after current date` |
+| US-13.4 | Admin user edits a service log serviced_at to after current date | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log serviced_at to after current date` |
+| US-13.4 | Admin user edits a service log serviced_at to be empty | `frontend/tests/ServiceLogs.test.js` | `Admin user edits a service log serviced_at to be empty` |
+| US-13.5 | Un-signed-in user accesses service logs page | `frontend/tests/ServiceLogs.test.js` | `Un-signed-in user accesses service logs page` |
+| US-13.5 | Unauthenticated API request to service logs | `backend/tests/serviceLogs.test.js` | `Unauthenticated API request to service logs` |
+| US-13.5 | Unauthenticated API request to a particular service log | `backend/tests/serviceLogs.test.js` | `Unauthenticated API request to a particular service log` |
+| US-13.5 | Unauthenticated API request to create a service log | `backend/tests/serviceLogs.test.js` | `Unauthenticated API request to create a service log` |
+| US-13.5 | Unauthenticated API request to update a service log | `backend/tests/serviceLogs.test.js` | `Unauthenticated API request to update a service log` |
+| US-13.5 | Unauthenticated API request to delete a service log | `backend/tests/serviceLogs.test.js` | `Unauthenticated API request to delete a service log` |
+| US-13.5 | Signed-in user without admin , area admin, or maintenance role accesses service logs page | `frontend/tests/ServiceLogs.test.js` | `Signed-in user without admin , area admin, or maintenance role accesses service logs page` |
+| US-13.5 | Signed-in user without admin , area admin, or maintenance role API request to service logs | `backend/tests/serviceLogs.test.js` | `Signed-in user without admin , area admin, or maintenance role API request to service logs` |
+| US-13.5 | Signed-in user without admin , area admin, or maintenance role API request to a particular service log | `backend/tests/serviceLogs.test.js` | `Signed-in user without admin , area admin, or maintenance role API request to a particular service log` |
+| US-13.5 | Signed-in user without admin , area admin, or maintenance role API request to create a service log | `backend/tests/serviceLogs.test.js` | `Signed-in user without admin , area admin, or maintenance role API request to create a service log` |
+| US-13.5 | Signed-in user without admin , area admin, or maintenance role API request to update a service log | `backend/tests/serviceLogs.test.js` | `Signed-in user without admin , area admin, or maintenance role API request to update a service log` |
+| US-13.5 | Signed-in user without admin , area admin, or maintenance role API request to delete a service log | `backend/tests/serviceLogs.test.js` | `Signed-in user without admin , area admin, or maintenance role API request to delete a service log` |
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-003** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-003** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

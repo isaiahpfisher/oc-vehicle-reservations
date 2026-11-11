@@ -164,6 +164,22 @@ JSON keys are `vehicleId`, `userId`, `odometerReading`, and `recordedAt`.
 
 JSON keys are camelCase: `vehicleId`, `vehicleRequestId`, `authorId`, `assigneeId`, `resolvedAt`, `createdAt`, `updatedAt`.
 
+## `service_logs`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `user_id` | INTEGER | Required. Existing user chosen on the form. References `users.id`. |
+| `vehicle_id` | INTEGER | Required. Existing vehicle. References `vehicles.id`. |
+| `service_type_id` | INTEGER | Required. Existing service type. References `service_types.id`. |
+| `mileage_log_id` | INTEGER | Required. The mileage log created for this service. References `mileage_logs.id`. |
+| `maintenance_need_id` | INTEGER | Optional. Stored as given. No foreign key until Feature 11. |
+| `serviced_at` | DATEONLY | Required. `YYYY-MM-DD`, not after today. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+JSON keys are camelCase: `userId`, `vehicleId`, `serviceTypeId`, `mileageLogId`, `maintenanceNeedId`, `servicedAt`. Create and update send `miles` (the odometer reading) instead of `mileageLogId`.
+
 ## `vehicle_requests` (Feature 8)
 
 | Column | Type | Rules |
@@ -208,3 +224,7 @@ Requests restrict deleting the user who made them and the area, destinations, dr
 - A vehicle request has many issue reports. An issue report optionally belongs to one vehicle request. Deleting the vehicle request keeps the issue report with no linked request.
 - A user has many issue reports as author. An issue report belongs to one author. The author cannot be deleted while they still have issue reports.
 - A user has many issue reports as assignee. An issue report optionally belongs to one assignee. Deleting the assignee keeps the issue report with no assignee.
+- A user has many service logs. A service log belongs to one user. The user cannot be deleted while a service log names them.
+- A vehicle has many service logs. A service log belongs to one vehicle. The vehicle cannot be deleted while it still has service logs.
+- A service type has many service logs. A service log belongs to one service type. The service type cannot be deleted while a service log uses it.
+- A mileage log has many service logs. A service log belongs to one mileage log. The mileage log cannot be deleted while a service log uses it. Deleting the service log keeps the mileage log.

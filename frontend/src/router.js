@@ -55,6 +55,13 @@ const router = createRouter({
       meta: { roles: ["admin", "area_admin"] },
     },
     {
+      path: "/service-logs/:vehicleId",
+      name: "service-logs",
+      component: () => import("./views/ServiceLogs.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
+    },
+    {
       path: "/drivers",
       name: "drivers",
       component: () => import("./views/Drivers.vue"),

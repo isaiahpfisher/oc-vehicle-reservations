@@ -878,9 +878,18 @@ export const SEED_REQUESTS = [...NAMED_REQUESTS, ...generatedRequests()];
 /* Writing it all                                                                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-/** Requests point at everything else, and vehicles at areas (Feature 5 restricts that), so these go before users and areas. */
+/** Child rows go before the records they point at, and vehicles before areas. */
 const clearSampleTables = async (transaction) => {
-  for (const model of [db.vehicleRequest, db.vehicle, db.vehicleType, db.serviceType, db.driver, db.destination]) {
+  for (const model of [
+    db.serviceLog,
+    db.mileageLog,
+    db.vehicleRequest,
+    db.vehicle,
+    db.vehicleType,
+    db.serviceType,
+    db.driver,
+    db.destination,
+  ]) {
     await model.destroy({ where: {}, transaction });
   }
 };
