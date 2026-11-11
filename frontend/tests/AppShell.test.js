@@ -70,7 +70,8 @@ describe("App shell (ui-style-system.mdc)", () => {
 
     const content = sidebar.querySelector(".v-navigation-drawer__content");
     expect(content.textContent).toContain("OC");
-    // Pages come from route `meta.nav` (Features 3–8, 10, 12), grouped into sections by `meta.navGroup`.
+    // Pages come from route `meta.nav` (Features 3–8, 10–12), grouped into sections by `meta.navGroup`.
+    // Feature 11 adds Maintenance Needs in Fleet, after Service Types.
     const mainNav = content.querySelector('[aria-label="Main navigation"]');
     expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
       "Requests",
@@ -80,6 +81,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Vehicle Types",
       "Issue Reports",
       "Service Types",
+      "Maintenance Needs",
       "Users",
       "Areas",
     ]);
@@ -101,7 +103,11 @@ describe("App shell (ui-style-system.mdc)", () => {
     await openApp("/");
 
     const mainNav = drawer().querySelector('[aria-label="Main navigation"]');
-    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual(["Service Types"]);
+    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
+      "Issue Reports",
+      "Service Types",
+      "Maintenance Needs",
+    ]);
     expect(sectionTitles(mainNav)).toEqual(["Fleet"]);
   });
 
@@ -149,7 +155,9 @@ describe("App shell (ui-style-system.mdc)", () => {
     const tooltips = () =>
       wrapper.findComponent({ name: "VNavigationDrawer" }).findAllComponents({ name: "VTooltip" }).map((tooltip) => tooltip.props());
     expect(tooltips().map(({ text, disabled }) => [text, disabled])).toEqual([
+      ["Issue Reports", false],
       ["Service Types", false],
+      ["Maintenance Needs", false],
       ["My Requests", false],
     ]);
 

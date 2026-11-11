@@ -132,6 +132,15 @@ const router = createRouter({
       meta: { nav: "Issue Reports", navGroup: "Fleet", icon: "mdi-alert-circle-outline" },
     },
     {
+      path: "/issue-reports/:id",
+      redirect: (to) => ({
+        path: "/issue-reports",
+        query: {
+          notice: `There is no page for /issue-reports/${to.params.id}. This is a placeholder for when such a page comes into existence.`,
+        },
+      }),
+    },
+    {
       path: "/service-types",
       name: "service-types",
       component: () => import("./views/ServiceTypes.vue"),
@@ -161,6 +170,30 @@ const router = createRouter({
       name: "areas",
       component: () => import("./views/Areas.vue"),
       meta: { nav: "Areas", navGroup: "Administration", icon: "mdi-domain", roles: ["admin"] },
+    },
+    {
+      path: "/maintenance-needs",
+      name: "maintenance-needs",
+      component: () => import("./views/MaintenanceNeeds.vue"),
+      meta: {
+        nav: "Maintenance Needs",
+        navGroup: "Fleet",
+        icon: "mdi-tools",
+        roles: ["admin", "area_admin", "maintenance"],
+      },
+    },
+    {
+      path: "/maintenance-needs/new",
+      name: "maintenanceNeedCreate",
+      component: () => import("./views/MaintenanceNeedsForm.vue"),
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
+    },
+    {
+      path: "/maintenance-needs/:id",
+      name: "maintenanceNeedEdit",
+      component: () => import("./views/MaintenanceNeedsForm.vue"),
+      props: true,
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
     },
     {
       path: "/:pathMatch(.*)*",

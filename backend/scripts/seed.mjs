@@ -3,6 +3,7 @@
  * The project team (TEAM_ADMINS) is always seeded as admins, so signing in with Google after a seed needs no make-admin.
  * Feature 8 adds vehicle types, vehicles, service types, drivers, destinations, and vehicle requests, so every table has
  * enough rows to try searching, filtering, paging, and the calendar.
+ * Feature 9, 10, and 11 add mileage logs, issue reports, and maintenance needs.
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...] [-- --google]
  *
  * The data is generated from a fixed random seed, so every run produces the same rows (dates move with the day you seed).
@@ -875,13 +876,124 @@ const generatedRequests = () => {
 export const SEED_REQUESTS = [...NAMED_REQUESTS, ...generatedRequests()];
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Issue reports, maintenance needs, and mileage logs (Features 9, 10, and 11)                                         */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+const MAINTENANCE_EMAILS = [
+  "maintenance@oc.edu",
+  "multirole@oc.edu",
+  "hector.alvarez@oc.edu",
+  "brian.kessler@oc.edu",
+  "victor.ramos@oc.edu",
+  "wendy.okafor@oc.edu",
+];
+const REPORT_AUTHORS = ["admin@oc.edu", "areaadmin@oc.edu", ...MAINTENANCE_EMAILS];
+
+const ISSUE_COPY = {
+  low_gas: ["Fuel light is on.", "Tank is below a quarter.", "The van was returned almost empty."],
+  dirty: ["Mud on the floor mats.", "Trash left in the back seat.", "The cargo area needs to be swept."],
+  maintenance: ["Brakes squeak at low speed.", "Oil change is due.", "The check-engine light came on.", "A headlight is out."],
+  other: ["Spare key is missing.", "The key fob battery is dead.", "A seat belt will not retract."],
+};
+
+const NEED_TITLES = ["Oil change", "Brake noise", "Headlight out", "Tire wear", "Battery check", "Wiper blades", "Coolant leak"];
+
+const activeVehicles = () => SEED_VEHICLES.filter((vehicle) => vehicle.status === "active");
+
+const generatedIssueReports = () => {
+  const vehicles = activeVehicles();
+  const types = ["maintenance", "maintenance", "low_gas", "dirty", "other"];
+  return Array.from({ length: 32 }, (_, index) => {
+    const type = types[index % types.length];
+    const status = ["pending", "resolved", "cancelled"][index % 3];
+    const vehicle = vehicles[index % vehicles.length].universityId;
+    return {
+      vehicle,
+      linkRequest: type === "maintenance" && index % 2 === 0,
+      author: REPORT_AUTHORS[index % REPORT_AUTHORS.length],
+      assignee: type === "maintenance" || index % 4 === 0 ? MAINTENANCE_EMAILS[index % MAINTENANCE_EMAILS.length] : null,
+      type,
+      description: ISSUE_COPY[type][index % ISSUE_COPY[type].length],
+      status,
+      resolvedAt: status === "resolved" ? isoDay(-((index % 20) + 1)) : null,
+    };
+  });
+};
+
+export const SEED_ISSUE_REPORTS = generatedIssueReports();
+
+const maintenanceStatus = (index) => ["Open", "In Progress", "Completed", "Canceled"][index % 4];
+
+const generatedMaintenanceNeeds = () => {
+  const fromReports = SEED_ISSUE_REPORTS.flatMap((report, issueReportIndex) => {
+    if (report.type !== "maintenance" || issueReportIndex % 2 !== 0) return [];
+    const status = maintenanceStatus(issueReportIndex);
+    return [
+      {
+        issueReportIndex,
+        vehicle: report.vehicle,
+        author: report.author,
+        assignee: report.assignee,
+        title: "Maintenance Needed",
+        description: report.description,
+        outOfService: true,
+        priority: "None",
+        status,
+        resolvedAt: status === "Open" || status === "In Progress" ? null : isoDay(-((issueReportIndex % 15) + 1)),
+      },
+    ];
+  });
+
+  const vehicles = activeVehicles();
+  const standalone = Array.from({ length: 8 }, (_, index) => {
+    const status = maintenanceStatus(index);
+    return {
+      issueReportIndex: null,
+      vehicle: vehicles[index % vehicles.length].universityId,
+      author: MAINTENANCE_EMAILS[index % MAINTENANCE_EMAILS.length],
+      assignee: index % 5 === 0 ? null : MAINTENANCE_EMAILS[(index + 1) % MAINTENANCE_EMAILS.length],
+      title: NEED_TITLES[index % NEED_TITLES.length],
+      description: ISSUE_COPY.maintenance[index % ISSUE_COPY.maintenance.length],
+      outOfService: index % 2 === 0,
+      priority: ["High", "Medium", "Low", "None"][index % 4],
+      status,
+      resolvedAt: status === "Open" || status === "In Progress" ? null : isoDay(-((index % 10) + 1)),
+    };
+  });
+
+  return [...fromReports, ...standalone];
+};
+
+export const SEED_MAINTENANCE_NEEDS = generatedMaintenanceNeeds();
+
+const generatedMileageLogs = () => {
+  const vehicles = activeVehicles().slice(0, 20);
+  return vehicles.flatMap((vehicle, vehicleIndex) => {
+    let reading = 8000 + vehicleIndex * 500;
+    return [0, 1, 2].map((step) => {
+      reading += 120 + vehicleIndex * 10 + step * 40;
+      return {
+        vehicle: vehicle.universityId,
+        user: MAINTENANCE_EMAILS[(vehicleIndex + step) % MAINTENANCE_EMAILS.length],
+        odometerReading: reading,
+        recordedAt: isoDay(-((3 - step) * 30 + vehicleIndex)),
+      };
+    });
+  });
+};
+
+export const SEED_MILEAGE_LOGS = generatedMileageLogs();
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /* Writing it all                                                                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-/** Child rows go before the records they point at, and vehicles before areas. */
+/** Records that point at vehicles, requests, or users go before those rows are replaced. */
 const clearSampleTables = async (transaction) => {
   for (const model of [
+    db.maintenanceNeed,
     db.serviceLog,
+    db.issueReport,
     db.mileageLog,
     db.vehicleRequest,
     db.vehicle,
@@ -962,6 +1074,62 @@ const seedRequests = async ({ areaIds, google, transaction }) => {
   }
 };
 
+/** Features 9–11: mileage logs, issue reports, and maintenance needs for the seeded fleet. */
+const seedOperations = async ({ transaction }) => {
+  const users = Object.fromEntries((await db.user.findAll({ transaction })).map((user) => [user.email, user.id]));
+  const vehicles = Object.fromEntries((await db.vehicle.findAll({ transaction })).map((vehicle) => [vehicle.universityId, vehicle.id]));
+  const requestByVehicle = new Map();
+  for (const link of await db.vehicleRequestVehicle.findAll({ transaction })) {
+    if (!requestByVehicle.has(link.vehicleId)) requestByVehicle.set(link.vehicleId, link.vehicleRequestId);
+  }
+
+  const reports = [];
+  for (const report of SEED_ISSUE_REPORTS) {
+    const vehicleId = vehicles[report.vehicle];
+    reports.push(
+      await db.issueReport.create(
+        {
+          vehicleId,
+          vehicleRequestId: report.linkRequest ? (requestByVehicle.get(vehicleId) ?? null) : null,
+          authorId: users[report.author],
+          assigneeId: report.assignee ? users[report.assignee] : null,
+          type: report.type,
+          description: report.description,
+          status: report.status,
+          resolvedAt: report.resolvedAt,
+        },
+        { transaction },
+      ),
+    );
+  }
+
+  await db.maintenanceNeed.bulkCreate(
+    SEED_MAINTENANCE_NEEDS.map((need) => ({
+      issueReportId: need.issueReportIndex == null ? null : reports[need.issueReportIndex].id,
+      authorId: users[need.author],
+      vehicleId: vehicles[need.vehicle],
+      assigneeId: need.assignee ? users[need.assignee] : null,
+      title: need.title,
+      description: need.description,
+      outOfService: need.outOfService,
+      priority: need.priority,
+      status: need.status,
+      resolvedAt: need.resolvedAt,
+    })),
+    { transaction },
+  );
+
+  await db.mileageLog.bulkCreate(
+    SEED_MILEAGE_LOGS.map((log) => ({
+      vehicleId: vehicles[log.vehicle],
+      userId: users[log.user],
+      odometerReading: log.odometerReading,
+      recordedAt: log.recordedAt,
+    })),
+    { transaction },
+  );
+};
+
 /**
  * Replace users, sessions, roles, areas, and the sample tables with seed data in one transaction.
  * `keep` users survive with their sessions and non-area roles (areas are recreated, so area roles can't survive).
@@ -1008,6 +1176,7 @@ export const seed = async ({ keep = [], google = false } = {}) => {
 
     await seedSampleTables({ areaIds, transaction });
     await seedRequests({ areaIds, google, transaction });
+    await seedOperations({ transaction });
 
     return keptUsers.map((user) => user.email);
   });
@@ -1020,6 +1189,7 @@ export const seed = async ({ keep = [], google = false } = {}) => {
       `Added sample data: ${SEED_VEHICLES.length} vehicles, ${SEED_VEHICLE_TYPES.length} vehicle types,`,
       `${SEED_SERVICE_TYPES.length} service types, ${SEED_DRIVERS.length} drivers, ${SEED_DESTINATIONS.length} destinations.`,
       `Added ${SEED_REQUESTS.length} vehicle requests.`,
+      `Added ${SEED_ISSUE_REPORTS.length} issue reports, ${SEED_MAINTENANCE_NEEDS.length} maintenance needs, and ${SEED_MILEAGE_LOGS.length} mileage logs.`,
       kept.length ? `Kept: ${kept.join(", ")}.` : "",
       missing.length ? `Not found (nothing kept): ${missing.join(", ")}.` : "",
     ]
