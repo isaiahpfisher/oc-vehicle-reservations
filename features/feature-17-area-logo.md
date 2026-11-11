@@ -1,4 +1,4 @@
-# Feature: User Authentication and Session Management
+# Feature: Area Logos
 
 **Feature ID:** 17
 **Branch pattern:** `feature/17-area-logo`
@@ -21,7 +21,7 @@
 **Independent test:** Upload an image as area logo; it is stored in Supabase and the link to the Supabase image is stored in the database.
 **Acceptance scenarios:** see ### US-17.1 under Acceptance Criteria
 
-### US-17.1: Edit area logo
+### US-17.2: Edit area logo
 
 **As a** signed in admin user
 **I want to** edit what image is stored as the area logo
@@ -30,6 +30,16 @@
 **Priority:** P1
 **Independent test:** Upload a new image as area logo; it is stored in Supabase and the link to the Supabase image is stored in the database. The previous image upload is deleted.
 **Acceptance scenarios:** see ### US-17.2 under Acceptance Criteria
+
+### US-17.3: Delete area with logo
+
+**As a** signed in admin user
+**I want to** delete the area logo when I delete an area
+**So that** I do not think I have deleted something and it didn't happen
+
+**Priority:** P1
+**Independent test:** Delete an area with a logo; the Supabase logo is also deleted 
+**Acceptance scenarios:** see ### US-17.3 under Acceptance Criteria
 
 ## Requirements
 
@@ -40,10 +50,17 @@
 
 ## Assumptions
 
+- Updating an area logo removes the previous area logo in Supabase.
+- Deleting an area logo removes the logo in Supabase.
+- Deleting an area removes the folder with that area id and its area logo in Supabase.
+- Only .png, .jpeg/.jpg, and .webp images allowed.
+- Max file size 2 MB
 
 ## Edge Cases
 
-- File upload unsuccessful → `whatever error code that is`
+- File upload unsuccessful → `500` and `{ "message": "Failed to upload logo." }` The row is saved without changing the logo.
+- File type other than .png, .jpeg, and .webp → `400` and `{ "message": "Unsupported file type." }`
+- File size over 2 MB → `400` and `{ "message": "File must be under 2 MB." }`
 
 ## Success Criteria
 
@@ -60,23 +77,16 @@ Unchanged from Feature 2. Only admins can handle area logos.
 
 ## API Requirements
 
-Area methods are the same as Feature 2.
-
-Logo upload methods:
-| Method | Endpoint | Auth | Purpose |
-|--------|----------|------|---------|
-| `POST` | `/api/areas/logo/` | Yes | Upload an area logo |
-| `PUT` | `/api/areas/logo/:areaName` | Yes | Edit an area logo |
-| `DELETE` | `/api/areas/logo/:areaName` | Yes | Delete an area logo |
+Area methods are the same as Feature 2 unless stated otherwise. The request is multipart/form-data with the area name and logo file (POST and PUT). The area is stored in the database without the logo. Then the backend gets the id from the response and stores the logo in Supabase under that id. The backend updates the database entry for that id to have the logo URL of the logo in Supabase. This response is sent back to the user.
 
 New sample area requests:
 **Create area request body:**
 
-```json
-{
-  "name": "Athletics",
-  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/Athletics/example.png" 
-}
+```
+Content-Type: multipart/form-data
+
+name: Athletics
+logo: example.png
 ```
 
 **Area success response** (`200` / `201`):
@@ -85,28 +95,7 @@ New sample area requests:
 {
   "id": 1,
   "name": "Athletics",
-  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/Athletics/example.png",
-  "createdAt": "2026-07-02T12:00:00.000Z",
-  "updatedAt": "2026-07-02T12:00:00.000Z"
-}
-```
-
-Logo upload requests:
-**Create area logo request body:**
-
-```json
-{
-  "areaName": "Athletics",
-  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/Athletics/example.png" Is this right??
-}
-```
-
-**Area success response** (`200` / `201`):
-
-```json
-{
-  "area_name": "Athletics",
-  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/Athletics/example.png",
+  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/1/example.png",
   "createdAt": "2026-07-02T12:00:00.000Z",
   "updatedAt": "2026-07-02T12:00:00.000Z"
 }
@@ -117,100 +106,138 @@ Logo upload requests:
 
 ## Screen Requirements
 
-Existing views only. Labels match `Login.vue` and `MenuBar.vue`. API errors show in a `<v-alert>`, not a `<v-snackbar>`.
+`Areas.vue` and `AreaFormModal.vue` are changed to match the UI of `Service Types`. Create opens the modal. Edit edits the fields inline. The list is a table. 
 
-### [View: Login] — route name `login` (`/login`)
+### [View: Areas page] 
 
-File: `frontend/src/views/Login.vue`. Public.
+Implementation notes:
+- For Area Logo, the line in the table shows the rendered logo in appropriate size and the filename. There is an icon to upload a new file and another icon to remove the file right by the logo.
 
-- Heading: **Log in with Google**
+### [View: AreaFormModal ] 
 
-### [View: Home] — route name `home` (`/`)
-
-File: `frontend/src/views/Home.vue`.
-
-- No session: redirect to `login`
-- After login, this is the landing page
-
-### App chrome — `MenuBar.vue`
-
-- Title **Vehicle Registration System**
-- Session present: avatar menu with name/email and **Sign out**
-- Name and email are display only. There is no **Edit Profile** action (removed in Feature 3).
-- **Sign out** calls `POST /api/logout`, removes `localStorage` `user`, navigates to `login`
-
-Axios (`frontend/src/services/services.js`) attaches `Authorization: Bearer <token>` from `localStorage` `user` when present.
+Implementation notes:
+- For Area Logo, there is a button with appropriate coloration by Logo to upload a file. This button changes to Remove File if a file is uploaded. The file uploaded is depicted as the filename.
 
 ## Data Model Requirements
 
-### `users` table
+No updated data model.
 
-| Field                     | Type       | Rules                                                                 |
-| ------------------------- | ---------- | --------------------------------------------------------------------- |
-| `id`                      | INTEGER PK | Auto-increment                                                        |
-| `firstName`               | STRING     | Required                                                              |
-| `lastName`                | STRING     | Required                                                              |
-| `email`                   | STRING     | Required , Unique                                                            |
-| `createdAt` / `updatedAt` | DATETIME   | Sequelize timestamps                                                  |
+## Supabase Requirements
 
-### `sessions` table
-
-| Field                     | Type       | Rules                              |
-| ------------------------- | ---------- | ---------------------------------- |
-| `id`                      | INTEGER PK | Auto-increment                     |
-| `token`                   | STRING     | Required; JWT sent to the client   |
-| `email`                   | STRING     | Required                           |
-| `expirationDate`          | DATE       | Required; creation time + 24 hours |
-| `userId`                  | INTEGER FK | Required, references `users.id`    |
-| `createdAt` / `updatedAt` | DATETIME   | Sequelize timestamps               |
-
-**Associations:** `User` hasMany `Session`; `Session` belongsTo `User`.
-
-No `username` column. 
+- The bucket is public. The browser never receives the Supabase key.
+- Bucket name: `area-logos`
+- Path: `{areaId}/{filename}`
+- The server reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, which are off the frontend and out of Git.
 
 ---
 
 ## Acceptance Criteria (Gherkin)
 
-### US-1.1 — Create account
+### US-17.1: Upload area logo
 
-#### Scenario: User registers with valid information
+#### Scenario: User sees upload button
 
-- **Given** I am on the login page as a new user
-- **When** I click **Log in with Google** and log in with a valid OC google account
-- **Then** POST /api/login returns `200` with `email`, `firstName`, `lastName`, `userId`, and `token`
-- **And** my user account and session are created in the Vehicle Registration app DB
-- **And** I am sent to home
-- **And** my session is stored in `localStorage` under the key `user`
+- **Given** I am signed in as admin and on the areas page
+- **When** I open the new area modal
+- **Then** I see a button to upload the logo
+- **And** Clicking the button opens a way to select a file from my computer
+
+#### Scenario: User uploads logo 
+
+- **Given** I am signed in as admin and on the new area modal
+- **When** I upload a file and click **Save**
+- **Then** The logo is saved in Supabase and the database
+- **And** I see the logo rendered for that area on the list page
 
 ---
+
+### US-17.2: Edit area logo
+
+#### Scenario: User sees upload and remove icons
+
+- **Given** I am signed in as admin and on the areas page
+- **And** Areas exist 
+- **When** I click the edit button on a row
+- **Then** On that row I see an icon to upload a logo and an icon to remove the logo
+- **And** The remove logo is grayed out if there is no logo
+
+#### Scenario: User uploads logo on edit
+
+- **Given** I am signed in as admin and editing an area row
+- **When** I click the upload icon, upload a file, and click **Save**
+- **Then** The logo is saved in Supabase and the database
+- **And** I see the logo rendered for that area on the list page
+- **And** There is only one logo in Supabase for that area id
+
+#### Scenario: User removes logo 
+
+- **Given** I am signed in as admin and editing an area row
+- **When** I click the delete logo icon and click **Save**
+- **Then** The logo is removed in Supabase and the database
+- **And** I see no logo rendered for that area on the list page
+- **And** There is no logo in Supabase for that area id
+
+---
+
+### US-17.3: Delete area with logo
+
+#### Scenario: User deletes an area with a logo
+
+- **Given** I am signed in as admin and on the areas page
+- **And** And area with id `1` and a logo exists
+- **When** I click the delete button on that row
+- **Then** The area is deleted
+- **And** The area folder and the area logo in Supabase are deleted
+
+--- 
 
 ## Test Coverage Map
 
 Each scenario above must map to at least one automated test. `it("…")` titles match the Gherkin scenario names exactly.
 
+| Story | Scenario | Test file | Test name |
+|-------|----------|-----------|-----------|
+| US-17.1 | User sees upload button | `frontend/tests/Areas.test.js` | `User sees upload button` |
+| US-17.1 | User uploads logo | `backend/tests/areas.test.js` | `User uploads logo` |
+| US-17.1 | User uploads logo | `frontend/tests/Areas.test.js` | `User uploads logo` |
+| US-17.2 | User sees upload and remove icons | `frontend/tests/Areas.test.js` | `User sees upload and remove icons` |
+| US-17.2 | User uploads logo on edit | `backend/tests/areas.test.js` | `User uploads logo on edit` |
+| US-17.2 | User uploads logo on edit | `frontend/tests/Areas.test.js` | `User uploads logo on edit` |
+| US-17.2 | User removes logo | `backend/tests/areas.test.js` | `User removes logo` |
+| US-17.2 | User removes logo | `frontend/tests/Areas.test.js` | `User removes logo` |
+| US-17.3 | User deletes an area with a logo | `backend/tests/areas.test.js` | `User deletes an area with a logo` |
+| US-17.3 | User deletes an area with a logo | `frontend/tests/Areas.test.js` | `User deletes an area with a logo` |
+
 ## Agent implementation request
 
+Copy when asking Cursor to implement this feature (`@` this file):
 
-**Reference updates for this feature:** `features/reference/api.md`, `features/reference/data-model.md`, `features/reference/behavior.md`
+```text
+Implement Feature 17 from @features/feature-17-area-logo.md on branch `feature/17-area-logo`.
+
+Follow layer order in @features/framework.md (models → routes → backend tests → frontend → frontend tests).
+Map every Gherkin scenario in the Test Coverage Map; run `npm test` before finishing.
+If API routes, payloads, schema, or product rules changed per this spec, update @features/reference/api.md, @features/reference/data-model.md, and/or @features/reference/behavior.md in the same PR to match shipped code.
+Complete Definition of Done and the merge checklist in @features/framework.md.
+Do not implement behavior not in this spec.
+```
+
+**Reference updates for this feature:** `features/reference/data-model.md`, `features/reference/api.md`, `features/reference/behavior.md`
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-006** satisfied)
+- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-002** satisfied)
 - [ ] **Success Criteria (SC-001**–**SC-003)** met
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
 - [ ] `features/reference/data-model.md` updated (if schema changed)
 - [ ] `features/reference/api.md` updated (if API changed)
 - [ ] `features/reference/behavior.md` updated (if product rules changed)
-- [ ] Feature catalog row added in [README.md §2.3](../README.md#23-feature-catalog)
-- [ ] PR targets `dev` (not `main`)
 
 ## Out of Scope
 
-- email verification
+- Changing UI for other parts of the app.
 
 ## Delivered to later features
 
-- `req.user.id` from the session token are the ownership and privilege keys for later features.
-- After login, users land on home (`/`).
+- A link to Supabase to get a valid logo as part of an area.
