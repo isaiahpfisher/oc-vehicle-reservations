@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 8 adds `vehicle_requests` and its stop, driver, and vehicle tables. Feature 9 adds `mileage_logs`. Feature 10 adds `issue_reports`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
+**Status:** Feature 2 adds `areas`. Feature 3 adds `roles`; the starter-kit course tables and `users.role` are removed. Feature 4 adds `vehicleTypes`. Feature 5 adds `vehicles`. Feature 6 adds `destinations`. Feature 7 adds `drivers`. Feature 8 adds `vehicle_requests` and its stop, driver, and vehicle tables. Feature 9 adds `mileage_logs`. Feature 10 adds `issue_reports`. Feature 11 adds `maintenance_needs`. Feature 12 adds `service_types`. Sequelize creates `id`, `createdAt`, and `updatedAt`, and stores attributes in snake_case columns (`underscored: true`).
 
 ## `users`
 
@@ -192,6 +192,24 @@ Deleting a request cascades to its stops, drivers, and vehicles (requests are ne
 
 Requests restrict deleting the user who made them and the area, destinations, drivers, and vehicles they use (`onDelete: RESTRICT`). Deleting an approver sets `approverId` to `null`.
 
+## `maintenance_needs`
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `issue_report_id` | INTEGER | Optional, unique. References `issue_reports.id`. Null unless the author is an admin or area admin. |
+| `author_id` | INTEGER | Required. References `users.id`. Set from the signed-in user. |
+| `vehicle_id` | INTEGER | Required. References `vehicles.id`. |
+| `assignee_id` | INTEGER | Optional. References `users.id`. When set, that user must have the maintenance role. |
+| `title` | STRING(50) | Required. Trimmed. |
+| `description` | TEXT | Optional |
+| `out_of_service` | BOOLEAN | Required |
+| `priority` | ENUM | Required. `High`, `Medium`, `Low`, or `None` |
+| `status` | ENUM | Required. `Open`, `In Progress`, `Completed`, or `Canceled` |
+| `resolved_at` | DATEONLY | Optional. `yyyy-mm-dd` from `1950-01-01` through today. Stored null when status is `Open` or `In Progress`. Stored as today when status is `Completed` or `Canceled` and no date was sent. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
 ## Associations
 
 - A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
@@ -208,3 +226,7 @@ Requests restrict deleting the user who made them and the area, destinations, dr
 - A vehicle request has many issue reports. An issue report optionally belongs to one vehicle request. Deleting the vehicle request keeps the issue report with no linked request.
 - A user has many issue reports as author. An issue report belongs to one author. The author cannot be deleted while they still have issue reports.
 - A user has many issue reports as assignee. An issue report optionally belongs to one assignee. Deleting the assignee keeps the issue report with no assignee.
+- An issue report has at most one maintenance need. A maintenance need optionally belongs to one issue report. Deleting the issue report keeps the maintenance need with no linked report.
+- A user has many maintenance needs as author. A maintenance need belongs to one author. The author cannot be deleted while they still have maintenance needs.
+- A user has many maintenance needs as assignee. A maintenance need optionally belongs to one assignee. Deleting the assignee keeps the maintenance need with no assignee.
+- A vehicle has many maintenance needs. A maintenance need belongs to one vehicle. The vehicle cannot be deleted while it still has maintenance needs.

@@ -11,6 +11,9 @@
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "bundle": "node scripts/make-deploy.mjs",
     "make-admin": "node scripts/make-admin.mjs",
+    "make-area-admin": "node scripts/make-area-admin.mjs",
+    "make-requester": "node scripts/make-requester.mjs",
+    "make-maintenance": "node scripts/make-maintenance.mjs",
     "seed": "node scripts/seed.mjs"
   },
   "keywords": [

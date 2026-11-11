@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import issueReportServices from "../services/issueReportServices.js";
+import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import userServices from "../services/userServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import vehicleRequestServices from "../services/vehicleRequestServices.js";
@@ -14,8 +16,11 @@ import IssueReportFormModal from "../components/issueReports/IssueReportFormModa
 
 const ITEMS_PER_PAGE = 10;
 
+const route = useRoute();
 const { hasAnyRole, user } = useRoles();
 const canManage = computed(() => hasAnyRole(["admin", "area_admin"]));
+const linkedReportIds = ref([]);
+const notice = computed(() => (typeof route.query.notice === "string" ? route.query.notice : ""));
 
 const headers = [
   { title: "Vehicle", key: "vehicle.universityId" },
@@ -107,8 +112,44 @@ const deleteIssueReport = async (report) => {
   }
 };
 
+const maintenanceBlocked = (report) => report.type !== "maintenance" || linkedReportIds.value.includes(report.id);
+
+const loadMaintenanceLinks = async () => {
+  if (!canManage.value) {
+    return;
+  }
+
+  try {
+    const { data } = await maintenanceNeedServices.getMaintenanceNeeds();
+    linkedReportIds.value = data.map((need) => need.issueReportId).filter((id) => id != null);
+  } catch {
+    linkedReportIds.value = [];
+  }
+};
+
+const createMaintenanceNeed = async (report) => {
+  if (maintenanceBlocked(report)) {
+    return;
+  }
+
+  await maintenanceNeedServices.createMaintenanceNeed({
+    issueReportId: report.id,
+    vehicleId: report.vehicleId,
+    assigneeId: report.assigneeId,
+    description: report.description,
+    title: "Maintenance Needed",
+    outOfService: true,
+    priority: "None",
+    status: "Open",
+    resolvedAt: null,
+    authorId: user.value?.userId ?? null,
+  });
+
+  linkedReportIds.value = [...linkedReportIds.value, report.id];
+};
+
 onMounted(async () => {
-  await Promise.all([loadReports(), loadOptions()]);
+  await Promise.all([loadReports(), loadOptions(), loadMaintenanceLinks()]);
 });
 </script>
 
@@ -117,6 +158,8 @@ onMounted(async () => {
     <template #actions>
       <v-btn color="primary" variant="elevated" class="oc-cta" @click="openCreate">+ New Issue Report</v-btn>
     </template>
+
+    <v-alert v-if="notice" type="info" density="compact" class="mb-4">{{ notice }}</v-alert>
 
     <ListState
       :loading
@@ -143,6 +186,19 @@ onMounted(async () => {
         <template #[`item.assignee`]="{ item }">{{ personName(item.assignee) }}</template>
         <template #[`item.actions`]="{ item }">
           <div v-if="canManage" class="d-flex justify-end ga-1">
+            <v-tooltip text="Create maintenance need" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-plus"
+                  size="small"
+                  variant="text"
+                  aria-label="Create maintenance need"
+                  :disabled="maintenanceBlocked(item)"
+                  @click="createMaintenanceNeed(item)"
+                />
+              </template>
+            </v-tooltip>
             <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit issue report" @click="openEdit(item)" />
             <v-btn
               icon="mdi-delete"
