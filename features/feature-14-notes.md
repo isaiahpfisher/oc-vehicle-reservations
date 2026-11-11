@@ -1,6 +1,6 @@
 # Feature: Notes
 
-**Feature ID:** 12
+**Feature ID:** 14
 **Branch pattern:** `feature/14-notes`
 **Status:** Draft
 **Created:** 2026-11-04
