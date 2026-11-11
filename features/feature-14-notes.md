@@ -260,6 +260,12 @@ Scenario: Admin user can create notes
 
 ### US-14.2 — View notes on entities
 
+Scenario: Users can view notes on requests, issue reports, maintenance needs
+
+- **Given** I am a signed-in user
+- **When** I open a vehicle request, issue report, or maintenance need that I have access to
+- **Then** I see the notes for that entity
+
 ---
 
 ### US-14.3 — Toggle visibility
