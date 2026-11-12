@@ -1,5 +1,5 @@
 {
-  "name": "courses-speckit",
+  "name": "vehicles-speckit",
   "private": true,
   "description": "Spec-driven app — monorepo root (deploy scripts orchestrate frontend/ and backend/)",
   "scripts": {
@@ -14,14 +14,21 @@
     "test": "npm run test --prefix backend && npm run test --prefix frontend",
     "test:backend": "npm run test --prefix backend",
     "test:frontend": "npm run test --prefix frontend",
+    "seed": "npm run seed --prefix backend --",
+    "make-admin": "npm run make-admin --prefix backend --",
+    "make-area-admin": "npm run make-area-admin --prefix backend --",
+    "make-requester": "npm run make-requester --prefix backend --",
+    "make-maintenance": "npm run make-maintenance --prefix backend --",
     "specs:pdf": "node scripts/export-specs-pdf.mjs",
     "specs:pdf:app": "node scripts/export-app-specs-pdf.mjs",
     "specs:pdf:setup": "npx puppeteer browsers install chrome",
     "writing-guides:pdf": "node scripts/export-writing-guides-pdf.mjs",
-    "agility:export": "node scripts/export-agility-import.mjs --project \"Courses App\"",
+    "agility:export": "node scripts/export-agility-import.mjs --project \"Vehicles App\"",
     "agility:push": "node scripts/push-agility-api.mjs",
     "agility:push:dry-run": "node scripts/push-agility-api.mjs --dry-run",
-    "agility:verify": "node scripts/push-agility-api.mjs --verify"
+    "agility:verify": "node scripts/push-agility-api.mjs --verify",
+    "agility:sync-results": "node scripts/sync-agility-test-results.mjs",
+    "test:agility": "node --test \"scripts/agility/*.test.mjs\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

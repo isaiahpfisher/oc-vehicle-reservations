@@ -1,8 +1,10 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import { createMemoryHistory, createRouter } from "vue-router";
+import pinia from "../src/stores/index.js";
+import { useAuthStore } from "../src/stores/auth.js";
 
 export const vuetify = createVuetify({ components, directives });
 
@@ -29,10 +31,49 @@ export async function mountWithPlugins(component, options = {}) {
   const wrapper = mount(component, {
     ...rest,
     global: {
-      plugins: [vuetify, router],
+      plugins: [pinia, vuetify, router],
       ...global,
     },
   });
 
   return { wrapper, router };
 }
+
+/** Let Vuetify validation, API promises, and router navigation finish. */
+export const settle = async () => {
+  for (let i = 0; i < 5; i += 1) {
+    await flushPromises();
+  }
+};
+
+/** Retry an assertion until it passes (async validation and navigation settle on timers). */
+export const waitFor = async (assertion, timeout = 1500) => {
+  const start = Date.now();
+  for (;;) {
+    try {
+      return assertion();
+    } catch (error) {
+      if (Date.now() - start > timeout) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await flushPromises();
+    }
+  }
+};
+
+/** Axios-shaped API error. */
+export const apiError = (status, message) => Object.assign(new Error(message), { response: { status, data: { message } } });
+
+/**
+ * Sign the test in as `user` (a login response) through the auth store, or sign out with `null`.
+ * The store also writes localStorage, so a module reset afterwards still starts signed in.
+ */
+export const signInAs = (user) => {
+  const auth = useAuthStore();
+  if (user) {
+    auth.signIn(user);
+  } else {
+    auth.signOut();
+  }
+};

@@ -1,3 +1,4 @@
+import "./app/config/env.js";
 import routes from "./app/routes/index.js";
 import express from "express";
 import cors from "cors";
@@ -40,7 +41,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const API_PREFIX = process.env.NODE_ENV === "production" ? "/course-t1" : "/api";
+const API_PREFIX = process.env.NODE_ENV === "production" ? "/vehicle-t1" : "/api";
 
 app.use(API_PREFIX, routes);
 
@@ -48,7 +49,7 @@ const PORT = process.env.PORT || 3200;
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
-    logger.info(`Courses App API running on port ${PORT}`);
+    logger.info(`Vehicles App API running on port ${PORT}`);
   });
 }
 

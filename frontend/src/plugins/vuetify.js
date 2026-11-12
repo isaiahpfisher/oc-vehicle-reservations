@@ -24,6 +24,8 @@ const ocAcademic = {
     "on-secondary": "#FFFFFF",
     surface: "#F9F9FF",
     "surface-variant": "#E7E0E1",
+    // Text on surface-variant (e.g. tooltips); without it Vuetify's default is near-white.
+    "on-surface-variant": "#1C1B1F",
     "on-surface": "#1C1B1F",
     background: "#FFFFFF",
     "on-background": "#1C1B1F",
@@ -47,11 +49,25 @@ const vuetify = createVuetify({
     VBtn: {
       rounded: "lg",
     },
+    // Medium elevation for content cards (ui-style-system.mdc → Shape & Elevation)
     VCard: {
       rounded: "lg",
       color: "surface",
+      elevation: 2,
     },
     VTextField: {
+      density: "comfortable",
+      rounded: "lg",
+    },
+    VSelect: {
+      density: "comfortable",
+      rounded: "lg",
+    },
+    VAutocomplete: {
+      density: "comfortable",
+      rounded: "lg",
+    },
+    VTextarea: {
       density: "comfortable",
       rounded: "lg",
     },

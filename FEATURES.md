@@ -8,6 +8,8 @@ There’s an example in the league repository (including an example spec, but th
 
 Name and logo. Logo will require finding a way to store images. I recommend an S3 bucket. AWS charges money. Supabase is free last I checked. We can wait to do logos until a later feature so it doesn't block us.
 
+Note: I wrote the feature spec to store the logo URL. (Lana) 
+
 Blocked by: Auth
 
 ## 3. Roles/Permissions
@@ -21,6 +23,8 @@ Be sure to go back and use the new roles to enforce role access to the Area feat
 ## 4. Vehicle Types
 
 Just a name. Maybe add some default types like car, van, bus, and golf cart, but admin should be able to add custom vehicle types.
+
+I added a vehicle identifier of enum Serial Number or VIN because golf carts don't have VINs but serial numbers. 
 
 Blocked by: Roles
 

@@ -672,6 +672,7 @@ Example: Feature 2 (lists) and Feature 4 (profile) can ship in the same sprint, 
 | `npm run agility:export` | CSV backlog for Agility Excel import (auto-discovers `feature-N-*.md`) |
 | `npm run agility:push` | Push epics, stories, tests via Agility API |
 | `npm run agility:push -- --feature N --upsert` | Update existing stories/tests for feature N; create missing |
+| `npm run agility:sync-results` | Pick a feature, run tests, preview its AC status changes, then set Status (and Owner, if none) in Agility |
 | `npm run starter:zip` | Zip SDD starter kit for a **new** app — macOS/Windows/Linux (see [docs/STARTER-KIT.md](../docs/STARTER-KIT.md)) |
 
 PDF and Agility both pick up new `features/feature-N-*.md` automatically. See [README](./README.md#export-rules--specs-to-pdf) and [docs/agility-import/README.md](../docs/agility-import/README.md).

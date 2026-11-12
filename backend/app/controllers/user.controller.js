@@ -1,23 +1,60 @@
-import bcrypt from "bcryptjs";
-import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
-
-const SALT_ROUNDS = 10;
+import { ROLE_NAMES } from "../models/role.model.js";
+import { parseId, requiredInt } from "../helpers/fields.js";
+import { driverInclude, rolesInclude, toLinkedDriverResponse, toUserResponse } from "../helpers/users.js";
+import { isAdmin } from "../authorization/authorization.js";
 
 const exports = {};
+
+const notFound = (res, userId) => res.status(404).send({ message: `User with id=${userId} not found.` });
+
+/** `:id` as an integer, or `null` after sending a 400. */
+const userIdParam = (req, res) => {
+  const userId = parseId(req.params.id);
+  if (userId === null) {
+    res.status(400).send({ message: "Invalid user id." });
+  }
+  return userId;
+};
+
+/**
+ * Validate a PUT body's `roles` into unique `{ role, areaId }` rows.
+ * Returns `{ rows }` or `{ error }` with a 400 message.
+ */
+const parseRoles = async (roles) => {
+  if (!Array.isArray(roles)) {
+    return { error: "Roles must be an array." };
+  }
+  if (!roles.every((entry) => ROLE_NAMES.includes(entry?.role))) {
+    return { error: "Invalid role." };
+  }
+
+  const rows = roles.map(({ role, areaId }) => ({ role, areaId: role === "area_admin" ? requiredInt(areaId) : null }));
+
+  const areaIds = new Set(rows.filter(({ role }) => role === "area_admin").map(({ areaId }) => areaId));
+  const allAreasExist =
+    !areaIds.has(null) && (areaIds.size === 0 || (await db.area.count({ where: { id: [...areaIds] } })) === areaIds.size);
+  if (!allAreasExist) {
+    return { error: "Area admin role requires a valid area." };
+  }
+
+  const unique = new Map(rows.map((row) => [`${row.role}:${row.areaId}`, row]));
+  return { rows: [...unique.values()] };
+};
 
 exports.findAll = async (req, res) => {
   try {
     const users = await db.user.findAll({
-      attributes: ["id", "firstName", "lastName", "email"],
+      attributes: ["id", "firstName", "lastName", "email", "createdAt"],
+      include: rolesInclude(),
       order: [
         ["lastName", "ASC"],
         ["firstName", "ASC"],
       ],
     });
 
-    return res.send(users);
+    return res.send(users.map(toUserResponse));
   } catch (err) {
     logger.error(`User findAll failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch users." });
@@ -26,81 +63,91 @@ exports.findAll = async (req, res) => {
 
 exports.findOne = async (req, res) => {
   try {
-    const userId = parseInt(req.params.id, 10);
-    if (Number.isNaN(userId)) {
-      return res.status(400).send({ message: "Invalid user id." });
+    const userId = userIdParam(req, res);
+    if (userId === null) return;
+
+    // Non-admins may only read themselves; anyone else looks like a missing user.
+    if (userId !== req.user.id && !isAdmin(req.user)) {
+      return notFound(res, userId);
     }
 
-    const user = await db.user.findByPk(userId);
+    const user = await db.user.findByPk(userId, { include: [...rolesInclude(), ...driverInclude()] });
     if (!user) {
-      return res.status(404).send({ message: `User with id=${userId} not found.` });
+      return notFound(res, userId);
     }
 
-    return res.send(user);
+    return res.send({ ...toUserResponse(user), driver: toLinkedDriverResponse(user.driver) });
   } catch (err) {
     logger.error(`User findOne failed: ${err.message}`);
-    return res.status(500).send({ message: "Failed to fetch user profile." });
+    return res.status(500).send({ message: "Failed to fetch user." });
   }
 };
 
 exports.update = async (req, res) => {
   try {
-    const userId = parseInt(req.params.id, 10);
-    if (Number.isNaN(userId)) {
-      return res.status(400).send({ message: "Invalid user id." });
-    }
+    const userId = userIdParam(req, res);
+    if (userId === null) return;
 
-    const user = await db.user.unscoped().findByPk(userId);
+    const user = await db.user.findByPk(userId);
     if (!user) {
-      return res.status(404).send({ message: `User with id=${userId} not found.` });
+      return notFound(res, userId);
     }
 
-    const { firstName, lastName, email, password, role } = req.body;
-
-    if (!firstName?.trim()) {
-      return res.status(400).send({ message: "First name is required." });
-    }
-    if (!lastName?.trim()) {
-      return res.status(400).send({ message: "Last name is required." });
-    }
-    if (!email?.trim()) {
-      return res.status(400).send({ message: "Email is required." });
+    const { rows, error } = await parseRoles(req.body?.roles);
+    if (error) {
+      return res.status(400).send({ message: error });
     }
 
-    const trimmedEmail = email.trim();
+    if (userId === req.user.id && !rows.some(({ role }) => role === "admin")) {
+      return res.status(400).send({ message: "You cannot remove your own admin role." });
+    }
 
-    const existingEmail = await db.user.findOne({
-      where: {
-        email: trimmedEmail,
-        id: { [Op.ne]: user.id },
-      },
+    // Name and email come from Google (Feature 1 FR-006); only roles change here.
+    await db.sequelize.transaction(async (transaction) => {
+      await db.role.destroy({ where: { userId }, transaction });
+      await db.role.bulkCreate(
+        rows.map((row) => ({ ...row, userId })),
+        { transaction },
+      );
     });
-    if (existingEmail) {
-      return res.status(400).send({ message: "Email is already registered." });
-    }
 
-    if (password !== undefined && password !== null && password !== "") {
-      if (password.length < 8) {
-        return res.status(400).send({ message: "Password must be at least 8 characters." });
-      }
-
-      user.password = await bcrypt.hash(password, SALT_ROUNDS);
-    }
-
-    user.firstName = firstName.trim();
-    user.lastName = lastName.trim();
-    user.email = trimmedEmail;
-    if (role !== undefined && role !== null && String(role).trim()) {
-      user.role = String(role).trim();
-    }
-
-    await user.save();
-
-    const updatedUser = await db.user.findByPk(userId);
-    return res.send(updatedUser);
+    await user.reload({ include: rolesInclude() });
+    return res.send(toUserResponse(user));
   } catch (err) {
     logger.error(`User update failed: ${err.message}`);
-    return res.status(500).send({ message: "Failed to update user profile." });
+    return res.status(500).send({ message: "Failed to update user." });
+  }
+};
+
+exports.remove = async (req, res) => {
+  try {
+    const userId = userIdParam(req, res);
+    if (userId === null) return;
+
+    if (userId === req.user.id) {
+      return res.status(400).send({ message: "You cannot delete your own account." });
+    }
+
+    const user = await db.user.findByPk(userId);
+    if (!user) {
+      return notFound(res, userId);
+    }
+
+    // Feature 8: requests are never deleted, so a user who made requests stays.
+    if ((await db.vehicleRequest.count({ where: { userId } })) > 0) {
+      return res.status(400).send({ message: "User has vehicle requests and can't be deleted." });
+    }
+
+    // Feature 13: a service log names the user who the service is recorded for.
+    if ((await db.serviceLog.count({ where: { userId } })) > 0) {
+      return res.status(400).send({ message: "User has service logs and can't be deleted." });
+    }
+
+    await user.destroy();
+    return res.status(204).send();
+  } catch (err) {
+    logger.error(`User delete failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to delete user." });
   }
 };
 

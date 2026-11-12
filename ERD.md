@@ -59,14 +59,14 @@ erDiagram
 
     DRIVER {
       int id PK
-      int user_id FK "optional"
+      int user_id FK "optional" "unique"
       string first_name
       string last_name
       string phone_number
       string license_state
       date license_expiration_date
-      timestamp approved_at
-      enum status "pending, approved, denied, revoked"
+      timestamp approved_at optional
+      enum status "pending, approved, denied, revoked, former"
     }
 
     DESTINATION {
@@ -90,6 +90,7 @@ erDiagram
     VEHICLE_TYPE {
       int id PK
       string name
+      enum identifier "VIN, Serial"
     }
 
     VEHICLE_TYPE_INSTRUCTIONS {
@@ -107,9 +108,9 @@ erDiagram
       string make
       string model
       int year
-      string vin "unique"
+      string identifier "unique"
       date purchased_at
-      enum color
+      string color
       int passenger_capacity
       string license_plate "unique"
       date license_plate_expiration_date
@@ -161,14 +162,15 @@ erDiagram
 
     MAINTENANCE_NEED {
       int id PK
-      int issue_report_id FK "optional"
+      int issue_report_id FK "optional" "unique"
       int author_id FK
       int vehicle_id FK
       int assignee_id FK "optional"
-      text description
+      string title
+      text description "optional"
       boolean out_of_service
-      enum priority "high, medium, low, none"
-      enum status "open, in_progress, completed, cancelled"
+      enum priority "High, Medium, Low, None"
+      enum status "Open, In Progress, Completed, Canceled"
       date resolved_at
     }
 

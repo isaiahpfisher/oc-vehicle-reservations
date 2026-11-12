@@ -1,23 +1,33 @@
 {
-  "name": "courses-speckit-backend",
+  "name": "vehicle-speckit-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Courses App — Node.js REST API",
+  "description": "Vehicles App — Node.js REST API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "bundle": "node scripts/make-deploy.mjs"
+    "bundle": "node scripts/make-deploy.mjs",
+    "make-admin": "node scripts/make-admin.mjs",
+    "make-area-admin": "node scripts/make-area-admin.mjs",
+    "make-requester": "node scripts/make-requester.mjs",
+    "make-maintenance": "node scripts/make-maintenance.mjs",
+    "seed": "node scripts/seed.mjs"
   },
-  "keywords": ["node.js", "express", "sequelize"],
+  "keywords": [
+    "node.js",
+    "express",
+    "sequelize"
+  ],
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "google-auth-library": "^11.3.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "mysql2": "^3.12.0",

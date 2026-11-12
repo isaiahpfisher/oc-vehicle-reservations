@@ -21,6 +21,7 @@ mkdirSync(deployDir, { recursive: true });
 
 const entries = [
   "app",
+  "scripts",
   "server.js",
   "package.json",
   "package-lock.json",
@@ -36,9 +37,9 @@ for (const name of entries) {
   cpSync(from, join(deployDir, name), { recursive: true });
 }
 
-const serviceFile = join(root, "course-t1-backend.service");
+const serviceFile = join(root, "vehicle-t1-backend.service");
 if (existsSync(serviceFile)) {
-  cpSync(serviceFile, join(deployDir, "course-t1-backend.service"));
+  cpSync(serviceFile, join(deployDir, "vehicle-t1-backend.service"));
 }
 
 console.log(`Backend deploy artifact: ${deployDir}`);
