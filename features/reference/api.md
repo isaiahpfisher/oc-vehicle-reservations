@@ -62,9 +62,9 @@ User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, 
 | ------ | -------- | ---- | ------- |
 | `GET` | `/api/areas` | Bearer | `200` array of areas, ordered by `name`. |
 | `GET` | `/api/areas/:areaId` | Bearer | `200` with one area. |
-| `POST` | `/api/areas` | Admin | `201` with the created area. Body is `{ "name": "Athletics", "logo": "https://example.com/logo.png" }`. Omitted `logo` is stored as `""`. |
-| `PUT` | `/api/areas/:areaId` | Admin | `200` with the updated area. A field omitted from the body keeps its stored value. |
-| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it. An area that still has vehicles is `400`. |
+| `POST` | `/api/areas` | Admin | `201` with the created area. `multipart/form-data` fields are `name` and an optional `logo` file. The file is stored in the public Supabase bucket `area-logos` at `{AREA_LOGO_PREFIX}/{areaId}/{filename}`. Each developer sets their own `AREA_LOGO_PREFIX`. Production uses `prod`. `logo` is that public https URL. No file stores `logo: ""`. A JSON body is still accepted: `{ "name": "Athletics", "logo": "https://example.com/logo.png" }`. Omitted JSON `logo` is `""`. |
+| `PUT` | `/api/areas/:areaId` | Admin | `200` with the updated area. Multipart `logo` file replaces the logo and deletes the previous object for that area id. `removeLogo=true` with no file clears it and deletes that area's objects. Omitting both keeps the stored URL. A JSON field omitted from the body keeps its stored value. |
+| `DELETE` | `/api/areas/:areaId` | Admin | `200`. The area row is removed, along with every `area_admin` role for it and the objects under `area-logos/{AREA_LOGO_PREFIX}/{areaId}/`. An area that still has vehicles is `400`. |
 
 Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 
@@ -76,6 +76,9 @@ Success body: `{ "id", "name", "logo", "createdAt", "updatedAt" }`.
 | `name` longer than 255 characters after trim | `400` | `{ "message": "Name too long." }` |
 | `name` matches another area | `400` | `{ "message": "Name already taken." }` |
 | Non-empty `logo` is not an `http` or `https` URL | `400` | `{ "message": "Invalid logo URL." }` |
+| Logo file is not `.png`, `.jpg`, `.jpeg`, or `.webp` | `400` | `{ "message": "Unsupported file type." }` |
+| Logo file is over 2 MB | `400` | `{ "message": "File must be under 2 MB." }` |
+| Supabase upload fails | `500` | `{ "message": "Failed to upload logo." }` The area row is saved and its logo is unchanged. |
 | `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
 | Area id does not exist | `404` | `{ "message": "Area with id=… not found." }` |
 | Area still has vehicles | `400` | `{ "message": "Area has vehicles. Delete vehicles or reassign them to a different area first." }` |

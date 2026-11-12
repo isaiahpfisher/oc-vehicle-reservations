@@ -19,6 +19,8 @@
     "make-area-admin": "npm run make-area-admin --prefix backend --",
     "make-requester": "npm run make-requester --prefix backend --",
     "make-maintenance": "npm run make-maintenance --prefix backend --",
+    "drop-extra-indexes": "npm run drop-extra-indexes --prefix backend --",
+    "reset-local-data": "npm run reset-local-data --prefix backend --",
     "specs:pdf": "node scripts/export-specs-pdf.mjs",
     "specs:pdf:app": "node scripts/export-app-specs-pdf.mjs",
     "specs:pdf:setup": "npx puppeteer browsers install chrome",
