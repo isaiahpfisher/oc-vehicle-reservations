@@ -2,10 +2,15 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
+import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
+import serviceLogServices from "../services/serviceLogServices.js";
+import serviceTypeServices from "../services/serviceTypeServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import vehicleTypeServices from "../services/vehicleTypeServices.js";
+import { fullName } from "../models/users.js";
 import { useRoles } from "../composables/useRoles.js";
 import PageShell from "../components/layout/PageShell.vue";
+import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.vue";
 import Utils from "../config/utils.js";
 
 const route = useRoute();
@@ -39,6 +44,11 @@ const blank = () => ({
 });
 
 const form = ref(blank());
+const serviceLogOpen = ref(false);
+const serviceLogSaved = ref("");
+const serviceUsers = ref([]);
+const serviceTypes = ref([]);
+const serviceNeeds = ref([]);
 
 const visibleAreas = computed(() => {
   if (hasRole("admin")) {
@@ -85,8 +95,15 @@ const fromVehicle = (vehicle) => ({
   status: vehicle.status ?? null,
 });
 
-const ownsVehicle = (vehicle) =>
-  hasRole("admin") || areaAdminAreaIds.value.map(Number).includes(Number(vehicle.areaId));
+const managesArea = (areaId) => areaAdminAreaIds.value.map(Number).includes(Number(areaId));
+
+const ownsVehicle = (vehicle) => hasRole("admin") || hasRole("maintenance") || managesArea(vehicle.areaId);
+
+const canEditVehicle = computed(
+  () => hasRole("admin") || (hasRole("area_admin") && (isCreate.value || managesArea(loaded.value?.areaId))),
+);
+
+const readOnly = computed(() => !isCreate.value && !canEditVehicle.value);
 
 const load = async () => {
   loading.value = true;
@@ -188,7 +205,7 @@ const payload = () => ({
 
 const submit = async (event) => {
   event?.preventDefault?.();
-  if (saving.value) {
+  if (saving.value || readOnly.value) {
     return;
   }
 
@@ -257,49 +274,102 @@ const onYearKeydown = (event) => {
 const cancel = () => {
   router.push({ name: "vehicles" });
 };
+
+const withLabel = (user) => ({ ...user, label: fullName(user) });
+
+const openServiceLog = async () => {
+  serviceLogSaved.value = "";
+  const [userResult, typeResult, needResult] = await Promise.allSettled([
+    maintenanceNeedServices.getMaintenanceNeedOptions(),
+    serviceTypeServices.getServiceTypes(),
+    maintenanceNeedServices.getMaintenanceNeeds(),
+  ]);
+
+  serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
+  serviceNeeds.value =
+    needResult.status === "fulfilled"
+      ? needResult.value.data.filter((need) => String(need.vehicleId) === String(route.params.id))
+      : [];
+  serviceUsers.value = userResult.status === "fulfilled" ? userResult.value.data.assignees.map(withLabel) : [];
+
+  serviceLogOpen.value = true;
+};
+
+const createServiceLog = async (payload) => {
+  await serviceLogServices.createServiceLog({ ...payload, vehicleId: Number(route.params.id) });
+  serviceLogSaved.value = "Service log created.";
+};
 </script>
 
 <template>
   <PageShell :title="title" :breadcrumbs :loading :error="loadError" :max-width="720">
+    <template v-if="!isCreate" #actions>
+      <router-link class="vehicle-form__mileage" :to="{ name: 'vehicle-mileage-logs', params: { vehicleId: route.params.id } }">
+        Mileage log
+      </router-link>
+      <router-link class="vehicle-form__service" :to="{ name: 'service-logs', params: { vehicleId: route.params.id } }">
+        Service log
+      </router-link>
+      <button type="button" class="vehicle-form__service" @click="openServiceLog">
+        + New Service Log
+      </button>
+    </template>
+
     <v-form @submit.prevent="submit">
-      <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" />
-      <v-select v-model="form.vehicleTypeId" :items="typeItems" item-title="title" item-value="value" label="Vehicle Type" />
-      <v-text-field v-model="form.universityId" label="University Id" />
-      <v-text-field v-model="form.identifier" :label="identifierLabel" />
-      <v-text-field v-model="form.make" label="Make" />
-      <v-text-field v-model="form.model" label="Model" />
+      <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" :disabled="readOnly" />
+      <v-select
+        v-model="form.vehicleTypeId"
+        :items="typeItems"
+        item-title="title"
+        item-value="value"
+        label="Vehicle Type"
+        :disabled="readOnly"
+      />
+      <v-text-field v-model="form.universityId" label="University Id" :disabled="readOnly" />
+      <v-text-field v-model="form.identifier" :label="identifierLabel" :disabled="readOnly" />
+      <v-text-field v-model="form.make" label="Make" :disabled="readOnly" />
+      <v-text-field v-model="form.model" label="Model" :disabled="readOnly" />
       <v-text-field
         :model-value="form.year"
         label="Year"
         type="number"
         step="1"
         max="9999"
+        :disabled="readOnly"
         @update:model-value="setYear"
         @keydown="onYearKeydown"
       />
-      <v-text-field v-model="form.color" label="Color" />
-      <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" />
-      <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" />
-      <v-text-field v-model="form.licensePlate" label="License Plate" />
-      <v-text-field v-model="form.licensePlateExpirationDate" label="License Plate Expiration Date" type="date" />
-      <v-select v-model="form.status" :items="statusItems" label="Status" />
+      <v-text-field v-model="form.color" label="Color" :disabled="readOnly" />
+      <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" :disabled="readOnly" />
+      <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" :disabled="readOnly" />
+      <v-text-field v-model="form.licensePlate" label="License Plate" :disabled="readOnly" />
+      <v-text-field
+        v-model="form.licensePlateExpirationDate"
+        label="License Plate Expiration Date"
+        type="date"
+        :disabled="readOnly"
+      />
+      <v-select v-model="form.status" :items="statusItems" label="Status" :disabled="readOnly" />
 
       <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
+      <v-alert v-if="serviceLogSaved" type="success" density="compact" class="mb-4">{{ serviceLogSaved }}</v-alert>
 
       <div class="d-flex ga-2 mt-2">
-        <router-link
-          v-if="!isCreate"
-          class="vehicle-form__mileage"
-          :to="{ name: 'vehicle-mileage-logs', params: { vehicleId: route.params.id } }"
-        >
-          Mileage log
-        </router-link>
-        <button type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
+        <button v-if="!readOnly" type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
           {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
         </button>
         <button type="button" class="vehicle-form__cancel" :disabled="saving" @click="cancel">Cancel</button>
       </div>
     </v-form>
+
+    <ServiceLogFormModal
+      v-if="!isCreate"
+      v-model="serviceLogOpen"
+      :users="serviceUsers"
+      :service-types="serviceTypes"
+      :maintenance-needs="serviceNeeds"
+      :save="createServiceLog"
+    />
   </PageShell>
 </template>
 
@@ -335,7 +405,8 @@ const cancel = () => {
   color: rgb(var(--v-theme-on-surface));
 }
 
-.vehicle-form__mileage {
+.vehicle-form__mileage,
+.vehicle-form__service {
   display: inline-flex;
   align-items: center;
   min-height: 36px;
@@ -344,5 +415,11 @@ const cancel = () => {
   font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
+}
+
+button.vehicle-form__service {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 </style>

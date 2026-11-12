@@ -90,6 +90,22 @@ describe("Feature 9 — Mileage Log", () => {
       expect(response.body.vehicle).toEqual({ id: 3, universityId: "V-100" });
     });
 
+    it("Maintenance user saves mileage log", async () => {
+      // Feature 13: maintenance records mileage for a vehicle without editing the vehicle.
+      await seedFleet();
+      const { headers, user } = await signIn(["maintenance"], {
+        firstName: "Mo",
+        lastName: "Maint",
+        email: "maint@example.com",
+      });
+
+      const response = await request(app).post("/api/mileage-logs").set(headers).send(validBody());
+
+      expect(response.status).toBe(201);
+      expect(response.body.vehicleId).toBe(3);
+      expect(response.body.userId).toBe(user.userId);
+    });
+
     it("Area admin saves mileage log for a vehicle in their area", async () => {
       const { athletics } = await seedFleet();
       const { headers } = await signIn([{ role: "area_admin", areaId: athletics.id }], {

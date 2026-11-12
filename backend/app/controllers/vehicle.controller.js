@@ -24,6 +24,10 @@ const managedAreaIds = (user) => {
   return user.roles.filter((role) => role.role === "area_admin").map((role) => Number(role.areaId));
 };
 
+/** Feature 13: maintenance reads every vehicle. Writes still use `managedAreaIds`. */
+const readableAreaIds = (user) =>
+  user.roles.some((role) => role.role === "maintenance") ? null : managedAreaIds(user);
+
 const mayUseArea = (allowed, areaId) => allowed === null || allowed.includes(Number(areaId));
 
 const field = (body, ...keys) => {
@@ -348,7 +352,7 @@ const sendFailure = (res, result) => res.status(result.status || 400).send({ mes
 
 exports.findAll = async (req, res) => {
   try {
-    const allowed = managedAreaIds(req.user);
+    const allowed = readableAreaIds(req.user);
     if (allowed && allowed.length === 0) {
       return res.status(200).send([]);
     }
@@ -380,7 +384,7 @@ exports.findOne = async (req, res) => {
       return res.status(404).send({ message: `Vehicle with id=${vehicleId} not found.` });
     }
 
-    if (!mayUseArea(managedAreaIds(req.user), vehicle.areaId)) {
+    if (!mayUseArea(readableAreaIds(req.user), vehicle.areaId)) {
       return res.status(403).send({ message: WRONG_AREA });
     }
 
