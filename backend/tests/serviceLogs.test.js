@@ -85,19 +85,22 @@ const createLog = async (fleet, headers, userId, overrides = {}) => {
   return response.body;
 };
 
+let worker;
+
 beforeEach(async () => {
   await syncTestDatabase();
+  const created = await createUserWithRoles(["maintenance"], {
+    email: "worker@example.com",
+    firstName: "Sam",
+    lastName: "Tech",
+  });
+  worker = created.body;
 });
 
 describe("Feature 13 — Maintenance Log Management", () => {
   describe("US-13.1 — Create service logs", () => {
     it("Admin user saves service log", async () => {
       const fleet = await seedFleet();
-      const recordedFor = await registerUser({
-        email: "sam@example.com",
-        firstName: "Sam",
-        lastName: "Tech",
-      });
       const sessions = [
         await signIn(["admin"], { email: "admin@example.com", firstName: "Ada", lastName: "Admin" }),
         await signIn([{ role: "area_admin", areaId: fleet.athletics.id }], {
@@ -108,22 +111,22 @@ describe("Feature 13 — Maintenance Log Management", () => {
         await signIn(["maintenance"], { email: "maint@example.com", firstName: "Mo", lastName: "Maint" }),
       ];
 
-      const need = await createNeed(fleet.athleticsVehicle.id, recordedFor.body.userId, "Brake noise");
+      const need = await createNeed(fleet.athleticsVehicle.id, worker.userId, "Brake noise");
 
       for (const { headers, user } of sessions) {
         const response = await request(app)
           .post("/api/service-logs")
           .set(headers)
-          .send(bodyFor(fleet, recordedFor.body.userId, { maintenanceNeedId: need.id }));
+          .send(bodyFor(fleet, worker.userId, { maintenanceNeedId: need.id }));
 
         expect(response.status).toBe(201);
-        expect(response.body.userId).toBe(recordedFor.body.userId);
+        expect(response.body.userId).toBe(worker.userId);
         expect(response.body.vehicleId).toBe(fleet.athleticsVehicle.id);
         expect(response.body.serviceTypeId).toBe(fleet.oil.id);
         expect(response.body.maintenanceNeedId).toBe(need.id);
         expect(response.body.maintenanceNeed).toEqual({ id: need.id, title: "Brake noise" });
         expect(response.body.servicedAt).toBe("2026-07-02");
-        expect(response.body.user).toEqual({ id: recordedFor.body.userId, firstName: "Sam", lastName: "Tech" });
+        expect(response.body.user).toEqual({ id: worker.userId, firstName: "Sam", lastName: "Tech" });
         expect(response.body.vehicle).toEqual({ id: fleet.athleticsVehicle.id, universityId: "V-100" });
         expect(response.body.serviceType).toEqual({ id: fleet.oil.id, name: "Oil Change" });
         expect(response.body.mileageLog.odometerReading).toBe(12050);
@@ -140,16 +143,27 @@ describe("Feature 13 — Maintenance Log Management", () => {
       expect(listed.body).toHaveLength(3);
     });
 
+    it("User without the maintenance role is rejected", async () => {
+      const fleet = await seedFleet();
+      const { headers } = await signIn();
+      const other = await registerUser({ email: "sam@example.com", firstName: "Sam", lastName: "Plain" });
+
+      const response = await request(app).post("/api/service-logs").set(headers).send(bodyFor(fleet, other.body.userId));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "User does not have maintenance role." });
+    });
+
     it("Area admin creates a service log for a vehicle outside their area", async () => {
       const fleet = await seedFleet();
-      const { headers, user } = await signIn([{ role: "area_admin", areaId: fleet.athletics.id }], {
+      const { headers } = await signIn([{ role: "area_admin", areaId: fleet.athletics.id }], {
         email: "area@example.com",
       });
 
       const response = await request(app)
         .post("/api/service-logs")
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { vehicleId: fleet.musicVehicle.id }));
+        .send(bodyFor(fleet, worker.userId, { vehicleId: fleet.musicVehicle.id }));
 
       expect(response.status).toBe(403);
       expect(response.body).toEqual(wrongArea);
@@ -160,12 +174,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user edits a service log Service Type", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { serviceTypeId: fleet.tires.id }));
+        .send(bodyFor(fleet, worker.userId, { serviceTypeId: fleet.tires.id }));
 
       expect(response.status).toBe(200);
       expect(response.body.serviceTypeId).toBe(fleet.tires.id);
@@ -175,12 +189,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("API update can move a service log to another vehicle", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { vehicleId: fleet.musicVehicle.id }));
+        .send(bodyFor(fleet, worker.userId, { vehicleId: fleet.musicVehicle.id }));
 
       expect(response.status).toBe(200);
       expect(response.body.vehicleId).toBe(fleet.musicVehicle.id);
@@ -192,12 +206,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user edits a service log mileage_log_id", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { miles: 15000 }));
+        .send(bodyFor(fleet, worker.userId, { miles: 15000 }));
 
       expect(response.status).toBe(200);
       expect(response.body.mileageLogId).toBe(log.mileageLogId);
@@ -209,12 +223,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
       const { headers, user } = await signIn();
       const first = await createNeed(fleet.athleticsVehicle.id, user.userId, "Brake noise");
       const second = await createNeed(fleet.athleticsVehicle.id, user.userId, "Worn tires");
-      const log = await createLog(fleet, headers, user.userId, { maintenanceNeedId: first.id });
+      const log = await createLog(fleet, headers, worker.userId, { maintenanceNeedId: first.id });
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: second.id }));
+        .send(bodyFor(fleet, worker.userId, { maintenanceNeedId: second.id }));
 
       expect(response.status).toBe(200);
       expect(response.body.maintenanceNeedId).toBe(second.id);
@@ -228,7 +242,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
       const response = await request(app)
         .post("/api/service-logs")
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: 999 }));
+        .send(bodyFor(fleet, worker.userId, { maintenanceNeedId: 999 }));
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({ message: "Maintenance need not found." });
@@ -242,7 +256,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
       const response = await request(app)
         .post("/api/service-logs")
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: need.id }));
+        .send(bodyFor(fleet, worker.userId, { maintenanceNeedId: need.id }));
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({ message: "Maintenance need is for a different vehicle." });
@@ -252,7 +266,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
       const need = await createNeed(fleet.athleticsVehicle.id, user.userId, "Brake noise");
-      await createLog(fleet, headers, user.userId, { maintenanceNeedId: need.id });
+      await createLog(fleet, headers, worker.userId, { maintenanceNeedId: need.id });
 
       const response = await request(app).delete(`/api/maintenance-needs/${need.id}`).set(headers);
 
@@ -264,12 +278,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user edits a service log serviced_at", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { servicedAt: "2026-08-01" }));
+        .send(bodyFor(fleet, worker.userId, { servicedAt: "2026-08-01" }));
 
       expect(response.status).toBe(200);
       expect(response.body.servicedAt).toBe("2026-08-01");
@@ -280,12 +294,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user edits a service log serviced_at to after current date", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { servicedAt: "2099-01-01" }));
+        .send(bodyFor(fleet, worker.userId, { servicedAt: "2099-01-01" }));
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual(futureDate);
@@ -294,7 +308,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user deletes a service log", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app).delete(`/api/service-logs/${log.id}`).set(headers);
 
@@ -324,13 +338,13 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Area admin updates a service log for a vehicle outside their area", async () => {
       const fleet = await seedFleet();
       const admin = await signIn(["admin"], { email: "admin@example.com" });
-      const log = await createLog(fleet, admin.headers, admin.user.userId, { vehicleId: fleet.musicVehicle.id });
+      const log = await createLog(fleet, admin.headers, worker.userId, { vehicleId: fleet.musicVehicle.id });
       const area = await signIn([{ role: "area_admin", areaId: fleet.athletics.id }], { email: "area@example.com" });
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(area.headers)
-        .send(bodyFor(fleet, area.user.userId, { vehicleId: fleet.musicVehicle.id }));
+        .send(bodyFor(fleet, worker.userId, { vehicleId: fleet.musicVehicle.id }));
 
       expect(response.status).toBe(403);
       expect(response.body).toEqual(wrongArea);
@@ -338,9 +352,8 @@ describe("Feature 13 — Maintenance Log Management", () => {
 
     it("Mileage log, service type, and user used by a service log cannot be deleted", async () => {
       const fleet = await seedFleet();
-      const recordedFor = await registerUser({ email: "sam@example.com", firstName: "Sam", lastName: "Tech" });
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, recordedFor.body.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const mileage = await request(app).delete(`/api/mileage-logs/${log.mileageLogId}`).set(headers);
       expect(mileage.status).toBe(400);
@@ -350,11 +363,11 @@ describe("Feature 13 — Maintenance Log Management", () => {
       expect(serviceType.status).toBe(400);
       expect(serviceType.body).toEqual({ message: "Service type is used by a service log and can't be deleted." });
 
-      const userDelete = await request(app).delete(`/api/users/${recordedFor.body.userId}`).set(headers);
+      const userDelete = await request(app).delete(`/api/users/${worker.userId}`).set(headers);
       expect(userDelete.status).toBe(400);
       expect(userDelete.body).toEqual({ message: "User has service logs and can't be deleted." });
 
-      expect(user.userId).not.toBe(recordedFor.body.userId);
+      expect(user.userId).not.toBe(worker.userId);
     });
   });
 
@@ -369,7 +382,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Unauthenticated API request to a particular service log", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
       expect(log.id).toBe(1);
 
       const response = await request(app).get("/api/service-logs/1");
@@ -399,9 +412,9 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Unauthenticated API request to update a service log", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
-      const response = await request(app).put(`/api/service-logs/${log.id}`).send(bodyFor(fleet, user.userId));
+      const response = await request(app).put(`/api/service-logs/${log.id}`).send(bodyFor(fleet, worker.userId));
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual(unauthorized);
@@ -410,7 +423,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Unauthenticated API request to delete a service log", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const log = await createLog(fleet, headers, worker.userId);
 
       const response = await request(app).delete(`/api/service-logs/${log.id}`);
 
@@ -421,7 +434,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
     const withoutRole = async (send) => {
       const fleet = await seedFleet();
       const admin = await signIn(["admin"], { email: "admin@example.com" });
-      const log = await createLog(fleet, admin.headers, admin.user.userId);
+      const log = await createLog(fleet, admin.headers, worker.userId);
       const requester = await registerUser({ email: "requester@example.com" });
 
       const response = await send(bearer(requester.body.token), fleet, log, requester.body.userId);

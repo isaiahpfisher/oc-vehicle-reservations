@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import serviceLogServices from "../services/serviceLogServices.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
-import userServices from "../services/userServices.js";
 import { fullName } from "../models/users.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
@@ -98,20 +97,13 @@ const openNeed = (need) => {
 
 const openServiceLog = async (need) => {
   serviceLogSaved.value = "";
-  const [userResult, typeResult] = await Promise.allSettled([userServices.getUsers(), serviceTypeServices.getServiceTypes()]);
+  const [userResult, typeResult] = await Promise.allSettled([
+    maintenanceNeedServices.getMaintenanceNeedOptions(),
+    serviceTypeServices.getServiceTypes(),
+  ]);
 
   serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
-  if (userResult.status === "fulfilled") {
-    serviceUsers.value = userResult.value.data.map(withLabel);
-  } else if (user.value) {
-    serviceUsers.value = [
-      withLabel({
-        id: user.value.userId,
-        firstName: user.value.firstName,
-        lastName: user.value.lastName,
-      }),
-    ];
-  }
+  serviceUsers.value = userResult.status === "fulfilled" ? userResult.value.data.assignees.map(withLabel) : [];
 
   serviceLogNeed.value = need;
   serviceLogOpen.value = true;

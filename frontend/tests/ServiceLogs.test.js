@@ -21,6 +21,7 @@ vi.mock("../src/services/services.js", () => ({
 vi.mock("../src/services/maintenanceNeedServices.js", () => ({
   default: {
     getMaintenanceNeeds: vi.fn(),
+    getMaintenanceNeedOptions: vi.fn(),
   },
 }));
 
@@ -191,6 +192,7 @@ beforeEach(async () => {
   maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({
     data: [brakeNoise, wornTires, { id: 7, vehicleId: 4, title: "Other vehicle" }],
   });
+  maintenanceNeedServices.getMaintenanceNeedOptions.mockResolvedValue({ data: { assignees: users, vehicles: [] } });
   serviceLogServices.getServiceLogsByVehicle.mockResolvedValue({ data: [] });
   serviceLogServices.createServiceLog.mockResolvedValue({ status: 201, data: oilLog });
   serviceLogServices.updateServiceLog.mockResolvedValue({ status: 200, data: oilLog });

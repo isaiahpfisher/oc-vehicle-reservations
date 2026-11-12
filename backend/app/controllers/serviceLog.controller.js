@@ -212,9 +212,16 @@ const readBody = async (body) => {
     return servicedAt;
   }
 
-  const existingUser = await db.user.findByPk(user.value, { attributes: ["id"] });
+  const existingUser = await db.user.findByPk(user.value, {
+    attributes: ["id"],
+    include: [{ model: db.role, as: "roles", attributes: ["role"] }],
+  });
   if (!existingUser) {
     return { status: 404, message: "User not found." };
+  }
+
+  if (!existingUser.roles.some(({ role }) => role === "maintenance")) {
+    return { message: "User does not have maintenance role." };
   }
 
   const existingVehicle = await db.vehicle.findByPk(vehicle.value, {

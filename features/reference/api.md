@@ -330,7 +330,7 @@ An admin or a maintenance user may create, update, and delete a service log for 
 | `PUT` | `/api/service-logs/:serviceLogId` | Admin, area admin for the current and new vehicle, or maintenance | `200` with the updated service log. Updates the attached mileage log's reading, vehicle, and date. |
 | `DELETE` | `/api/service-logs/:serviceLogId` | Admin, area admin for that vehicle, or maintenance | `200` `{ "message": "Service log deleted successfully." }`. The mileage log stays. |
 
-Create and update body: `{ "userId": 1, "vehicleId": 2, "serviceTypeId": 1, "miles": 12050, "maintenanceNeedId": null, "servicedAt": "2026-07-02" }`. `maintenanceNeedId` may be omitted. `miles` is a whole number of 0 or more and is stored on a new mileage log at create. That mileage log's `userId` is the signed-in user. The service log's `userId` is the user in the body.
+Create and update body: `{ "userId": 1, "vehicleId": 2, "serviceTypeId": 1, "miles": 12050, "maintenanceNeedId": null, "servicedAt": "2026-07-02" }`. `maintenanceNeedId` may be omitted. `miles` is a whole number of 0 or more and is stored on a new mileage log at create. That mileage log's `userId` is the signed-in user. The service log's `userId` is a user who holds the maintenance role. The form lists those workers.
 
 Success body: `{ "id", "userId", "vehicleId", "serviceTypeId", "mileageLogId", "maintenanceNeedId", "servicedAt", "user": { "id", "firstName", "lastName" }, "vehicle": { "id", "universityId" }, "serviceType": { "id", "name" }, "mileageLog": { "id", "odometerReading" }, "maintenanceNeed": { "id", "title" } or null, "createdAt", "updatedAt" }`. `maintenanceNeedId` must be a maintenance need for that same vehicle.
 
@@ -349,6 +349,7 @@ Success body: `{ "id", "userId", "vehicleId", "serviceTypeId", "mileageLogId", "
 | `servicedAt` is not a real `YYYY-MM-DD` date | `400` | `{ "message": "Invalid serviced at." }` |
 | `servicedAt` is after today | `400` | `{ "message": "serviced_at cannot be after current date." }` |
 | `userId` does not exist | `404` | `{ "message": "User not found." }` |
+| `userId` does not have the maintenance role | `400` | `{ "message": "User does not have maintenance role." }` |
 | `vehicleId` does not exist | `404` | `{ "message": "Vehicle not found." }` |
 | `serviceTypeId` does not exist | `404` | `{ "message": "Service type not found." }` |
 | `:serviceLogId` or `:vehicleId` is not an integer | `400` | `{ "message": "Invalid service log id." }` / `{ "message": "Invalid vehicle id." }` |

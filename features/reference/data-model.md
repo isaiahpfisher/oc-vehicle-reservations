@@ -169,7 +169,7 @@ JSON keys are camelCase: `vehicleId`, `vehicleRequestId`, `authorId`, `assigneeI
 | Column | Type | Rules |
 | ------ | ---- | ----- |
 | `id` | INTEGER | Primary key, auto-increment |
-| `user_id` | INTEGER | Required. Existing user chosen on the form. References `users.id`. |
+| `user_id` | INTEGER | Required. Existing user with the maintenance role, chosen on the form. References `users.id`. |
 | `vehicle_id` | INTEGER | Required. Existing vehicle. References `vehicles.id`. |
 | `service_type_id` | INTEGER | Required. Existing service type. References `service_types.id`. |
 | `mileage_log_id` | INTEGER | Required. The mileage log created for this service. References `mileage_logs.id`. |

@@ -577,7 +577,6 @@ describe("Feature 11 — Maintenance Needs", () => {
     it("Admin user creates a service log from a maintenance need", async () => {
       // Feature 13: a maintenance need row can record the service performed for that need.
       signIn();
-      userServices.getUsers.mockResolvedValue({ data: [{ id: 2, firstName: "Jane", lastName: "Doe" }] });
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [{ id: 1, name: "Oil Change" }] });
       maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [need] });
       await mountAppAt("/maintenance-needs");
@@ -586,7 +585,9 @@ describe("Feature 11 — Maintenance Needs", () => {
       document.body.querySelector('[aria-label="Create service log"]').click();
       await settle();
 
-      await (await field("VCombobox", "User")).setValue(2);
+      const userField = await field("VCombobox", "User");
+      expect(userField.props("items").map((person) => person.id)).toEqual([john.id, jello.id]);
+      await userField.setValue(john.id);
       await (await field("VCombobox", "Service Type")).setValue(1);
       await (await textField("Mileage")).setValue("12050");
       await (await textField("Serviced At")).setValue("2026-07-02");
@@ -597,7 +598,7 @@ describe("Feature 11 — Maintenance Needs", () => {
 
       await waitFor(() => expect(serviceLogServices.createServiceLog).toHaveBeenCalledTimes(1));
       expect(serviceLogServices.createServiceLog).toHaveBeenCalledWith({
-        userId: 2,
+        userId: 3,
         serviceTypeId: 1,
         miles: 12050,
         maintenanceNeedId: 1,

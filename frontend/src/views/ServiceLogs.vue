@@ -4,7 +4,6 @@ import { useRoute } from "vue-router";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import serviceLogServices from "../services/serviceLogServices.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
-import userServices from "../services/userServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import { fullName } from "../models/users.js";
 import {
@@ -14,7 +13,6 @@ import {
   userName,
   vehicleLabel,
 } from "../models/serviceLogs.js";
-import { useAuthStore } from "../stores/auth.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
 import ListState from "../components/common/ListState.vue";
@@ -24,7 +22,6 @@ import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.v
 const ITEMS_PER_PAGE = 10;
 
 const route = useRoute();
-const auth = useAuthStore();
 const vehicleId = computed(() => route.params.vehicleId);
 
 const headers = [
@@ -55,17 +52,6 @@ const {
 });
 
 const withLabel = (user) => ({ ...user, label: fullName(user) });
-
-const userOptions = computed(() => {
-  const byId = new Map(users.value.map((user) => [user.id, user]));
-  for (const log of serviceLogs.value) {
-    if (log.user && !byId.has(log.user.id)) {
-      byId.set(log.user.id, withLabel(log.user));
-    }
-  }
-
-  return [...byId.values()];
-});
 
 const serviceTypeOptions = computed(() => {
   const byId = new Map(serviceTypes.value.map((serviceType) => [serviceType.id, serviceType]));
@@ -112,7 +98,7 @@ const breadcrumbs = computed(() => [
 const loadOptions = async () => {
   const [vehicleResult, userResult, typeResult, needResult] = await Promise.allSettled([
     vehicleServices.getVehicles(),
-    userServices.getUsers(),
+    maintenanceNeedServices.getMaintenanceNeedOptions(),
     serviceTypeServices.getServiceTypes(),
     maintenanceNeedServices.getMaintenanceNeeds(),
   ]);
@@ -120,17 +106,7 @@ const loadOptions = async () => {
   vehicles.value = vehicleResult.status === "fulfilled" ? vehicleResult.value.data : [];
   serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
   maintenanceNeeds.value = needResult.status === "fulfilled" ? needResult.value.data : [];
-  if (userResult.status === "fulfilled") {
-    users.value = userResult.value.data.map(withLabel);
-  } else if (auth.user) {
-    users.value = [
-      withLabel({
-        id: auth.user.userId,
-        firstName: auth.user.firstName,
-        lastName: auth.user.lastName,
-      }),
-    ];
-  }
+  users.value = userResult.status === "fulfilled" ? userResult.value.data.assignees.map(withLabel) : [];
 };
 
 const formInitial = computed(() => {
@@ -260,7 +236,7 @@ onMounted(() => {
       v-model="formOpen"
       :title="editingLog ? 'Edit service log' : 'New service log'"
       :submit-label="editingLog ? 'Save' : 'Create'"
-      :users="userOptions"
+      :users="users"
       :service-types="serviceTypeOptions"
       :maintenance-needs="maintenanceNeedOptions"
       :initial="formInitial"

@@ -5,19 +5,16 @@ import areaServices from "../services/areaServices.js";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import serviceLogServices from "../services/serviceLogServices.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
-import userServices from "../services/userServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import vehicleTypeServices from "../services/vehicleTypeServices.js";
 import { fullName } from "../models/users.js";
 import { useRoles } from "../composables/useRoles.js";
-import { useAuthStore } from "../stores/auth.js";
 import PageShell from "../components/layout/PageShell.vue";
 import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.vue";
 import Utils from "../config/utils.js";
 
 const route = useRoute();
 const router = useRouter();
-const auth = useAuthStore();
 const { hasRole, areaAdminAreaIds } = useRoles();
 
 const isCreate = computed(() => route.name === "vehicleCreate");
@@ -283,7 +280,7 @@ const withLabel = (user) => ({ ...user, label: fullName(user) });
 const openServiceLog = async () => {
   serviceLogSaved.value = "";
   const [userResult, typeResult, needResult] = await Promise.allSettled([
-    userServices.getUsers(),
+    maintenanceNeedServices.getMaintenanceNeedOptions(),
     serviceTypeServices.getServiceTypes(),
     maintenanceNeedServices.getMaintenanceNeeds(),
   ]);
@@ -293,17 +290,7 @@ const openServiceLog = async () => {
     needResult.status === "fulfilled"
       ? needResult.value.data.filter((need) => String(need.vehicleId) === String(route.params.id))
       : [];
-  if (userResult.status === "fulfilled") {
-    serviceUsers.value = userResult.value.data.map(withLabel);
-  } else if (auth.user) {
-    serviceUsers.value = [
-      withLabel({
-        id: auth.user.userId,
-        firstName: auth.user.firstName,
-        lastName: auth.user.lastName,
-      }),
-    ];
-  }
+  serviceUsers.value = userResult.status === "fulfilled" ? userResult.value.data.assignees.map(withLabel) : [];
 
   serviceLogOpen.value = true;
 };

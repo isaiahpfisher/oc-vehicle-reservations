@@ -78,7 +78,7 @@
 - There is no split sidebar / main panel.
 - Delete removes the service log row and leaves its mileage log. A mileage log, service type, or user that a service log still uses cannot be deleted.
 - JSON keys are camelCase (`userId`, `vehicleId`, `serviceTypeId`, `miles`, `mileageLogId`, `maintenanceNeedId`, `servicedAt`), matching the rest of the API. The table is `service_logs`.
-- Creating a service log also creates a mileage log. That mileage log's `userId` is the signed-in user (FR-002). The service log's `userId` is the user chosen on the form and must already exist.
+- Creating a service log also creates a mileage log. That mileage log's `userId` is the signed-in user (FR-002). The service log's `userId` is the maintenance worker chosen on the form and must already exist. A user without the maintenance role is `400` `{ "message": "User does not have maintenance role." }`.
 - `servicedAt` is `YYYY-MM-DD` and cannot be after today. The API message is `serviced_at cannot be after current date.`
 - An area admin may create, update, or delete a service log only when the vehicle is in an area they administer (`403` `{ "message": "Not authorized for the specified area." }`). Reads are not limited by area. Maintenance users are not limited by area.
 - `maintenanceNeedId` is an optional foreign key to a maintenance need for the same vehicle. Omit it, or send `null`, when there is no maintenance need. A missing id is `404` `{ "message": "Maintenance need not found." }`. A need for a different vehicle is `400` `{ "message": "Maintenance need is for a different vehicle." }`. A maintenance need that a service log still uses cannot be deleted (`400` `{ "message": "Maintenance need is used by a service log and can't be deleted." }`). The form offers that vehicle's maintenance needs, and the table shows the need's title.
@@ -166,7 +166,7 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 **Single Vue view** (`ServiceLogs.vue`) — no sidebar / main-panel split.
 
 - Heading: **Service Log Management**
-- Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **User** and **Service Type** are combo boxes. **Maintenance Need** is an optional select of that vehicle's maintenance needs. **Cancel** and **Create** sit in the dialog footer. The vehicle is the one in the page route.
+- Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **User** and **Service Type** are combo boxes. **User** lists maintenance workers. **Maintenance Need** is an optional select of that vehicle's maintenance needs. **Cancel** and **Create** sit in the dialog footer. The vehicle is the one in the page route.
 - Display service logs in a `<v-data-table>` (10 per page). Columns are **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, **Serviced At**, and **Actions**. **Maintenance Need** shows the need's title. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
 - **Edit** icon opens the same dialog, pre-filled with the current user, service type, mileage, maintenance need, and serviced at. **Cancel** and **Save** sit in the dialog footer. The vehicle stays the page's vehicle. Cancel closes the dialog without saving.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
@@ -250,6 +250,12 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 - **When** I submit the create dialog with valid data
 - **Then** the API returns `201` with that service log
 - **And** the log appears in the service logs list
+
+#### Scenario: User without the maintenance role is rejected
+
+- **Given** I am signed in as admin, area admin, or maintenance
+- **When** I create a service log for a user who does not have the maintenance role
+- **Then** the API returns `400` with `{ "message": "User does not have maintenance role." }`
 
 #### Scenario: Admin user creates service log with missing field
 
@@ -451,6 +457,7 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 | US-13.1 | Admin user creates a service log from a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | `Admin user creates a service log from a maintenance need` |
 | US-13.1 | Admin user saves service log | `backend/tests/serviceLogs.test.js` | `Admin user saves service log` |
 | US-13.1 | Admin user saves service log | `frontend/tests/ServiceLogs.test.js` | `Admin user saves service log` |
+| US-13.1 | User without the maintenance role is rejected | `backend/tests/serviceLogs.test.js` | `User without the maintenance role is rejected` |
 | US-13.1 | Admin user creates service log with missing field | `frontend/tests/ServiceLogs.test.js` | `Admin user creates service log with missing field` |
 | US-13.2 | Service logs view lists service logs | `frontend/tests/ServiceLogs.test.js` | `Service logs view lists service logs` |
 | US-13.2 | Service logs empty state | `frontend/tests/ServiceLogs.test.js` | `Service logs empty state` |
