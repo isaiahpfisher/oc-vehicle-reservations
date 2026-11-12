@@ -11,6 +11,10 @@ const props = defineProps({
   /** Set when the dialog is opened for one maintenance need. */
   presetNeedId: { type: [Number, null], default: null },
   lockNeed: { type: Boolean, default: false },
+  /** Pre-filled values when editing an existing service log. */
+  initial: { type: Object, default: null },
+  title: { type: String, default: "New service log" },
+  submitLabel: { type: String, default: "Create" },
   save: { type: Function, required: true },
 });
 
@@ -27,13 +31,15 @@ const formError = ref("");
 const saving = ref(false);
 
 watch(
-  () => [open.value, props.presetNeedId],
+  () => [open.value, props.presetNeedId, props.initial],
   ([isOpen]) => {
     if (!isOpen) {
       return;
     }
 
-    form.value = { ...blank(), maintenanceNeedId: props.presetNeedId ?? null };
+    form.value = props.initial
+      ? { ...blank(), ...props.initial }
+      : { ...blank(), maintenanceNeedId: props.presetNeedId ?? null };
     formError.value = "";
   },
 );
@@ -65,7 +71,7 @@ const submit = async () => {
 <template>
   <v-dialog v-model="open" max-width="560" :persistent="saving">
     <v-card v-if="open" rounded="lg">
-      <v-card-title>New service log</v-card-title>
+      <v-card-title>{{ title }}</v-card-title>
       <v-card-text>
         <v-combobox
           v-model="form.userId"
@@ -102,7 +108,7 @@ const submit = async () => {
       <v-card-actions>
         <v-spacer />
         <v-btn color="secondary" variant="text" :disabled="saving" @click="open = false">Cancel</v-btn>
-        <v-btn color="primary" variant="elevated" class="oc-cta" :loading="saving" @click="submit">Create</v-btn>
+        <v-btn color="primary" variant="elevated" class="oc-cta" :loading="saving" @click="submit">{{ submitLabel }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

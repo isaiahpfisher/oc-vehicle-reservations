@@ -12,7 +12,6 @@ import {
   mileageReading,
   serviceTypeName,
   userName,
-  validateServiceLogForm,
   vehicleLabel,
 } from "../models/serviceLogs.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -39,16 +38,7 @@ const headers = [
 ];
 
 const formOpen = ref(false);
-const editingId = ref(null);
-const draft = ref({
-  userId: null,
-  serviceTypeId: null,
-  miles: "",
-  maintenanceNeedId: null,
-  servicedAt: "",
-});
-const formError = ref("");
-const saving = ref(false);
+const editingLog = ref(null);
 const users = ref([]);
 const vehicles = ref([]);
 const serviceTypes = ref([]);
@@ -143,64 +133,39 @@ const loadOptions = async () => {
   }
 };
 
-const openCreate = () => {
-  formOpen.value = true;
-};
-
-const startEdit = (log) => {
-  if (saving.value) {
-    return;
+const formInitial = computed(() => {
+  const log = editingLog.value;
+  if (!log) {
+    return null;
   }
 
-  editingId.value = log.id;
-  draft.value = {
+  return {
     userId: log.userId,
     serviceTypeId: log.serviceTypeId,
     miles: log.mileageLog?.odometerReading ?? "",
     maintenanceNeedId: log.maintenanceNeedId ?? null,
     servicedAt: log.servicedAt ?? "",
   };
-  formError.value = "";
+});
+
+const openCreate = () => {
+  editingLog.value = null;
+  formOpen.value = true;
 };
 
-const cancelEdit = () => {
-  if (saving.value) {
-    return;
-  }
-
-  editingId.value = null;
-  formError.value = "";
+const startEdit = (log) => {
+  editingLog.value = log;
+  formOpen.value = true;
 };
 
-const saveEdit = async () => {
-  if (saving.value || editingId.value === null) {
-    return;
+const saveServiceLog = async (payload) => {
+  const body = { ...payload, vehicleId: Number(vehicleId.value) };
+  if (editingLog.value) {
+    await serviceLogServices.updateServiceLog(editingLog.value.id, body);
+  } else {
+    await serviceLogServices.createServiceLog(body);
   }
 
-  const result = validateServiceLogForm(draft.value);
-  formError.value = result.message || "";
-  if (result.message) {
-    return;
-  }
-
-  saving.value = true;
-
-  try {
-    await serviceLogServices.updateServiceLog(editingId.value, {
-      ...result.value,
-      vehicleId: Number(vehicleId.value),
-    });
-    editingId.value = null;
-    await getServiceLogs(vehicleId.value);
-  } catch (saveError) {
-    formError.value = saveError.response?.data?.message || "Failed to save service log.";
-  } finally {
-    saving.value = false;
-  }
-};
-
-const createServiceLog = async (payload) => {
-  await serviceLogServices.createServiceLog({ ...payload, vehicleId: Number(vehicleId.value) });
   await getServiceLogs(vehicleId.value);
 };
 
@@ -216,11 +181,6 @@ const deleteServiceLog = async (log) => {
   });
 
   if (deleted) {
-    if (editingId.value === log.id) {
-      editingId.value = null;
-      formError.value = "";
-    }
-
     await getServiceLogs(vehicleId.value);
   }
 };
@@ -244,8 +204,6 @@ onMounted(() => {
       empty-title="No service logs yet. Create your first service log."
       empty-icon="mdi-wrench-clock"
     >
-      <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
-
       <v-data-table
         :headers="headers"
         :items="serviceLogs"
@@ -254,19 +212,7 @@ onMounted(() => {
         item-value="id"
       >
         <template #[`item.user`]="{ item }">
-          <v-combobox
-            v-if="editingId === item.id"
-            v-model="draft.userId"
-            :items="userOptions"
-            item-title="label"
-            item-value="id"
-            label="User"
-            :return-object="false"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ userName(item) }}</span>
+          <span>{{ userName(item) }}</span>
         </template>
 
         <template #[`item.vehicle`]="{ item }">
@@ -274,70 +220,23 @@ onMounted(() => {
         </template>
 
         <template #[`item.serviceType`]="{ item }">
-          <v-combobox
-            v-if="editingId === item.id"
-            v-model="draft.serviceTypeId"
-            :items="serviceTypeOptions"
-            item-title="name"
-            item-value="id"
-            label="Service Type"
-            :return-object="false"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ serviceTypeName(item) }}</span>
+          <span>{{ serviceTypeName(item) }}</span>
         </template>
 
         <template #[`item.mileage`]="{ item }">
-          <v-text-field
-            v-if="editingId === item.id"
-            v-model="draft.miles"
-            label="Mileage"
-            type="number"
-            step="1"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ mileageReading(item) }}</span>
+          <span>{{ mileageReading(item) }}</span>
         </template>
 
         <template #[`item.maintenanceNeed`]="{ item }">
-          <v-select
-            v-if="editingId === item.id"
-            v-model="draft.maintenanceNeedId"
-            :items="maintenanceNeedOptions"
-            item-title="title"
-            item-value="id"
-            label="Maintenance Need"
-            clearable
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ maintenanceNeedTitle(item) }}</span>
+          <span>{{ maintenanceNeedTitle(item) }}</span>
         </template>
 
         <template #[`item.servicedAt`]="{ item }">
-          <v-text-field
-            v-if="editingId === item.id"
-            v-model="draft.servicedAt"
-            label="Serviced At"
-            type="date"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ item.servicedAt }}</span>
+          <span>{{ item.servicedAt }}</span>
         </template>
 
         <template #[`item.actions`]="{ item }">
-          <div v-if="editingId === item.id" class="d-flex justify-end ga-1">
-            <v-btn size="small" variant="text" color="primary" :loading="saving" @click="saveEdit">Save</v-btn>
-            <v-btn size="small" variant="text" :disabled="saving" @click="cancelEdit">Cancel</v-btn>
-          </div>
-          <div v-else class="d-flex justify-end ga-1">
+          <div class="d-flex justify-end ga-1">
             <v-btn
               icon="mdi-pencil"
               size="small"
@@ -359,10 +258,13 @@ onMounted(() => {
 
     <ServiceLogFormModal
       v-model="formOpen"
+      :title="editingLog ? 'Edit service log' : 'New service log'"
+      :submit-label="editingLog ? 'Save' : 'Create'"
       :users="userOptions"
       :service-types="serviceTypeOptions"
       :maintenance-needs="maintenanceNeedOptions"
-      :save="createServiceLog"
+      :initial="formInitial"
+      :save="saveServiceLog"
     />
   </PageShell>
 </template>

@@ -168,14 +168,14 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 - Heading: **Service Log Management**
 - Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **User** and **Service Type** are combo boxes. **Maintenance Need** is an optional select of that vehicle's maintenance needs. **Cancel** and **Create** sit in the dialog footer. The vehicle is the one in the page route.
 - Display service logs in a `<v-data-table>` (10 per page). Columns are **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, **Serviced At**, and **Actions**. **Maintenance Need** shows the need's title. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
-- **Edit** icon turns that row into inline fields pre-filled with the current user, service type, mileage, maintenance need, and serviced at; **Save** / **Cancel**. The vehicle stays the page's vehicle. Cancel restores the row without saving.
+- **Edit** icon opens the same dialog, pre-filled with the current user, service type, mileage, maintenance need, and serviced at. **Cancel** and **Save** sit in the dialog footer. The vehicle stays the page's vehicle. Cancel closes the dialog without saving.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit service log**, **Delete service log**).
 - **Empty state:** **"No service logs yet. Create your first service log."** when there are no service logs.
 - **Loading state:** skeleton or progress indicator while service logs are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
 
-**Implementation note:** the route/view for service logs is vehicle dependant. The vehicle page puts **Mileage log**, **Service log**, and **+ New Service Log** in the page header, at the top right. **+ New Service Log** opens the same create dialog and stays on the vehicle page. Each maintenance need row has **Create service log**, which opens that dialog with the need locked and creates the log for the need's vehicle. Delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/serviceLogs`, modeled after existing create dialogs. Edit stays in the table row.
+**Implementation note:** the route/view for service logs is vehicle dependant. The vehicle page puts **Mileage log**, **Service log**, and **+ New Service Log** in the page header, at the top right. **+ New Service Log** opens the same create dialog and stays on the vehicle page. Each maintenance need row has **Create service log**, which opens that dialog with the need locked and creates the log for the need's vehicle. Delete dialog is a reusable component in `components/common` folder; the create and edit dialog is a component in `components/serviceLogs`, modeled after existing create dialogs. Edit opens that same dialog.
 
 ---
 
