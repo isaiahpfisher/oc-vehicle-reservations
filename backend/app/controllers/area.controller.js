@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { parseId, requiredText } from "../helpers/fields.js";
+import { bucketPath, logoFileError, removeAreaFolder, uploadAreaLogo } from "../services/areaLogoStorage.js";
 
 const exports = {};
 
@@ -75,18 +76,44 @@ exports.findOne = async (req, res) => {
   }
 };
 
+const wantsLogoCleared = (body, file) =>
+  !file &&
+  (body.removeLogo === true ||
+    body.removeLogo === "true" ||
+    (Object.hasOwn(body, "logo") && logoText(body.logo) === ""));
+
+const failUpload = (err, res) => {
+  logger.error(`area logo upload failed: ${err.message}`);
+  return res.status(500).send({ message: "Failed to upload logo." });
+};
+
 exports.create = async (req, res) => {
   try {
     const name = requiredText(req.body.name);
-    const logo = logoText(req.body.logo);
+    const logo = req.file ? "" : logoText(req.body.logo);
     const message = await validateArea(name, logo);
-
     if (message) {
       return res.status(400).send({ message });
     }
 
+    const fileMessage = logoFileError(req.file);
+    if (fileMessage) {
+      return res.status(400).send({ message: fileMessage });
+    }
+
     const area = await db.area.create({ name, logo });
-    return res.status(201).send(area);
+    if (!req.file) {
+      return res.status(201).send(area);
+    }
+
+    try {
+      const url = await uploadAreaLogo(area.id, req.file);
+      await area.update({ logo: url });
+      await area.reload();
+      return res.status(201).send(area);
+    } catch (err) {
+      return failUpload(err, res);
+    }
   } catch (err) {
     if (err.name === "SequelizeUniqueConstraintError") {
       return res.status(400).send({ message: "Name already taken." });
@@ -109,15 +136,43 @@ exports.update = async (req, res) => {
       return res.status(404).send({ message: `Area with id=${areaId} not found.` });
     }
 
-    const name = Object.hasOwn(req.body, "name") ? requiredText(req.body.name) : existing.name;
-    const logo = Object.hasOwn(req.body, "logo") ? logoText(req.body.logo) : existing.logo;
-    const message = await validateArea(name, logo, areaId);
+    const fileMessage = logoFileError(req.file);
+    if (fileMessage) {
+      return res.status(400).send({ message: fileMessage });
+    }
 
+    const name = Object.hasOwn(req.body, "name") ? requiredText(req.body.name) : existing.name;
+    const clearLogo = wantsLogoCleared(req.body, req.file);
+    const logo = req.file
+      ? existing.logo
+      : clearLogo
+        ? ""
+        : Object.hasOwn(req.body, "logo")
+          ? logoText(req.body.logo)
+          : existing.logo;
+    const message = await validateArea(name, logo, areaId);
     if (message) {
       return res.status(400).send({ message });
     }
 
-    await db.area.update({ name, logo }, { where: { id: areaId } });
+    if (req.file) {
+      await existing.update({ name });
+      try {
+        const url = await uploadAreaLogo(existing.id, req.file);
+        await existing.update({ logo: url });
+        await existing.reload();
+        return res.status(200).send(existing);
+      } catch (err) {
+        await existing.reload();
+        return failUpload(err, res);
+      }
+    }
+
+    if (bucketPath(existing.logo) && logo !== existing.logo) {
+      await removeAreaFolder(existing.id);
+    }
+
+    await existing.update({ name, logo });
     await existing.reload();
 
     return res.status(200).send(existing);
@@ -156,6 +211,7 @@ exports.remove = async (req, res) => {
     }
 
     await db.area.destroy({ where: { id: areaId } });
+    await removeAreaFolder(areaId);
 
     return res.status(200).send({ message: "Area deleted successfully." });
   } catch (err) {
