@@ -109,12 +109,12 @@ Success body: `{ "id", "name", "identifier", "createdAt", "updatedAt" }`.
 
 ## Vehicles
 
-Every vehicle route requires a Bearer token and `admin` or `area_admin`. Admins pass. Area admins only see and change vehicles in areas they administer. JSON keys are camelCase.
+Every vehicle route requires a Bearer token. `GET` allows `admin`, `area_admin`, or `maintenance`. Writes require `admin` or `area_admin`. Admins pass. Area admins only see and change vehicles in areas they administer. Maintenance can read every vehicle and cannot change one. JSON keys are camelCase.
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
-| `GET` | `/api/vehicles` | Admin or area admin | `200` array. Admins receive every vehicle. Area admins receive vehicles whose `areaId` is one of their areas. Ordered by make, then model. |
-| `GET` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with one vehicle. An area admin asking for another area's vehicle is `403`. |
+| `GET` | `/api/vehicles` | Admin, area admin, or maintenance | `200` array. Admins and maintenance users receive every vehicle. Area admins receive vehicles whose `areaId` is one of their areas. Ordered by make, then model. |
+| `GET` | `/api/vehicles/:vehicleId` | Admin, area admin, or maintenance | `200` with one vehicle. An area admin asking for another area's vehicle is `403`. Maintenance may read any vehicle. |
 | `POST` | `/api/vehicles` | Admin or area admin | `201` with the created vehicle. An area admin can only set `areaId` to an area they administer. |
 | `PUT` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with the updated vehicle. A field omitted from the body keeps its stored value. An area admin cannot edit a vehicle outside their areas, or move one into an area they do not administer. |
 | `DELETE` | `/api/vehicles/:vehicleId` | Admin or area admin | `200`. The vehicle row is removed. An area admin cannot delete a vehicle outside their areas. |
@@ -126,7 +126,7 @@ Success body: `{ "id", "areaId", "vehicleTypeId", "universityId", "make", "model
 | Condition | Status | Body |
 | --------- | ------ | ---- |
 | No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
-| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Signed in without `admin`, `area_admin`, or `maintenance` on `GET`, or without `admin` or `area_admin` on a write | `403` | `{ "message": "Admin or area admin role required." }` |
 | Area admin acts on another area | `403` | `{ "message": "Not authorized for the specified area." }` |
 | Missing or whitespace-only required text | `400` | `{ "message": "Missing university id." }` (and the same shape for make, model, identifier, and color) |
 | Missing area, vehicle type, year, purchase date, passenger capacity, or status | `400` | `{ "message": "Missing area id." }` and the matching message for that field |
@@ -190,7 +190,7 @@ Every route requires a Bearer token and `admin`, `area_admin`, or `maintenance` 
 | `GET` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with one service type. |
 | `POST` | `/api/service-types` | Admin, area admin, or maintenance | `201` with the created service type. Body is `{ "name": "Oil Change", "service_frequency_days": 500, "service_frequency_miles": 5000 }`. Either frequency may be `null`. `name` is trimmed before save. |
 | `PUT` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200` with the updated service type. Body is the same shape as create. |
-| `DELETE` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200`. The service type row is removed. |
+| `DELETE` | `/api/service-types/:serviceTypeId` | Admin, area admin, or maintenance | `200`. The service type row is removed. A service type used by a service log is `400` `{ "message": "Service type is used by a service log and can't be deleted." }`. |
 
 Success body: `{ "id", "name", "service_frequency_days", "service_frequency_miles", "createdAt", "updatedAt" }`.
 
@@ -287,15 +287,15 @@ Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId"
 
 ## Mileage logs
 
-Every route requires a Bearer token (`authenticate`). An admin may read and change mileage logs for any vehicle. An area admin may do that only when the vehicle belongs to an area they administer. Any other signed-in user receives `403` `{ "message": "Forbidden." }`. A missing session is `401` `{ "message": "Unauthorized." }`.
+Every route requires a Bearer token (`authenticate`). An admin or a maintenance user may read and change mileage logs for any vehicle. An area admin may do that only when the vehicle belongs to an area they administer. Any other signed-in user receives `403` `{ "message": "Forbidden." }`. A missing session is `401` `{ "message": "Unauthorized." }`.
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
-| `GET` | `/api/mileage-logs?vehicleId=:vehicleId` | Admin, or area admin for that vehicle | `200` array of that vehicle's mileage logs, newest recorded date first. |
-| `GET` | `/api/mileage-logs/:mileageLogId` | Admin, or area admin for that vehicle | `200` with one mileage log. |
-| `POST` | `/api/mileage-logs` | Admin, or area admin for that vehicle | `201` with the created mileage log. Body is `{ "vehicleId": 3, "odometerReading": 12050, "recordedAt": "2026-10-23" }`. |
-| `PUT` | `/api/mileage-logs/:mileageLogId` | Admin, or area admin for that vehicle | `200` with the updated mileage log. `vehicleId` must be the log's current vehicle. |
-| `DELETE` | `/api/mileage-logs/:mileageLogId` | Admin, or area admin for that vehicle | `200` `{ "message": "Mileage log deleted successfully." }`. |
+| `GET` | `/api/mileage-logs?vehicleId=:vehicleId` | Admin, maintenance, or area admin for that vehicle | `200` array of that vehicle's mileage logs, newest recorded date first. |
+| `GET` | `/api/mileage-logs/:mileageLogId` | Admin, maintenance, or area admin for that vehicle | `200` with one mileage log. |
+| `POST` | `/api/mileage-logs` | Admin, maintenance, or area admin for that vehicle | `201` with the created mileage log. Body is `{ "vehicleId": 3, "odometerReading": 12050, "recordedAt": "2026-10-23" }`. |
+| `PUT` | `/api/mileage-logs/:mileageLogId` | Admin, maintenance, or area admin for that vehicle | `200` with the updated mileage log. `vehicleId` must be the log's current vehicle. |
+| `DELETE` | `/api/mileage-logs/:mileageLogId` | Admin, maintenance, or area admin for that vehicle | `200` `{ "message": "Mileage log deleted successfully." }`. |
 
 Success body: `{ "id", "vehicleId", "userId", "odometerReading", "recordedAt", "user": { "id", "firstName", "lastName" }, "vehicle": { "id", "universityId" }, "createdAt", "updatedAt" }`. `userId` is the signed-in user on create and is ignored in the body. An update does not change `userId`. `recordedAt` is `YYYY-MM-DD`. `odometerReading` is an integer of 0 or more.
 
@@ -313,6 +313,47 @@ Success body: `{ "id", "vehicleId", "userId", "odometerReading", "recordedAt", "
 | Update sends a different existing `vehicleId` | `400` | `{ "message": "Vehicle cannot be changed." }` |
 | `:mileageLogId` is not an integer | `400` | `{ "message": "Invalid mileage log id." }` |
 | Mileage log id does not exist | `404` | `{ "message": "Mileage log with id=… not found." }` |
+| Mileage log is used by a service log | `400` | `{ "message": "Mileage log is used by a service log and can't be deleted." }` |
+
+## Service logs
+
+Every route uses `authorizeRoles("admin", "area_admin", "maintenance")`. A missing session is `401` `{ "message": "Unauthorized! No token provided." }`. A signed-in user without one of those roles is `403` `{ "message": "One of these roles is required: admin, area_admin, maintenance." }`.
+
+An admin or a maintenance user may create, update, and delete a service log for any vehicle. An area admin may do that only when the vehicle belongs to an area they administer. A vehicle outside that scope is `403` `{ "message": "Not authorized for the specified area." }`. `GET` is not limited by area.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/service-logs` | Admin, area admin, or maintenance | `200` array of every service log, newest `servicedAt` first. |
+| `GET` | `/api/service-logs/:serviceLogId` | Admin, area admin, or maintenance | `200` with one service log. |
+| `GET` | `/api/service-logs/vehicle/:vehicleId` | Admin, area admin, or maintenance | `200` array of that vehicle's service logs, newest `servicedAt` first. |
+| `POST` | `/api/service-logs` | Admin, area admin for that vehicle, or maintenance | `201` with the created service log. Also creates the attached mileage log. |
+| `PUT` | `/api/service-logs/:serviceLogId` | Admin, area admin for the current and new vehicle, or maintenance | `200` with the updated service log. Updates the attached mileage log's reading, vehicle, and date. |
+| `DELETE` | `/api/service-logs/:serviceLogId` | Admin, area admin for that vehicle, or maintenance | `200` `{ "message": "Service log deleted successfully." }`. The mileage log stays. |
+
+Create and update body: `{ "userId": 1, "vehicleId": 2, "serviceTypeId": 1, "miles": 12050, "maintenanceNeedId": null, "servicedAt": "2026-07-02" }`. `maintenanceNeedId` may be omitted. `miles` is a whole number of 0 or more and is stored on a new mileage log at create. That mileage log's `userId` is the signed-in user. The service log's `userId` is a user who holds the maintenance role. The form lists those workers.
+
+Success body: `{ "id", "userId", "vehicleId", "serviceTypeId", "mileageLogId", "maintenanceNeedId", "servicedAt", "user": { "id", "firstName", "lastName" }, "vehicle": { "id", "universityId" }, "serviceType": { "id", "name" }, "mileageLog": { "id", "odometerReading" }, "maintenanceNeed": { "id", "title" } or null, "createdAt", "updatedAt" }`. `maintenanceNeedId` must be a maintenance need for that same vehicle.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin`, `area_admin`, or `maintenance` | `403` | `{ "message": "One of these roles is required: admin, area_admin, maintenance." }` |
+| Area admin uses a vehicle outside their areas | `403` | `{ "message": "Not authorized for the specified area." }` |
+| Missing `userId`, `vehicleId`, `serviceTypeId`, `miles`, or `servicedAt` | `400` | `{ "message": "Missing user." }` / `Missing vehicle.` / `Missing service type.` / `Missing mileage.` / `Missing serviced at.` |
+| Id is not a positive integer | `400` | `{ "message": "Invalid user." }` / `Invalid vehicle.` / `Invalid service type.` |
+| `miles` is not a whole number | `400` | `{ "message": "Mileage must be a whole number." }` |
+| `miles` is negative | `400` | `{ "message": "Mileage must be zero or greater." }` |
+| `maintenanceNeedId` is not a positive integer | `400` | `{ "message": "Invalid maintenance need." }` |
+| `maintenanceNeedId` does not exist | `404` | `{ "message": "Maintenance need not found." }` |
+| `maintenanceNeedId` belongs to a different vehicle | `400` | `{ "message": "Maintenance need is for a different vehicle." }` |
+| `servicedAt` is not a real `YYYY-MM-DD` date | `400` | `{ "message": "Invalid serviced at." }` |
+| `servicedAt` is after today | `400` | `{ "message": "serviced_at cannot be after current date." }` |
+| `userId` does not exist | `404` | `{ "message": "User not found." }` |
+| `userId` does not have the maintenance role | `400` | `{ "message": "User does not have maintenance role." }` |
+| `vehicleId` does not exist | `404` | `{ "message": "Vehicle not found." }` |
+| `serviceTypeId` does not exist | `404` | `{ "message": "Service type not found." }` |
+| `:serviceLogId` or `:vehicleId` is not an integer | `400` | `{ "message": "Invalid service log id." }` / `{ "message": "Invalid vehicle id." }` |
+| Service log id does not exist | `404` | `{ "message": "Service log with id=… not found." }` |
 
 ## Maintenance needs
 
@@ -327,7 +368,7 @@ Every `/api/maintenance-needs` route uses `authorizeRoles("admin", "area_admin",
 | `GET` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for that vehicle, or maintenance | `200` with one maintenance need. |
 | `POST` | `/api/maintenance-needs` | Admin, area admin for that vehicle, or maintenance | `201` with the created maintenance need. |
 | `PUT` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for the current vehicle and the vehicle in the body, or maintenance | `200` with the updated maintenance need. |
-| `DELETE` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for that vehicle, or maintenance | `200` `{ "message": "Maintenance need deleted." }`. |
+| `DELETE` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for that vehicle, or maintenance | `200` `{ "message": "Maintenance need deleted." }`. A need used by a service log is `400` `{ "message": "Maintenance need is used by a service log and can't be deleted." }`. |
 
 Success body: `{ "id", "issueReportId", "authorId", "vehicleId", "assigneeId", "title", "description", "outOfService", "priority", "status", "resolvedAt", "author", "assignee", "vehicle", "createdAt", "updatedAt" }`. `author` and `assignee` are `{ "id", "firstName", "lastName" }` (`assignee` is null when unset). `vehicle` is `{ "id", "color", "make", "model", "licensePlate", "areaId", "universityId" }`. `resolvedAt` is `yyyy-mm-dd` or null.
 

@@ -5,11 +5,11 @@ import { authenticate, authorizeRoles, holdsAnyRole } from "../authorization/aut
 const router = Router();
 const adminOnly = authorizeRoles("admin");
 
-// Feature 5 vehicle form lists types for area admins. Writes stay admin-only.
-// Other signed-in roles still get the Feature 4 message.
+// Feature 5 lists types for area admins. Feature 13 also lets maintenance read them on a vehicle page.
+// Writes stay admin-only. Other signed-in roles still get the Feature 4 message.
 const readVehicleTypes = (req, res, next) =>
   authenticate(req, res, () => {
-    if (!holdsAnyRole(req.user, ["admin", "area_admin"])) {
+    if (!holdsAnyRole(req.user, ["admin", "area_admin", "maintenance"])) {
       return res.status(403).send({ message: "Admin role required." });
     }
 

@@ -28,8 +28,14 @@ const today = () => {
   return `${now.getFullYear()}-${month}-${day}`;
 };
 
+const managesArea = (areaId) => areaAdminAreaIds.value.map(Number).includes(Number(areaId));
+
+const canCreate = computed(() => hasRole("admin") || hasRole("area_admin"));
+
+const canEdit = (vehicle) => hasRole("admin") || managesArea(vehicle.areaId);
+
 const visibleVehicles = computed(() => {
-  if (hasRole("admin")) {
+  if (hasRole("admin") || hasRole("maintenance")) {
     return vehicles.value;
   }
 
@@ -86,7 +92,7 @@ onMounted(getVehicles);
 
 <template>
   <PageShell title="Vehicle Management">
-    <template #actions>
+    <template v-if="canCreate" #actions>
       <v-btn color="primary" variant="elevated" class="oc-cta" :to="{ name: 'vehicleCreate' }">
         + New Vehicle
       </v-btn>
@@ -121,8 +127,30 @@ onMounted(getVehicles);
 
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-1">
-            <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit vehicle" @click="editVehicle(item)" />
-            <v-btn icon="mdi-delete" size="small" variant="text" aria-label="Delete vehicle" @click="deleteVehicle(item)" />
+            <v-btn
+              v-if="canEdit(item)"
+              icon="mdi-pencil"
+              size="small"
+              variant="text"
+              aria-label="Edit vehicle"
+              @click="editVehicle(item)"
+            />
+            <v-btn
+              v-else
+              icon="mdi-eye"
+              size="small"
+              variant="text"
+              aria-label="View vehicle"
+              @click="editVehicle(item)"
+            />
+            <v-btn
+              v-if="canEdit(item)"
+              icon="mdi-delete"
+              size="small"
+              variant="text"
+              aria-label="Delete vehicle"
+              @click="deleteVehicle(item)"
+            />
           </div>
         </template>
       </v-data-table>

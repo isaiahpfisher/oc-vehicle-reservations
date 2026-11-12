@@ -2,11 +2,15 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
+import serviceLogServices from "../services/serviceLogServices.js";
+import serviceTypeServices from "../services/serviceTypeServices.js";
+import { fullName } from "../models/users.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
 import ListState from "../components/common/ListState.vue";
 import PageShell from "../components/layout/PageShell.vue";
+import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.vue";
 
 const ITEMS_PER_PAGE = 10;
 const TABS = ["assigned", "open", "resolved", "all"];
@@ -79,9 +83,39 @@ const assignedEmpty = computed(() => tab.value === "assigned" && !filteredNeeds.
 const listEmpty = computed(() => !visibleNeeds.value.length);
 
 const confirmDelete = useConfirm();
+const serviceLogOpen = ref(false);
+const serviceLogSaved = ref("");
+const serviceLogNeed = ref(null);
+const serviceUsers = ref([]);
+const serviceTypes = ref([]);
+
+const withLabel = (person) => ({ ...person, label: fullName(person) });
 
 const openNeed = (need) => {
   router.push({ name: "maintenanceNeedEdit", params: { id: need.id } });
+};
+
+const openServiceLog = async (need) => {
+  serviceLogSaved.value = "";
+  const [userResult, typeResult] = await Promise.allSettled([
+    maintenanceNeedServices.getMaintenanceNeedOptions(),
+    serviceTypeServices.getServiceTypes(),
+  ]);
+
+  serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
+  serviceUsers.value = userResult.status === "fulfilled" ? userResult.value.data.assignees.map(withLabel) : [];
+
+  serviceLogNeed.value = need;
+  serviceLogOpen.value = true;
+};
+
+const createServiceLog = async (payload) => {
+  await serviceLogServices.createServiceLog({
+    ...payload,
+    vehicleId: Number(serviceLogNeed.value.vehicleId ?? serviceLogNeed.value.vehicle?.id),
+    maintenanceNeedId: serviceLogNeed.value.id,
+  });
+  serviceLogSaved.value = "Service log created.";
 };
 
 const deleteNeed = async (need) => {
@@ -107,6 +141,8 @@ loadNeeds();
       <v-btn color="primary" variant="elevated" class="oc-cta" @click="router.push({ name: 'maintenanceNeedCreate' })">+ New Maintenance Need</v-btn>
     </template>
 
+    <v-alert v-if="serviceLogSaved" type="success" density="compact" class="mb-4">{{ serviceLogSaved }}</v-alert>
+
     <v-tabs v-model="tab" class="mb-4">
       <v-tab v-if="isMaintenance" value="assigned">Assigned to Me</v-tab>
       <v-tab value="open">Open</v-tab>
@@ -131,11 +167,28 @@ loadNeeds();
         <template #[`item.assignee`]="{ item }">{{ personName(item.assignee) }}</template>
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-1">
+            <v-btn
+              icon="mdi-clipboard-plus-outline"
+              size="small"
+              variant="text"
+              aria-label="Create service log"
+              @click="openServiceLog(item)"
+            />
             <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit maintenance need" @click="openNeed(item)" />
             <v-btn icon="mdi-delete" size="small" variant="text" aria-label="Delete maintenance need" @click="deleteNeed(item)" />
           </div>
         </template>
       </v-data-table>
     </ListState>
+
+    <ServiceLogFormModal
+      v-model="serviceLogOpen"
+      :users="serviceUsers"
+      :service-types="serviceTypes"
+      :maintenance-needs="serviceLogNeed ? [serviceLogNeed] : []"
+      :preset-need-id="serviceLogNeed?.id ?? null"
+      lock-need
+      :save="createServiceLog"
+    />
   </PageShell>
 </template>
