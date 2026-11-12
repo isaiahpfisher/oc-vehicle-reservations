@@ -4,26 +4,16 @@ import authConfig from "../app/config/auth.config.js";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
-let schemaReady = false;
-
 /**
  * Start each test from an empty database.
- * The first call in a test file drops every table (not just current models, so stale tables from removed
- * features can't block FK drops) and recreates the schema. Later calls only truncate, which is several
- * times faster and still resets auto-increment ids.
+ * Jest's global setup drops and recreates the schema once per run. Each test only truncates,
+ * which still resets auto-increment ids.
  */
 export const syncTestDatabase = async () => {
   // Last line of defense: this wipes every table, so only ever run it against a *-test database.
   const name = db.sequelize.config.database;
   if (!name.endsWith("-test")) {
     throw new Error(`Refusing to reset "${name}": test databases must be named *-test.`);
-  }
-
-  if (!schemaReady) {
-    await db.sequelize.getQueryInterface().dropAllTables();
-    await db.sequelize.sync({ force: true });
-    schemaReady = true;
-    return;
   }
 
   // FOREIGN_KEY_CHECKS is per connection, so the transaction keeps every statement on one pooled connection.
