@@ -52,7 +52,7 @@ const router = createRouter({
       name: "vehicle-mileage-logs",
       component: () => import("./views/MileageLogs.vue"),
       props: true,
-      meta: { roles: ["admin", "area_admin"] },
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
     },
     {
       path: "/service-logs/:vehicleId",
@@ -104,7 +104,7 @@ const router = createRouter({
       path: "/vehicles",
       name: "vehicles",
       component: () => import("./views/Vehicles.vue"),
-      meta: { nav: "Vehicles", navGroup: "Fleet", icon: "mdi-car-multiple", roles: ["admin", "area_admin"] },
+      meta: { nav: "Vehicles", navGroup: "Fleet", icon: "mdi-car-multiple", roles: ["admin", "area_admin", "maintenance"] },
     },
     {
       path: "/vehicles/new",
@@ -117,7 +117,7 @@ const router = createRouter({
       name: "vehicleDetails",
       component: () => import("./views/VehicleForm.vue"),
       props: true,
-      meta: { roles: ["admin", "area_admin"] },
+      meta: { roles: ["admin", "area_admin", "maintenance"] },
     },
     {
       path: "/vehicle-types",

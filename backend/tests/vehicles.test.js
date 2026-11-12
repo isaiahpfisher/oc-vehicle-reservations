@@ -514,24 +514,34 @@ describe("Feature 5 — Vehicles", () => {
     });
 
     it("Signed-in user without admin or area admin role API request to vehicles", async () => {
-      const headers = await signIn(["maintenance"], { email: "maint@eagles.oc.edu" });
+      // Feature 13: maintenance can read vehicles. A signed-in user with no fleet role still cannot.
+      const maintenance = await signIn(["maintenance"], { email: "maint@eagles.oc.edu" });
+      const requester = await signIn([], { email: "requester@eagles.oc.edu" });
 
-      const response = await request(app).get("/api/vehicles").set(headers);
+      const allowed = await request(app).get("/api/vehicles").set(maintenance);
+      const denied = await request(app).get("/api/vehicles").set(requester);
 
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual(forbidden);
+      expect(allowed.status).toBe(200);
+      expect(Array.isArray(allowed.body)).toBe(true);
+      expect(denied.status).toBe(403);
+      expect(denied.body).toEqual(forbidden);
     });
 
     it("Signed-in user without admin or area admin role API request to a particular vehicle", async () => {
+      // Feature 13: maintenance can read one vehicle. A signed-in user with no fleet role still cannot.
       const admin = await signIn();
       await seed();
       await postVehicle(admin);
-      const headers = await signIn(["maintenance"], { email: "maint@eagles.oc.edu" });
+      const maintenance = await signIn(["maintenance"], { email: "maint@eagles.oc.edu" });
+      const requester = await signIn([], { email: "requester@eagles.oc.edu" });
 
-      const response = await request(app).get("/api/vehicles/1").set(headers);
+      const allowed = await request(app).get("/api/vehicles/1").set(maintenance);
+      const denied = await request(app).get("/api/vehicles/1").set(requester);
 
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual(forbidden);
+      expect(allowed.status).toBe(200);
+      expect(allowed.body.id).toBe(1);
+      expect(denied.status).toBe(403);
+      expect(denied.body).toEqual(forbidden);
     });
 
     it("Signed-in user without admin or area admin role API request to create a vehicle", async () => {

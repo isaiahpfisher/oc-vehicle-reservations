@@ -7,6 +7,7 @@ import { mount } from "@vue/test-utils";
 import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
+import maintenanceNeedServices from "../src/services/maintenanceNeedServices.js";
 import serviceLogServices from "../src/services/serviceLogServices.js";
 import serviceTypeServices from "../src/services/serviceTypeServices.js";
 import userServices from "../src/services/userServices.js";
@@ -15,6 +16,12 @@ import { apiError, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}));
+
+vi.mock("../src/services/maintenanceNeedServices.js", () => ({
+  default: {
+    getMaintenanceNeeds: vi.fn(),
+  },
 }));
 
 vi.mock("../src/services/serviceLogServices.js", () => ({
@@ -69,6 +76,8 @@ const vehicles = [
 
 const oilChange = { id: 1, name: "Oil Change" };
 const tireRotation = { id: 2, name: "Tire Rotation" };
+const brakeNoise = { id: 9, vehicleId: 3, title: "Brake noise" };
+const wornTires = { id: 4, vehicleId: 3, title: "Worn tires" };
 
 const oilLog = {
   id: 1,
@@ -82,6 +91,7 @@ const oilLog = {
   vehicle: { id: 3, universityId: "V-100" },
   serviceType: { id: 1, name: "Oil Change" },
   mileageLog: { id: 8, odometerReading: 12050 },
+  maintenanceNeed: { id: 9, title: "Brake noise" },
 };
 
 const savedPayload = {
@@ -138,8 +148,10 @@ const clickNamed = async (text) => {
 };
 
 const fillCreate = async (overrides = {}) => {
-  await (await field("VSelect", "User")).setValue(overrides.userId ?? 2);
-  await (await field("VSelect", "Service Type")).setValue(overrides.serviceTypeId ?? 1);
+  const user = users.find((item) => item.id === (overrides.userId ?? 2));
+  const serviceType = [oilChange, tireRotation].find((item) => item.id === (overrides.serviceTypeId ?? 1));
+  await (await field("VCombobox", "User")).setValue({ ...user, label: `${user.firstName} ${user.lastName}` });
+  await (await field("VCombobox", "Service Type")).setValue(serviceType);
   await (await field("VTextField", "Mileage")).setValue(String(overrides.miles ?? 12050));
   await (await field("VTextField", "Serviced At")).setValue(overrides.servicedAt ?? "2026-07-02");
 };
@@ -176,6 +188,9 @@ beforeEach(async () => {
     },
   });
   serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange, tireRotation] });
+  maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({
+    data: [brakeNoise, wornTires, { id: 7, vehicleId: 4, title: "Other vehicle" }],
+  });
   serviceLogServices.getServiceLogsByVehicle.mockResolvedValue({ data: [] });
   serviceLogServices.createServiceLog.mockResolvedValue({ status: 201, data: oilLog });
   serviceLogServices.updateServiceLog.mockResolvedValue({ status: 200, data: oilLog });
@@ -207,11 +222,11 @@ describe("Feature 13 — Maintenance Log Management", () => {
         await mountAppAt("/service-logs/3");
         await openNewServiceLog();
 
-        expect(await field("VSelect", "User")).toBeDefined();
+        expect(await field("VCombobox", "User")).toBeDefined();
         expect(wrapper.findAllComponents({ name: "VSelect" }).some((item) => item.props("label") === "Vehicle")).toBe(false);
-        expect(await field("VSelect", "Service Type")).toBeDefined();
+        expect(await field("VCombobox", "Service Type")).toBeDefined();
         expect(await field("VTextField", "Mileage")).toBeDefined();
-        expect(await field("VTextField", "Maintenance Need")).toBeDefined();
+        expect(await field("VSelect", "Maintenance Need")).toBeDefined();
         expect(await field("VTextField", "Serviced At")).toBeDefined();
 
         wrapper.unmount();
@@ -289,7 +304,8 @@ describe("Feature 13 — Maintenance Log Management", () => {
         expect(row?.textContent).toContain("Jane Doe");
         expect(row?.textContent).toContain("V-100");
         expect(row?.textContent).toContain("12050");
-        expect(row?.textContent).toContain("9");
+        expect(row?.textContent).toContain("Brake noise");
+        expect(row?.textContent).not.toContain("Other vehicle");
         expect(row?.textContent).toContain("2026-07-02");
       });
     });
@@ -339,7 +355,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
       serviceLogServices.updateServiceLog.mockResolvedValue({ status: 200, data: next });
       serviceLogServices.getServiceLogsByVehicle.mockResolvedValueOnce({ data: [oilLog] }).mockResolvedValue({ data: [next] });
       await editAndSave(async () => {
-        await (await field("VSelect", "Service Type")).setValue(2);
+        await (await field("VCombobox", "Service Type")).setValue(2);
       });
 
       await waitFor(() => expect(serviceLogServices.updateServiceLog).toHaveBeenCalledTimes(1));
@@ -350,7 +366,7 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user edits a service log Service Type to be empty", async () => {
       serviceLogServices.getServiceLogsByVehicle.mockResolvedValue({ data: [oilLog] });
       await editAndSave(async () => {
-        await (await field("VSelect", "Service Type")).setValue(null);
+        await (await field("VCombobox", "Service Type")).setValue(null);
       });
 
       expect(serviceLogServices.updateServiceLog).not.toHaveBeenCalled();
@@ -382,17 +398,17 @@ describe("Feature 13 — Maintenance Log Management", () => {
     });
 
     it("Admin user edits a service log maintenance_need_id", async () => {
-      const next = updatedLog({ maintenanceNeedId: 4 });
+      const next = updatedLog({ maintenanceNeedId: 4, maintenanceNeed: { id: 4, title: "Worn tires" } });
       serviceLogServices.updateServiceLog.mockResolvedValue({ status: 200, data: next });
       serviceLogServices.getServiceLogsByVehicle.mockResolvedValueOnce({ data: [oilLog] }).mockResolvedValue({ data: [next] });
       await editAndSave(async () => {
-        await (await field("VTextField", "Maintenance Need")).setValue("4");
+        await (await field("VSelect", "Maintenance Need")).setValue(4);
       });
 
       await waitFor(() =>
         expect(serviceLogServices.updateServiceLog).toHaveBeenCalledWith(1, { ...editedPayload, maintenanceNeedId: 4 }),
       );
-      await waitFor(() => expect(wrapper.text()).toContain("4"));
+      await waitFor(() => expect(wrapper.text()).toContain("Worn tires"));
     });
 
     it("Admin user deletes a service log", async () => {

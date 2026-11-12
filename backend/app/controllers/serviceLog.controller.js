@@ -12,6 +12,7 @@ const withRelations = [
   { model: db.vehicle, as: "vehicle", attributes: ["id", "universityId", "areaId"] },
   { model: db.serviceType, as: "serviceType", attributes: ["id", "name"] },
   { model: db.mileageLog, as: "mileageLog", attributes: ["id", "odometerReading"] },
+  { model: db.maintenanceNeed, as: "maintenanceNeed", attributes: ["id", "title", "vehicleId"] },
 ];
 
 const asDate = (value) => {
@@ -47,6 +48,7 @@ const present = (log) => ({
   vehicle: log.vehicle ? { id: log.vehicle.id, universityId: log.vehicle.universityId } : null,
   serviceType: log.serviceType ? { id: log.serviceType.id, name: log.serviceType.name } : null,
   mileageLog: log.mileageLog ? { id: log.mileageLog.id, odometerReading: log.mileageLog.odometerReading } : null,
+  maintenanceNeed: log.maintenanceNeed ? { id: log.maintenanceNeed.id, title: log.maintenanceNeed.title } : null,
   createdAt: log.createdAt,
   updatedAt: log.updatedAt,
 });
@@ -225,6 +227,19 @@ const readBody = async (body) => {
   const existingType = await db.serviceType.findByPk(serviceType.value, { attributes: ["id", "name"] });
   if (!existingType) {
     return { status: 404, message: "Service type not found." };
+  }
+
+  if (maintenanceNeed.value !== null) {
+    const existingNeed = await db.maintenanceNeed.findByPk(maintenanceNeed.value, {
+      attributes: ["id", "vehicleId"],
+    });
+    if (!existingNeed) {
+      return { status: 404, message: "Maintenance need not found." };
+    }
+
+    if (existingNeed.vehicleId !== existingVehicle.id) {
+      return { message: "Maintenance need is for a different vehicle." };
+    }
   }
 
   return {

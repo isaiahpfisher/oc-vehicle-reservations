@@ -16,7 +16,6 @@ export default (sequelize, Sequelize) => {
       type: Sequelize.INTEGER,
       allowNull: false,
     },
-    // INTERIM: no foreign key until Feature 11 adds maintenanceNeeds.
     maintenanceNeedId: {
       type: Sequelize.INTEGER,
       allowNull: true,

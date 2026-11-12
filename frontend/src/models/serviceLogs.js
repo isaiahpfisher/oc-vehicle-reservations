@@ -13,6 +13,10 @@ const calendarDate = (value) => {
 };
 
 const requiredId = (value) => {
+  if (value && typeof value === "object") {
+    return requiredId(value.id);
+  }
+
   if (value === undefined || value === null || String(value).trim() === "") {
     return null;
   }
@@ -79,3 +83,5 @@ export const vehicleLabel = (log) => log?.vehicle?.universityId ?? "";
 export const serviceTypeName = (log) => log?.serviceType?.name ?? "";
 
 export const mileageReading = (log) => log?.mileageLog?.odometerReading ?? "";
+
+export const maintenanceNeedTitle = (log) => log?.maintenanceNeed?.title ?? "";

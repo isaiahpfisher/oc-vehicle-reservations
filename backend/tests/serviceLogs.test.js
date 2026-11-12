@@ -50,6 +50,16 @@ const seedFleet = async () => {
   return { athletics, music, athleticsVehicle, musicVehicle, oil, tires };
 };
 
+const createNeed = (vehicleId, authorId, title) =>
+  db.maintenanceNeed.create({
+    authorId,
+    vehicleId,
+    title,
+    outOfService: false,
+    priority: "None",
+    status: "Open",
+  });
+
 const bodyFor = (fleet, userId, overrides = {}) => ({
   userId,
   vehicleId: fleet.athleticsVehicle.id,
@@ -98,17 +108,20 @@ describe("Feature 13 — Maintenance Log Management", () => {
         await signIn(["maintenance"], { email: "maint@example.com", firstName: "Mo", lastName: "Maint" }),
       ];
 
+      const need = await createNeed(fleet.athleticsVehicle.id, recordedFor.body.userId, "Brake noise");
+
       for (const { headers, user } of sessions) {
         const response = await request(app)
           .post("/api/service-logs")
           .set(headers)
-          .send(bodyFor(fleet, recordedFor.body.userId, { maintenanceNeedId: 4 }));
+          .send(bodyFor(fleet, recordedFor.body.userId, { maintenanceNeedId: need.id }));
 
         expect(response.status).toBe(201);
         expect(response.body.userId).toBe(recordedFor.body.userId);
         expect(response.body.vehicleId).toBe(fleet.athleticsVehicle.id);
         expect(response.body.serviceTypeId).toBe(fleet.oil.id);
-        expect(response.body.maintenanceNeedId).toBe(4);
+        expect(response.body.maintenanceNeedId).toBe(need.id);
+        expect(response.body.maintenanceNeed).toEqual({ id: need.id, title: "Brake noise" });
         expect(response.body.servicedAt).toBe("2026-07-02");
         expect(response.body.user).toEqual({ id: recordedFor.body.userId, firstName: "Sam", lastName: "Tech" });
         expect(response.body.vehicle).toEqual({ id: fleet.athleticsVehicle.id, universityId: "V-100" });
@@ -194,15 +207,58 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Admin user edits a service log maintenance_need_id", async () => {
       const fleet = await seedFleet();
       const { headers, user } = await signIn();
-      const log = await createLog(fleet, headers, user.userId);
+      const first = await createNeed(fleet.athleticsVehicle.id, user.userId, "Brake noise");
+      const second = await createNeed(fleet.athleticsVehicle.id, user.userId, "Worn tires");
+      const log = await createLog(fleet, headers, user.userId, { maintenanceNeedId: first.id });
 
       const response = await request(app)
         .put(`/api/service-logs/${log.id}`)
         .set(headers)
-        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: 8 }));
+        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: second.id }));
 
       expect(response.status).toBe(200);
-      expect(response.body.maintenanceNeedId).toBe(8);
+      expect(response.body.maintenanceNeedId).toBe(second.id);
+      expect(response.body.maintenanceNeed).toEqual({ id: second.id, title: "Worn tires" });
+    });
+
+    it("Missing maintenance need is rejected", async () => {
+      const fleet = await seedFleet();
+      const { headers, user } = await signIn();
+
+      const response = await request(app)
+        .post("/api/service-logs")
+        .set(headers)
+        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: 999 }));
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ message: "Maintenance need not found." });
+    });
+
+    it("Maintenance need for a different vehicle is rejected", async () => {
+      const fleet = await seedFleet();
+      const { headers, user } = await signIn();
+      const need = await createNeed(fleet.musicVehicle.id, user.userId, "Other vehicle");
+
+      const response = await request(app)
+        .post("/api/service-logs")
+        .set(headers)
+        .send(bodyFor(fleet, user.userId, { maintenanceNeedId: need.id }));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Maintenance need is for a different vehicle." });
+    });
+
+    it("Maintenance need used by a service log cannot be deleted", async () => {
+      const fleet = await seedFleet();
+      const { headers, user } = await signIn();
+      const need = await createNeed(fleet.athleticsVehicle.id, user.userId, "Brake noise");
+      await createLog(fleet, headers, user.userId, { maintenanceNeedId: need.id });
+
+      const response = await request(app).delete(`/api/maintenance-needs/${need.id}`).set(headers);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Maintenance need is used by a service log and can't be deleted." });
+      expect(await db.maintenanceNeed.findByPk(need.id)).not.toBeNull();
     });
 
     it("Admin user edits a service log serviced_at", async () => {

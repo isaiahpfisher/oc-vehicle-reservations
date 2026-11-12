@@ -1,12 +1,20 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
+import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import serviceLogServices from "../services/serviceLogServices.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
 import userServices from "../services/userServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import { fullName } from "../models/users.js";
-import { mileageReading, serviceTypeName, userName, validateServiceLogForm, vehicleLabel } from "../models/serviceLogs.js";
+import {
+  maintenanceNeedTitle,
+  mileageReading,
+  serviceTypeName,
+  userName,
+  validateServiceLogForm,
+  vehicleLabel,
+} from "../models/serviceLogs.js";
 import { useAuthStore } from "../stores/auth.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
@@ -36,7 +44,7 @@ const draft = ref({
   userId: null,
   serviceTypeId: null,
   miles: "",
-  maintenanceNeedId: "",
+  maintenanceNeedId: null,
   servicedAt: "",
 });
 const formError = ref("");
@@ -44,6 +52,7 @@ const saving = ref(false);
 const users = ref([]);
 const vehicles = ref([]);
 const serviceTypes = ref([]);
+const maintenanceNeeds = ref([]);
 
 const {
   data: serviceLogs,
@@ -79,6 +88,21 @@ const serviceTypeOptions = computed(() => {
   return [...byId.values()];
 });
 
+const maintenanceNeedOptions = computed(() => {
+  const byId = new Map(
+    maintenanceNeeds.value
+      .filter((need) => String(need.vehicleId) === String(vehicleId.value))
+      .map((need) => [need.id, need]),
+  );
+  for (const log of serviceLogs.value) {
+    if (log.maintenanceNeed && !byId.has(log.maintenanceNeed.id)) {
+      byId.set(log.maintenanceNeed.id, log.maintenanceNeed);
+    }
+  }
+
+  return [...byId.values()];
+});
+
 const universityId = computed(() => {
   const fromLog = serviceLogs.value.find((log) => log.vehicle)?.vehicle?.universityId;
   if (fromLog) {
@@ -96,14 +120,16 @@ const breadcrumbs = computed(() => [
 ]);
 
 const loadOptions = async () => {
-  const [vehicleResult, userResult, typeResult] = await Promise.allSettled([
+  const [vehicleResult, userResult, typeResult, needResult] = await Promise.allSettled([
     vehicleServices.getVehicles(),
     userServices.getUsers(),
     serviceTypeServices.getServiceTypes(),
+    maintenanceNeedServices.getMaintenanceNeeds(),
   ]);
 
   vehicles.value = vehicleResult.status === "fulfilled" ? vehicleResult.value.data : [];
   serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
+  maintenanceNeeds.value = needResult.status === "fulfilled" ? needResult.value.data : [];
   if (userResult.status === "fulfilled") {
     users.value = userResult.value.data.map(withLabel);
   } else if (auth.user) {
@@ -131,7 +157,7 @@ const startEdit = (log) => {
     userId: log.userId,
     serviceTypeId: log.serviceTypeId,
     miles: log.mileageLog?.odometerReading ?? "",
-    maintenanceNeedId: log.maintenanceNeedId ?? "",
+    maintenanceNeedId: log.maintenanceNeedId ?? null,
     servicedAt: log.servicedAt ?? "",
   };
   formError.value = "";
@@ -228,13 +254,14 @@ onMounted(() => {
         item-value="id"
       >
         <template #[`item.user`]="{ item }">
-          <v-select
+          <v-combobox
             v-if="editingId === item.id"
             v-model="draft.userId"
             :items="userOptions"
             item-title="label"
             item-value="id"
             label="User"
+            :return-object="false"
             density="compact"
             hide-details
             variant="outlined"
@@ -247,13 +274,14 @@ onMounted(() => {
         </template>
 
         <template #[`item.serviceType`]="{ item }">
-          <v-select
+          <v-combobox
             v-if="editingId === item.id"
             v-model="draft.serviceTypeId"
             :items="serviceTypeOptions"
             item-title="name"
             item-value="id"
             label="Service Type"
+            :return-object="false"
             density="compact"
             hide-details
             variant="outlined"
@@ -276,19 +304,19 @@ onMounted(() => {
         </template>
 
         <template #[`item.maintenanceNeed`]="{ item }">
-          <!-- INTERIM: a number until Feature 11 supplies maintenance needs. -->
-          <v-text-field
+          <v-select
             v-if="editingId === item.id"
             v-model="draft.maintenanceNeedId"
+            :items="maintenanceNeedOptions"
+            item-title="title"
+            item-value="id"
             label="Maintenance Need"
-            type="number"
-            min="1"
-            step="1"
+            clearable
             density="compact"
             hide-details
             variant="outlined"
           />
-          <span v-else>{{ item.maintenanceNeedId ?? "" }}</span>
+          <span v-else>{{ maintenanceNeedTitle(item) }}</span>
         </template>
 
         <template #[`item.servicedAt`]="{ item }">
@@ -333,6 +361,7 @@ onMounted(() => {
       v-model="formOpen"
       :users="userOptions"
       :service-types="serviceTypeOptions"
+      :maintenance-needs="maintenanceNeedOptions"
       :save="createServiceLog"
     />
   </PageShell>

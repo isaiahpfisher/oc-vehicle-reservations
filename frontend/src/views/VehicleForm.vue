@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
+import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import serviceLogServices from "../services/serviceLogServices.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
 import userServices from "../services/userServices.js";
@@ -50,6 +51,7 @@ const serviceLogOpen = ref(false);
 const serviceLogSaved = ref("");
 const serviceUsers = ref([]);
 const serviceTypes = ref([]);
+const serviceNeeds = ref([]);
 
 const visibleAreas = computed(() => {
   if (hasRole("admin")) {
@@ -96,8 +98,15 @@ const fromVehicle = (vehicle) => ({
   status: vehicle.status ?? null,
 });
 
-const ownsVehicle = (vehicle) =>
-  hasRole("admin") || areaAdminAreaIds.value.map(Number).includes(Number(vehicle.areaId));
+const managesArea = (areaId) => areaAdminAreaIds.value.map(Number).includes(Number(areaId));
+
+const ownsVehicle = (vehicle) => hasRole("admin") || hasRole("maintenance") || managesArea(vehicle.areaId);
+
+const canEditVehicle = computed(
+  () => hasRole("admin") || (hasRole("area_admin") && (isCreate.value || managesArea(loaded.value?.areaId))),
+);
+
+const readOnly = computed(() => !isCreate.value && !canEditVehicle.value);
 
 const load = async () => {
   loading.value = true;
@@ -199,7 +208,7 @@ const payload = () => ({
 
 const submit = async (event) => {
   event?.preventDefault?.();
-  if (saving.value) {
+  if (saving.value || readOnly.value) {
     return;
   }
 
@@ -273,12 +282,17 @@ const withLabel = (user) => ({ ...user, label: fullName(user) });
 
 const openServiceLog = async () => {
   serviceLogSaved.value = "";
-  const [userResult, typeResult] = await Promise.allSettled([
+  const [userResult, typeResult, needResult] = await Promise.allSettled([
     userServices.getUsers(),
     serviceTypeServices.getServiceTypes(),
+    maintenanceNeedServices.getMaintenanceNeeds(),
   ]);
 
   serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
+  serviceNeeds.value =
+    needResult.status === "fulfilled"
+      ? needResult.value.data.filter((need) => String(need.vehicleId) === String(route.params.id))
+      : [];
   if (userResult.status === "fulfilled") {
     serviceUsers.value = userResult.value.data.map(withLabel);
   } else if (auth.user) {
@@ -315,33 +329,46 @@ const createServiceLog = async (payload) => {
     </template>
 
     <v-form @submit.prevent="submit">
-      <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" />
-      <v-select v-model="form.vehicleTypeId" :items="typeItems" item-title="title" item-value="value" label="Vehicle Type" />
-      <v-text-field v-model="form.universityId" label="University Id" />
-      <v-text-field v-model="form.identifier" :label="identifierLabel" />
-      <v-text-field v-model="form.make" label="Make" />
-      <v-text-field v-model="form.model" label="Model" />
+      <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" :disabled="readOnly" />
+      <v-select
+        v-model="form.vehicleTypeId"
+        :items="typeItems"
+        item-title="title"
+        item-value="value"
+        label="Vehicle Type"
+        :disabled="readOnly"
+      />
+      <v-text-field v-model="form.universityId" label="University Id" :disabled="readOnly" />
+      <v-text-field v-model="form.identifier" :label="identifierLabel" :disabled="readOnly" />
+      <v-text-field v-model="form.make" label="Make" :disabled="readOnly" />
+      <v-text-field v-model="form.model" label="Model" :disabled="readOnly" />
       <v-text-field
         :model-value="form.year"
         label="Year"
         type="number"
         step="1"
         max="9999"
+        :disabled="readOnly"
         @update:model-value="setYear"
         @keydown="onYearKeydown"
       />
-      <v-text-field v-model="form.color" label="Color" />
-      <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" />
-      <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" />
-      <v-text-field v-model="form.licensePlate" label="License Plate" />
-      <v-text-field v-model="form.licensePlateExpirationDate" label="License Plate Expiration Date" type="date" />
-      <v-select v-model="form.status" :items="statusItems" label="Status" />
+      <v-text-field v-model="form.color" label="Color" :disabled="readOnly" />
+      <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" :disabled="readOnly" />
+      <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" :disabled="readOnly" />
+      <v-text-field v-model="form.licensePlate" label="License Plate" :disabled="readOnly" />
+      <v-text-field
+        v-model="form.licensePlateExpirationDate"
+        label="License Plate Expiration Date"
+        type="date"
+        :disabled="readOnly"
+      />
+      <v-select v-model="form.status" :items="statusItems" label="Status" :disabled="readOnly" />
 
       <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
       <v-alert v-if="serviceLogSaved" type="success" density="compact" class="mb-4">{{ serviceLogSaved }}</v-alert>
 
       <div class="d-flex ga-2 mt-2">
-        <button type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
+        <button v-if="!readOnly" type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
           {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
         </button>
         <button type="button" class="vehicle-form__cancel" :disabled="saving" @click="cancel">Cancel</button>
@@ -353,6 +380,7 @@ const createServiceLog = async (payload) => {
       v-model="serviceLogOpen"
       :users="serviceUsers"
       :service-types="serviceTypes"
+      :maintenance-needs="serviceNeeds"
       :save="createServiceLog"
     />
   </PageShell>

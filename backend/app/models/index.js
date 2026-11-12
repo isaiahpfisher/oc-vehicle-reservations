@@ -334,4 +334,16 @@ db.serviceLog.belongsTo(db.mileageLog, {
   onDelete: "RESTRICT",
 });
 
+db.maintenanceNeed.hasMany(db.serviceLog, {
+  foreignKey: { name: "maintenanceNeedId", allowNull: true },
+  as: "serviceLogs",
+  onDelete: "RESTRICT",
+});
+
+db.serviceLog.belongsTo(db.maintenanceNeed, {
+  foreignKey: { name: "maintenanceNeedId", allowNull: true },
+  as: "maintenanceNeed",
+  onDelete: "RESTRICT",
+});
+
 export default db;

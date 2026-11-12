@@ -7,6 +7,10 @@ const open = defineModel({ type: Boolean, default: false });
 const props = defineProps({
   users: { type: Array, default: () => [] },
   serviceTypes: { type: Array, default: () => [] },
+  maintenanceNeeds: { type: Array, default: () => [] },
+  /** Set when the dialog is opened for one maintenance need. */
+  presetNeedId: { type: [Number, null], default: null },
+  lockNeed: { type: Boolean, default: false },
   save: { type: Function, required: true },
 });
 
@@ -14,7 +18,7 @@ const blank = () => ({
   userId: null,
   serviceTypeId: null,
   miles: "",
-  maintenanceNeedId: "",
+  maintenanceNeedId: null,
   servicedAt: "",
 });
 
@@ -22,14 +26,17 @@ const form = ref(blank());
 const formError = ref("");
 const saving = ref(false);
 
-watch(open, (isOpen) => {
-  if (!isOpen) {
-    return;
-  }
+watch(
+  () => [open.value, props.presetNeedId],
+  ([isOpen]) => {
+    if (!isOpen) {
+      return;
+    }
 
-  form.value = blank();
-  formError.value = "";
-});
+    form.value = { ...blank(), maintenanceNeedId: props.presetNeedId ?? null };
+    formError.value = "";
+  },
+);
 
 const submit = async () => {
   if (saving.value) {
@@ -60,23 +67,33 @@ const submit = async () => {
     <v-card v-if="open" rounded="lg">
       <v-card-title>New service log</v-card-title>
       <v-card-text>
-        <v-select v-model="form.userId" :items="users" item-title="label" item-value="id" label="User" density="comfortable" />
-        <v-select
+        <v-combobox
+          v-model="form.userId"
+          :items="users"
+          item-title="label"
+          item-value="id"
+          label="User"
+          :return-object="false"
+          density="comfortable"
+        />
+        <v-combobox
           v-model="form.serviceTypeId"
           :items="serviceTypes"
           item-title="name"
           item-value="id"
           label="Service Type"
+          :return-object="false"
           density="comfortable"
         />
         <v-text-field v-model="form.miles" label="Mileage" type="number" step="1" density="comfortable" />
-        <!-- INTERIM: a number until Feature 11 supplies maintenance needs. -->
-        <v-text-field
+        <v-select
           v-model="form.maintenanceNeedId"
+          :items="maintenanceNeeds"
+          item-title="title"
+          item-value="id"
           label="Maintenance Need"
-          type="number"
-          min="1"
-          step="1"
+          :clearable="!lockNeed"
+          :disabled="lockNeed"
           density="comfortable"
         />
         <v-text-field v-model="form.servicedAt" label="Serviced At" type="date" density="comfortable" />

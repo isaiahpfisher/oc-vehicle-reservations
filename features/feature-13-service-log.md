@@ -81,8 +81,9 @@
 - Creating a service log also creates a mileage log. That mileage log's `userId` is the signed-in user (FR-002). The service log's `userId` is the user chosen on the form and must already exist.
 - `servicedAt` is `YYYY-MM-DD` and cannot be after today. The API message is `serviced_at cannot be after current date.`
 - An area admin may create, update, or delete a service log only when the vehicle is in an area they administer (`403` `{ "message": "Not authorized for the specified area." }`). Reads are not limited by area. Maintenance users are not limited by area.
-- Feature 11 is not implemented. `maintenanceNeedId` is an optional integer with no foreign key. INTERIM: Feature 11 adds the maintenance-need association and replaces this number with a real maintenance need. Until then the form accepts an optional id and does not check that one exists.
+- `maintenanceNeedId` is an optional foreign key to a maintenance need for the same vehicle. Omit it, or send `null`, when there is no maintenance need. A missing id is `404` `{ "message": "Maintenance need not found." }`. A need for a different vehicle is `400` `{ "message": "Maintenance need is for a different vehicle." }`. A maintenance need that a service log still uses cannot be deleted (`400` `{ "message": "Maintenance need is used by a service log and can't be deleted." }`). The form offers that vehicle's maintenance needs, and the table shows the need's title.
 - The create and edit forms do not include a vehicle. The page is already for one vehicle, and it sends that route `vehicleId`. The table still shows the vehicle.
+- A maintenance user can read vehicles and vehicle types, and can create, edit, and delete mileage logs for any vehicle. They cannot create, edit, or delete a vehicle. The vehicle list shows **View vehicle** instead of edit and delete, and the vehicle page disables its fields and hides **Save**. **Mileage log**, **Service log**, and **+ New Service Log** stay in the header. Maintenance needs stay on their own page, which maintenance users can already open. Each row there has **Create service log**, which records the service for that need and its vehicle and stays on the page.
 
 ## Edge Cases
 
@@ -165,8 +166,8 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 **Single Vue view** (`ServiceLogs.vue`) — no sidebar / main-panel split.
 
 - Heading: **Service Log Management**
-- Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **Cancel** and **Create** sit in the dialog footer. The vehicle is the one in the page route.
-- Display service logs in a `<v-data-table>` (10 per page). Columns are **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, **Serviced At**, and **Actions**. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
+- Primary action: **+ New Service Log** opens a `<v-dialog>` with **User**, **Service Type**, **Mileage**, **Maintenance Need**, and **Serviced At**. **User** and **Service Type** are combo boxes. **Maintenance Need** is an optional select of that vehicle's maintenance needs. **Cancel** and **Create** sit in the dialog footer. The vehicle is the one in the page route.
+- Display service logs in a `<v-data-table>` (10 per page). Columns are **User**, **Vehicle**, **Service Type**, **Mileage**, **Maintenance Need**, **Serviced At**, and **Actions**. **Maintenance Need** shows the need's title. Row icon buttons use `size="small"` and `variant="text"`, matching the users table.
 - **Edit** icon turns that row into inline fields pre-filled with the current user, service type, mileage, maintenance need, and serviced at; **Save** / **Cancel**. The vehicle stays the page's vehicle. Cancel restores the row without saving.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
 - Icon-only row actions use `size="small"` and accessible `aria-label`s (**Edit service log**, **Delete service log**).
@@ -174,7 +175,7 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 - **Loading state:** skeleton or progress indicator while service logs are fetching.
 - **Error state:** `<v-alert type="error">` for API failures.
 
-**Implementation note:** the route/view for service logs is vehicle dependant. The vehicle page puts **Mileage log**, **Service log**, and **+ New Service Log** in the page header, at the top right. **+ New Service Log** opens the same create dialog and stays on the vehicle page. Delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/serviceLogs`, modeled after existing create dialogs. Edit stays in the table row.
+**Implementation note:** the route/view for service logs is vehicle dependant. The vehicle page puts **Mileage log**, **Service log**, and **+ New Service Log** in the page header, at the top right. **+ New Service Log** opens the same create dialog and stays on the vehicle page. Each maintenance need row has **Create service log**, which opens that dialog with the need locked and creates the log for the need's vehicle. Delete dialog is a reusable component in `components/common` folder; the create dialog is a component in `components/serviceLogs`, modeled after existing create dialogs. Edit stays in the table row.
 
 ---
 
@@ -235,6 +236,13 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 - **When** I click **+ New Service Log** and submit the dialog
 - **Then** the service log is created for that vehicle
 - **And** I stay on the vehicle page
+
+#### Scenario: Admin user creates a service log from a maintenance need
+
+- **Given** I am signed in as admin, area admin, or maintenance on the maintenance needs view
+- **When** I click **Create service log** on a maintenance need and submit the dialog
+- **Then** the service log is created for that need and its vehicle
+- **And** I stay on the maintenance needs page
 
 #### Scenario: Admin user saves service log
 
@@ -440,6 +448,7 @@ Any signed in admin, area admin, or maintenance user may create, edit, delete, o
 |-------|----------|-----------|-----------|
 | US-13.1 | Admin user creates a service log | `frontend/tests/ServiceLogs.test.js` | `Admin user creates a service log` |
 | US-13.1 | Admin user creates a service log from the vehicle page | `frontend/tests/ServiceLogs.test.js` | `Admin user creates a service log from the vehicle page` |
+| US-13.1 | Admin user creates a service log from a maintenance need | `frontend/tests/MaintenanceNeeds.test.js` | `Admin user creates a service log from a maintenance need` |
 | US-13.1 | Admin user saves service log | `backend/tests/serviceLogs.test.js` | `Admin user saves service log` |
 | US-13.1 | Admin user saves service log | `frontend/tests/ServiceLogs.test.js` | `Admin user saves service log` |
 | US-13.1 | Admin user creates service log with missing field | `frontend/tests/ServiceLogs.test.js` | `Admin user creates service log with missing field` |
