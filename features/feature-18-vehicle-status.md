@@ -24,7 +24,7 @@
 ### US-18.2: Filter vehicles
 
 **As a** signed-in admin or area admin
-**I want to** be able to filter vehicles by status, make, model, color, year
+**I want to** be able to filter vehicles by status, type, make, model, color, year
 **So that** I can easily find vehicles
 
 **Priority:** P2
