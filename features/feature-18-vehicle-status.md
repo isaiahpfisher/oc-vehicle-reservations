@@ -54,7 +54,7 @@
 ### US-18.5: Track when service is due
 
 **As a** signed-in admin, area admin, or maintenance user
-**I want** each vehicle's next service for each service type worked out from its last service log of that type, its estimated current mileage (US-18.16), and the service type's mile and day frequencies
+**I want** each vehicle's next service for each service type worked out from its last service log of that type, its estimated current mileage, and the service type's mile and day frequencies
 **So that** service due dates are always up to date without anyone tracking them by hand
 
 **Priority:** P1
@@ -275,138 +275,254 @@ Most views only get slight updates. There are very few new views.
 
 ### US-18.2 — Filter vehicles by status
 
-#### Scenario:
+#### Scenario: Vehicle list can be filtered
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in as a user with access to the vehicle list and have vehicles
+- **When**: I search or filter vehicles
+- **Then**: the list updates accordingly
 
 ---
 
 ### US-18.3 — See why a vehicle has its status
 
-#### Scenario:
+#### Scenario: Vehicle page has explanation of status
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to a vehicle page
+- **When**: I open the vehicle page
+- **Then**: then I see its estimated current mileage (and how it's being calculated), its current out-of-service maintenance needs, and when each service type is due next
 
 ---
 
 ### US-18.4 — Vehicles go out of service from maintenance needs
 
-#### Scenario:
+#### Scenario: Maintenance needs take vehicle out of service
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to maintenance needs and vehicles
+- **When**: I make a maintenance need with out of service set to true and an unresolved status
+- **Then**: the vehicle is taken out of service and is marked as such when viewing the vehicle or assigning it to a request
 
 ---
 
 ### US-18.5 — Track when service is due
 
-#### Scenario:
+#### Scenario: Vehicles show when service is next due
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am a signed-in admin, area admin, or maintenance user
+- **When**: I look at a vehicle
+- **Then**: it shows when each kind of service is next due
 
 ---
 
 ### US-18.6 — Only assign available vehicles
 
-#### Scenario:
+#### Scenario: Unavailable vehicles cannot be assigned
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in as an admin, area admin
+- **When**: I am assigning a vehicle to a request
+- **Then**: I see a warning when I try use assign that vehicle to a request
 
 ---
 
 ### US-18.7 — Warn when service will be due during a trip
 
-#### Scenario:
+#### Scenario: Vehicles that will have service due during a request show a warning
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to a vehicle request
+- **When**: I try to assign a vehicle to a request that will make it need service during the trip
+- **Then**: I see a warning
 
 ---
 
 ### US-18.8 — Warn when a license plate expires before a trip ends
 
-#### Scenario:
+#### Scenario: License plate expiring before end of trip gives warning
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to a vehicle request
+- **When**: I assign a vehicle whose license plate will expire
+- **Then**: I see a warning
 
 ---
 
 ### US-18.9 — See problems with vehicles already assigned to a request
 
-#### Scenario:
+#### Scenario: Vehicles that have new problems arise after a request has been created handled get surfaced
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to a vehicle request
+- **When**: I open a vehicle request
+- **Then**: I see any vehicles that have problems with vehicle service, availability, driver license expiration, plate expiration, etc.
 
 ---
 
 ### US-18.10 — Find requests whose vehicles have problems
 
-#### Scenario:
+#### Scenario: Vehicle Request list shows requests with problematic vehicles
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to a vehicle request
+- **When**: I open the vehicle page
+- **Then**: I see and can filter to requests with problems
 
 ---
 
 ### US-18.11 — Warn when taking a booked vehicle out of service
 
-#### Scenario:
+#### Scenario: When a maintenance person (or area admin) takes a vehicle out of service, they're warned about affected requests
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to maintenance needs
+- **When**: I take a vehicle out of service
+- **Then**: I am warned about any affected trips
 
 ---
 
 ### US-18.12 — Warn before retiring a booked vehicle
 
-#### Scenario:
+#### Scenario: When a user retires a vehicle, they're warned about affected requests
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in with access to vehicles
+- **When**: I retire a vehicle
+- **Then**: I am warned about any affected trips
 
 ---
 
 ### US-18.13 — Maintenance users see vehicles needing attention
 
-#### Scenario:
+#### Scenario: Vehicle list can be filtered to vehicles that need attention
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in as a user with access to vehicles
+- **When**: I filter to needs service/maintenance
+- **Then**: I see a list of vehicles that need attention
 
 ---
 
 ### US-18.14 — Estimate current mileage from trips
 
-#### Scenario:
+#### Scenario: Vehicle Current Mileage calculated from trip estimates
 
-- **Given**
-- **When**
-- **Then**
+- **Given**: I am signed in as a user with access to vehicles
+- **When**: I look at a vehicle
+- **Then**: I see an estimate of its current mileage based on the most recent mileage entry and the estimate from trips since then
 
 ---
 
 ## Test Coverage Map
 
-| Story | Scenario | Test file | Test name |
-| ----- | -------- | --------- | --------- |
+| Story    | Scenario                                                                                                         | Test file                              | Test name                                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| US-18.1  | Vehicle list displays in-depth status of each vehicle                                                            | `backend/tests/vehicleStatus.test.js`  | `Vehicle list displays in-depth status of each vehicle`                                                            |
+| US-18.1  | Vehicle list displays in-depth status of each vehicle                                                            | `frontend/tests/VehicleStatus.test.js` | `Vehicle list displays in-depth status of each vehicle`                                                            |
+| US-18.1  | Vehicle with an open out-of-service maintenance need shows Out of Service                                        | `frontend/tests/VehicleStatus.test.js` | `Vehicle with an open out-of-service maintenance need shows Out of Service`                                        |
+| US-18.1  | Vehicle with nothing due shows Available                                                                         | `backend/tests/vehicleStatus.test.js`  | `Vehicle with nothing due shows Available`                                                                         |
+| US-18.1  | Retired vehicle shows Retired even with an out-of-service maintenance need                                       | `backend/tests/vehicleStatus.test.js`  | `Retired vehicle shows Retired even with an out-of-service maintenance need`                                       |
+| US-18.1  | Out of Service outranks Service Overdue                                                                          | `backend/tests/vehicleStatus.test.js`  | `Out of Service outranks Service Overdue`                                                                          |
+| US-18.1  | Service Overdue outranks Plate Expired                                                                           | `backend/tests/vehicleStatus.test.js`  | `Service Overdue outranks Plate Expired`                                                                           |
+| US-18.1  | Plate Expired outranks Service Due Soon                                                                          | `backend/tests/vehicleStatus.test.js`  | `Plate Expired outranks Service Due Soon`                                                                          |
+| US-18.1  | Plate that expired yesterday shows Plate Expired                                                                 | `backend/tests/vehicleStatus.test.js`  | `Plate that expired yesterday shows Plate Expired`                                                                 |
+| US-18.1  | Service within 500 miles shows Service Due Soon                                                                  | `backend/tests/vehicleStatus.test.js`  | `Service within 500 miles shows Service Due Soon`                                                                  |
+| US-18.1  | Service within 14 days shows Service Due Soon                                                                    | `backend/tests/vehicleStatus.test.js`  | `Service within 14 days shows Service Due Soon`                                                                    |
+| US-18.1  | Service more than 500 miles and 14 days away shows Available                                                     | `backend/tests/vehicleStatus.test.js`  | `Service more than 500 miles and 14 days away shows Available`                                                     |
+| US-18.1  | Area admin only sees statuses for their own areas' vehicles                                                      | `backend/tests/vehicleStatus.test.js`  | `Area admin only sees statuses for their own areas' vehicles`                                                      |
+| US-18.1  | User without admin, area admin, or maintenance role cannot see vehicle status                                    | `backend/tests/vehicleStatus.test.js`  | `User without admin, area admin, or maintenance role cannot see vehicle status`                                    |
+| US-18.1  | Unauthenticated request for vehicle status is rejected                                                           | `backend/tests/vehicleStatus.test.js`  | `Unauthenticated request for vehicle status is rejected`                                                           |
+| US-18.2  | Vehicle list can be filtered                                                                                     | `frontend/tests/VehicleStatus.test.js` | `Vehicle list can be filtered`                                                                                     |
+| US-18.2  | Filtering by status shows only vehicles with that status                                                         | `frontend/tests/VehicleStatus.test.js` | `Filtering by status shows only vehicles with that status`                                                         |
+| US-18.2  | Filtering by make, model, color, and year narrows the list                                                       | `frontend/tests/VehicleStatus.test.js` | `Filtering by make, model, color, and year narrows the list`                                                       |
+| US-18.2  | Combined filters show only vehicles matching all of them                                                         | `frontend/tests/VehicleStatus.test.js` | `Combined filters show only vehicles matching all of them`                                                         |
+| US-18.2  | Clearing filters shows every vehicle again                                                                       | `frontend/tests/VehicleStatus.test.js` | `Clearing filters shows every vehicle again`                                                                       |
+| US-18.2  | Filters that match no vehicles show the empty state                                                              | `frontend/tests/VehicleStatus.test.js` | `Filters that match no vehicles show the empty state`                                                              |
+| US-18.3  | Vehicle page has explanation of status                                                                           | `frontend/tests/VehicleStatus.test.js` | `Vehicle page has explanation of status`                                                                           |
+| US-18.3  | Vehicle page lists the reasons for the vehicle's status                                                          | `frontend/tests/VehicleStatus.test.js` | `Vehicle page lists the reasons for the vehicle's status`                                                          |
+| US-18.3  | Vehicle page lists open out-of-service maintenance needs only                                                    | `backend/tests/vehicleStatus.test.js`  | `Vehicle page lists open out-of-service maintenance needs only`                                                    |
+| US-18.3  | Vehicle page lists upcoming trips only                                                                           | `backend/tests/vehicleStatus.test.js`  | `Vehicle page lists upcoming trips only`                                                                           |
+| US-18.3  | Vehicle page shows upcoming trips                                                                                | `frontend/tests/VehicleStatus.test.js` | `Vehicle page shows upcoming trips`                                                                                |
+| US-18.3  | Vehicle page shows recent mileage and service logs with links to the full pages                                  | `frontend/tests/VehicleStatus.test.js` | `Vehicle page shows recent mileage and service logs with links to the full pages`                                  |
+| US-18.3  | Maintenance user sees the vehicle page read-only but can add mileage and service logs                            | `frontend/tests/VehicleStatus.test.js` | `Maintenance user sees the vehicle page read-only but can add mileage and service logs`                            |
+| US-18.3  | Maintenance user cannot create, edit, or delete vehicles                                                         | `backend/tests/vehicleStatus.test.js`  | `Maintenance user cannot create, edit, or delete vehicles`                                                         |
+| US-18.3  | Vehicle page shows an error when status fails to load                                                            | `frontend/tests/VehicleStatus.test.js` | `Vehicle page shows an error when status fails to load`                                                            |
+| US-18.4  | Maintenance needs take vehicle out of service                                                                    | `backend/tests/vehicleStatus.test.js`  | `Maintenance needs take vehicle out of service`                                                                    |
+| US-18.4  | Maintenance needs take vehicle out of service                                                                    | `frontend/tests/VehicleStatus.test.js` | `Maintenance needs take vehicle out of service`                                                                    |
+| US-18.4  | In-progress out-of-service maintenance need keeps the vehicle out of service                                     | `backend/tests/vehicleStatus.test.js`  | `In-progress out-of-service maintenance need keeps the vehicle out of service`                                     |
+| US-18.4  | Completing a vehicle's only out-of-service maintenance need makes it available again                             | `backend/tests/vehicleStatus.test.js`  | `Completing a vehicle's only out-of-service maintenance need makes it available again`                             |
+| US-18.4  | Canceling a vehicle's only out-of-service maintenance need makes it available again                              | `backend/tests/vehicleStatus.test.js`  | `Canceling a vehicle's only out-of-service maintenance need makes it available again`                              |
+| US-18.4  | Vehicle stays out of service while another out-of-service need is open                                           | `backend/tests/vehicleStatus.test.js`  | `Vehicle stays out of service while another out-of-service need is open`                                           |
+| US-18.4  | Open maintenance need not marked out of service leaves the vehicle available                                     | `backend/tests/vehicleStatus.test.js`  | `Open maintenance need not marked out of service leaves the vehicle available`                                     |
+| US-18.4  | Issue reports do not change a vehicle's status                                                                   | `backend/tests/vehicleStatus.test.js`  | `Issue reports do not change a vehicle's status`                                                                   |
+| US-18.5  | Vehicles show when service is next due                                                                           | `backend/tests/vehicleStatus.test.js`  | `Vehicles show when service is next due`                                                                           |
+| US-18.5  | Vehicles show when service is next due                                                                           | `frontend/tests/VehicleStatus.test.js` | `Vehicles show when service is next due`                                                                           |
+| US-18.5  | Logging a service resets when that service type is next due                                                      | `backend/tests/vehicleStatus.test.js`  | `Logging a service resets when that service type is next due`                                                      |
+| US-18.5  | Next due uses the most recent service log of that type                                                           | `backend/tests/vehicleStatus.test.js`  | `Next due uses the most recent service log of that type`                                                           |
+| US-18.5  | Service logs of another type do not change a service type's due date                                             | `backend/tests/vehicleStatus.test.js`  | `Service logs of another type do not change a service type's due date`                                             |
+| US-18.5  | Never-serviced vehicle counts from its purchase date and initial mileage                                         | `backend/tests/vehicleStatus.test.js`  | `Never-serviced vehicle counts from its purchase date and initial mileage`                                         |
+| US-18.5  | Service is due at whichever of the mile or day frequency comes first                                             | `backend/tests/vehicleStatus.test.js`  | `Service is due at whichever of the mile or day frequency comes first`                                             |
+| US-18.5  | Service type with only a day frequency is due by date only                                                       | `backend/tests/vehicleStatus.test.js`  | `Service type with only a day frequency is due by date only`                                                       |
+| US-18.5  | Service type with only a mile frequency is due by miles only                                                     | `backend/tests/vehicleStatus.test.js`  | `Service type with only a mile frequency is due by miles only`                                                     |
+| US-18.5  | Service type with no frequencies is never due                                                                    | `backend/tests/vehicleStatus.test.js`  | `Service type with no frequencies is never due`                                                                    |
+| US-18.5  | Vehicle page marks each service type overdue, due soon, or never serviced                                        | `frontend/tests/VehicleStatus.test.js` | `Vehicle page marks each service type overdue, due soon, or never serviced`                                        |
+| US-18.6  | Unavailable vehicles cannot be assigned                                                                          | `backend/tests/vehicleStatus.test.js`  | `Unavailable vehicles cannot be assigned`                                                                          |
+| US-18.6  | Unavailable vehicles cannot be assigned                                                                          | `frontend/tests/VehicleStatus.test.js` | `Unavailable vehicles cannot be assigned`                                                                          |
+| US-18.6  | Assigning an out-of-service vehicle returns 400                                                                  | `backend/tests/vehicleStatus.test.js`  | `Assigning an out-of-service vehicle returns 400`                                                                  |
+| US-18.6  | Assigning a retired vehicle returns 400                                                                          | `backend/tests/vehicleStatus.test.js`  | `Assigning a retired vehicle returns 400`                                                                          |
+| US-18.6  | Assigning a vehicle booked for an overlapping trip returns 400                                                   | `backend/tests/vehicleStatus.test.js`  | `Assigning a vehicle booked for an overlapping trip returns 400`                                                   |
+| US-18.6  | Vehicle on a cancelled or denied overlapping request can be assigned                                             | `backend/tests/vehicleStatus.test.js`  | `Vehicle on a cancelled or denied overlapping request can be assigned`                                             |
+| US-18.6  | Vehicle booked for a non-overlapping trip can be assigned                                                        | `backend/tests/vehicleStatus.test.js`  | `Vehicle booked for a non-overlapping trip can be assigned`                                                        |
+| US-18.6  | Vehicles shown as booked in the assign dialog are the ones assignment rejects                                    | `backend/tests/vehicleStatus.test.js`  | `Vehicles shown as booked in the assign dialog are the ones assignment rejects`                                    |
+| US-18.6  | Vehicle already on the request is not rejected after it becomes unavailable                                      | `backend/tests/vehicleStatus.test.js`  | `Vehicle already on the request is not rejected after it becomes unavailable`                                      |
+| US-18.6  | Out-of-service, retired, and booked vehicles are shown disabled with the reason                                  | `frontend/tests/VehicleStatus.test.js` | `Out-of-service, retired, and booked vehicles are shown disabled with the reason`                                  |
+| US-18.6  | Already-assigned vehicle that became unavailable shows a warning in the assign dialog                            | `frontend/tests/VehicleStatus.test.js` | `Already-assigned vehicle that became unavailable shows a warning in the assign dialog`                            |
+| US-18.6  | Assign dialog shows the error when assignment is rejected                                                        | `frontend/tests/VehicleStatus.test.js` | `Assign dialog shows the error when assignment is rejected`                                                        |
+| US-18.7  | Vehicles that will have service due during a request show a warning                                              | `backend/tests/vehicleStatus.test.js`  | `Vehicles that will have service due during a request show a warning`                                              |
+| US-18.7  | Vehicles that will have service due during a request show a warning                                              | `frontend/tests/VehicleStatus.test.js` | `Vehicles that will have service due during a request show a warning`                                              |
+| US-18.7  | Service coming due by date before the trip ends is flagged                                                       | `backend/tests/vehicleStatus.test.js`  | `Service coming due by date before the trip ends is flagged`                                                       |
+| US-18.7  | Service coming due by miles during the trip is flagged                                                           | `backend/tests/vehicleStatus.test.js`  | `Service coming due by miles during the trip is flagged`                                                           |
+| US-18.7  | Service due after the trip is not flagged                                                                        | `backend/tests/vehicleStatus.test.js`  | `Service due after the trip is not flagged`                                                                        |
+| US-18.7  | Trip with unknown mileage is only checked by date                                                                | `backend/tests/vehicleStatus.test.js`  | `Trip with unknown mileage is only checked by date`                                                                |
+| US-18.7  | Vehicle with service due during the trip can still be assigned                                                   | `backend/tests/vehicleStatus.test.js`  | `Vehicle with service due during the trip can still be assigned`                                                   |
+| US-18.7  | Assign dialog subtitle shows the service due date and miles                                                      | `frontend/tests/VehicleStatus.test.js` | `Assign dialog subtitle shows the service due date and miles`                                                      |
+| US-18.7  | Service filter includes vehicles due between the trip's start and end dates                                      | `frontend/tests/VehicleStatus.test.js` | `Service filter includes vehicles due between the trip's start and end dates`                                      |
+| US-18.8  | License plate expiring before end of trip gives warning                                                          | `backend/tests/vehicleStatus.test.js`  | `License plate expiring before end of trip gives warning`                                                          |
+| US-18.8  | License plate expiring before end of trip gives warning                                                          | `frontend/tests/VehicleStatus.test.js` | `License plate expiring before end of trip gives warning`                                                          |
+| US-18.8  | Plate expiring the day before the trip ends is flagged                                                           | `backend/tests/vehicleStatus.test.js`  | `Plate expiring the day before the trip ends is flagged`                                                           |
+| US-18.8  | Already-expired plate is flagged                                                                                 | `backend/tests/vehicleStatus.test.js`  | `Already-expired plate is flagged`                                                                                 |
+| US-18.8  | Plate expiring after the trip ends is not flagged                                                                | `backend/tests/vehicleStatus.test.js`  | `Plate expiring after the trip ends is not flagged`                                                                |
+| US-18.8  | Vehicle with an expiring plate can still be assigned                                                             | `backend/tests/vehicleStatus.test.js`  | `Vehicle with an expiring plate can still be assigned`                                                             |
+| US-18.9  | Vehicles that have new problems arise after a request has been created handled get surfaced                      | `backend/tests/vehicleStatus.test.js`  | `Vehicles that have new problems arise after a request has been created handled get surfaced`                      |
+| US-18.9  | Vehicles that have new problems arise after a request has been created handled get surfaced                      | `frontend/tests/VehicleStatus.test.js` | `Vehicles that have new problems arise after a request has been created handled get surfaced`                      |
+| US-18.9  | Marking an assigned vehicle out of service flags it on the request                                               | `backend/tests/vehicleStatus.test.js`  | `Marking an assigned vehicle out of service flags it on the request`                                               |
+| US-18.9  | Retiring an assigned vehicle flags it on the request                                                             | `backend/tests/vehicleStatus.test.js`  | `Retiring an assigned vehicle flags it on the request`                                                             |
+| US-18.9  | Moving a request's dates onto another trip with the same vehicle flags the vehicle                               | `backend/tests/vehicleStatus.test.js`  | `Moving a request's dates onto another trip with the same vehicle flags the vehicle`                               |
+| US-18.9  | Moving a request's end date past a service due date flags the vehicle                                            | `backend/tests/vehicleStatus.test.js`  | `Moving a request's end date past a service due date flags the vehicle`                                            |
+| US-18.9  | Changing a request's destinations so the trip passes the next due mileage flags the vehicle                      | `backend/tests/vehicleStatus.test.js`  | `Changing a request's destinations so the trip passes the next due mileage flags the vehicle`                      |
+| US-18.9  | Requester viewing their own request does not get vehicle problems                                                | `backend/tests/vehicleStatus.test.js`  | `Requester viewing their own request does not get vehicle problems`                                                |
+| US-18.9  | Each problem shows as a warning on its vehicle in the request's Vehicles section                                 | `frontend/tests/VehicleStatus.test.js` | `Each problem shows as a warning on its vehicle in the request's Vehicles section`                                 |
+| US-18.9  | Past, cancelled, denied, and returned requests do not show vehicle warnings                                      | `frontend/tests/VehicleStatus.test.js` | `Past, cancelled, denied, and returned requests do not show vehicle warnings`                                      |
+| US-18.10 | Vehicle Request list shows requests with problematic vehicles                                                    | `backend/tests/vehicleStatus.test.js`  | `Vehicle Request list shows requests with problematic vehicles`                                                    |
+| US-18.10 | Vehicle Request list shows requests with problematic vehicles                                                    | `frontend/tests/VehicleStatus.test.js` | `Vehicle Request list shows requests with problematic vehicles`                                                    |
+| US-18.10 | Filtering to requests with vehicle problems shows only flagged requests                                          | `frontend/tests/VehicleStatus.test.js` | `Filtering to requests with vehicle problems shows only flagged requests`                                          |
+| US-18.10 | Past, cancelled, denied, and returned requests are not flagged                                                   | `backend/tests/vehicleStatus.test.js`  | `Past, cancelled, denied, and returned requests are not flagged`                                                   |
+| US-18.10 | Area admin only sees vehicle problem flags for their own areas                                                   | `backend/tests/vehicleStatus.test.js`  | `Area admin only sees vehicle problem flags for their own areas`                                                   |
+| US-18.11 | When a maintenance person (or area admin) takes a vehicle out of service, they're warned about affected requests | `frontend/tests/VehicleStatus.test.js` | `When a maintenance person (or area admin) takes a vehicle out of service, they're warned about affected requests` |
+| US-18.11 | Maintenance user can see a vehicle's upcoming trips                                                              | `backend/tests/vehicleStatus.test.js`  | `Maintenance user can see a vehicle's upcoming trips`                                                              |
+| US-18.11 | Upcoming trips are not shown when out of service is off                                                          | `frontend/tests/VehicleStatus.test.js` | `Upcoming trips are not shown when out of service is off`                                                          |
+| US-18.11 | Upcoming trips are not shown for a completed or canceled need                                                    | `frontend/tests/VehicleStatus.test.js` | `Upcoming trips are not shown for a completed or canceled need`                                                    |
+| US-18.11 | Changing the selected vehicle updates the upcoming trips shown                                                   | `frontend/tests/VehicleStatus.test.js` | `Changing the selected vehicle updates the upcoming trips shown`                                                   |
+| US-18.11 | Vehicle with no upcoming trips shows no warning                                                                  | `frontend/tests/VehicleStatus.test.js` | `Vehicle with no upcoming trips shows no warning`                                                                  |
+| US-18.11 | Maintenance need vehicle dropdown shows each vehicle's status                                                    | `frontend/tests/VehicleStatus.test.js` | `Maintenance need vehicle dropdown shows each vehicle's status`                                                    |
+| US-18.12 | When a user retires a vehicle, they're warned about affected requests                                            | `frontend/tests/VehicleStatus.test.js` | `When a user retires a vehicle, they're warned about affected requests`                                            |
+| US-18.12 | Retiring a vehicle with no upcoming trips saves without confirmation                                             | `frontend/tests/VehicleStatus.test.js` | `Retiring a vehicle with no upcoming trips saves without confirmation`                                             |
+| US-18.12 | Canceling the retire confirmation does not save                                                                  | `frontend/tests/VehicleStatus.test.js` | `Canceling the retire confirmation does not save`                                                                  |
+| US-18.12 | Confirming the retire confirmation saves the vehicle                                                             | `frontend/tests/VehicleStatus.test.js` | `Confirming the retire confirmation saves the vehicle`                                                             |
+| US-18.12 | Retiring a vehicle assigned to upcoming trips still succeeds                                                     | `backend/tests/vehicleStatus.test.js`  | `Retiring a vehicle assigned to upcoming trips still succeeds`                                                     |
+| US-18.13 | Vehicle list can be filtered to vehicles that need attention                                                     | `frontend/tests/VehicleStatus.test.js` | `Vehicle list can be filtered to vehicles that need attention`                                                     |
+| US-18.13 | Needs Attention includes out-of-service, overdue, due-soon, and plate-expired vehicles                           | `frontend/tests/VehicleStatus.test.js` | `Needs Attention includes out-of-service, overdue, due-soon, and plate-expired vehicles`                           |
+| US-18.13 | Needs Attention excludes available and retired vehicles                                                          | `frontend/tests/VehicleStatus.test.js` | `Needs Attention excludes available and retired vehicles`                                                          |
+| US-18.13 | Maintenance user can open a vehicle's status page from the list                                                  | `frontend/tests/VehicleStatus.test.js` | `Maintenance user can open a vehicle's status page from the list`                                                  |
+| US-18.13 | Maintenance user sees no create, edit, or delete actions on the vehicle list                                     | `frontend/tests/VehicleStatus.test.js` | `Maintenance user sees no create, edit, or delete actions on the vehicle list`                                     |
+| US-18.14 | Vehicle Current Mileage calculated from trip estimates                                                           | `backend/tests/vehicleStatus.test.js`  | `Vehicle Current Mileage calculated from trip estimates`                                                           |
+| US-18.14 | Vehicle Current Mileage calculated from trip estimates                                                           | `frontend/tests/VehicleStatus.test.js` | `Vehicle Current Mileage calculated from trip estimates`                                                           |
+| US-18.14 | Latest reading is the most recent by recorded date                                                               | `backend/tests/vehicleStatus.test.js`  | `Latest reading is the most recent by recorded date`                                                               |
+| US-18.14 | Trips before the latest reading are not added                                                                    | `backend/tests/vehicleStatus.test.js`  | `Trips before the latest reading are not added`                                                                    |
+| US-18.14 | Trips with unknown miles add 0                                                                                   | `backend/tests/vehicleStatus.test.js`  | `Trips with unknown miles add 0`                                                                                   |
+| US-18.14 | Cancelled, denied, and upcoming trips are not added                                                              | `backend/tests/vehicleStatus.test.js`  | `Cancelled, denied, and upcoming trips are not added`                                                              |
+| US-18.14 | Vehicle with no mileage logs starts from its initial mileage                                                     | `backend/tests/vehicleStatus.test.js`  | `Vehicle with no mileage logs starts from its initial mileage`                                                     |
+| US-18.14 | Vehicle page explains how current mileage was estimated                                                          | `frontend/tests/VehicleStatus.test.js` | `Vehicle page explains how current mileage was estimated`                                                          |
 
 ## Definition of Done
 
