@@ -17,6 +17,7 @@ import TripDetailsFields from "../components/requests/TripDetailsFields.vue";
 import DestinationStops from "../components/requests/DestinationStops.vue";
 import DriversField from "../components/requests/DriversField.vue";
 import AssignVehiclesDialog from "../components/requests/AssignVehiclesDialog.vue";
+import NotesThread from "../components/notes/NotesThread.vue";
 import {
   OPEN_STATUSES,
   STATUS_OPTIONS,
@@ -594,6 +595,23 @@ const saveVehicles = async (vehicleIds) => {
             </div>
           </template>
           <div v-else class="text-body-medium text-medium-emphasis">No vehicles assigned yet.</div>
+          <!-- Feature 14 (US-14.6): report a problem with this trip's vehicle; the form starts with the trip filled in. -->
+          <template v-if="request.vehicles.length" #actions>
+            <v-btn
+              color="primary"
+              variant="text"
+              class="oc-cta"
+              prepend-icon="mdi-alert-circle-outline"
+              :to="{ name: 'issueReportCreate', query: { vehicleRequestId: request.id } }"
+              data-test="report-issue"
+            >
+              Report an issue
+            </v-btn>
+          </template>
+        </SectionCard>
+
+        <SectionCard title="Notes" data-test="request-notes">
+          <NotesThread parent-key="vehicleRequestId" :parent-id="request.id" />
         </SectionCard>
       </DetailLayout>
     </v-defaults-provider>

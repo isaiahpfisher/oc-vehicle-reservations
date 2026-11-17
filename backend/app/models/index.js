@@ -17,6 +17,7 @@ import issueReportModel from "./issueReport.model.js";
 import mileageLogModel from "./mileageLog.model.js";
 import serviceLogModel from "./serviceLog.model.js";
 import maintenanceNeedModel from "./maintenanceNeed.model.js";
+import noteModel from "./note.model.js";
 
 const db = {};
 db.Sequelize = Sequelize;
@@ -40,6 +41,7 @@ db.issueReport = issueReportModel(sequelize, Sequelize);
 db.mileageLog = mileageLogModel(sequelize, Sequelize);
 db.serviceLog = serviceLogModel(sequelize, Sequelize);
 db.maintenanceNeed = maintenanceNeedModel(sequelize, Sequelize);
+db.note = noteModel(sequelize, Sequelize);
 
 db.user.hasMany(db.session, {
   foreignKey: "userId",
@@ -345,5 +347,15 @@ db.serviceLog.belongsTo(db.maintenanceNeed, {
   as: "maintenanceNeed",
   onDelete: "RESTRICT",
 });
+
+// Feature 14: a note belongs to exactly one parent and goes when its parent is deleted.
+db.vehicleRequest.hasMany(db.note, { foreignKey: "vehicleRequestId", as: "notes", onDelete: "CASCADE" });
+db.note.belongsTo(db.vehicleRequest, { foreignKey: "vehicleRequestId", as: "vehicleRequest", onDelete: "CASCADE" });
+db.issueReport.hasMany(db.note, { foreignKey: "issueReportId", as: "notes", onDelete: "CASCADE" });
+db.note.belongsTo(db.issueReport, { foreignKey: "issueReportId", as: "issueReport", onDelete: "CASCADE" });
+db.maintenanceNeed.hasMany(db.note, { foreignKey: "maintenanceNeedId", as: "notes", onDelete: "CASCADE" });
+db.note.belongsTo(db.maintenanceNeed, { foreignKey: "maintenanceNeedId", as: "maintenanceNeed", onDelete: "CASCADE" });
+db.user.hasMany(db.note, { foreignKey: "authorId", as: "notes", onDelete: "RESTRICT" });
+db.note.belongsTo(db.user, { foreignKey: "authorId", as: "author", onDelete: "RESTRICT" });
 
 export default db;

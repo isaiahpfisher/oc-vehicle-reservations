@@ -1,5 +1,7 @@
 export const ISSUE_TYPES = ["low_gas", "dirty", "maintenance", "other"];
-export const ISSUE_STATUSES = ["pending", "resolved", "cancelled"];
+export const ISSUE_STATUSES = ["pending", "resolved", "cancelled", "moved_to_maintenance"];
+/** Statuses that close a report on a date. Feature 14: `moved_to_maintenance` closes it like `resolved`. */
+export const CLOSED_ON_STATUSES = ["resolved", "moved_to_maintenance"];
 
 export default (sequelize, Sequelize) => {
   const IssueReport = sequelize.define("issueReport", {

@@ -3,7 +3,8 @@
  * The project team (TEAM_ADMINS) is always seeded as admins, so signing in with Google after a seed needs no make-admin.
  * Feature 8 adds vehicle types, vehicles, service types, drivers, destinations, and vehicle requests, so every table has
  * enough rows to try searching, filtering, paging, and the calendar.
- * Feature 9, 10, and 11 add mileage logs, issue reports, and maintenance needs.
+ * Feature 9, 10, and 11 add mileage logs, issue reports, and maintenance needs; Feature 13 adds service logs (each with
+ * its own mileage log, like the API); Feature 14 adds note threads on requests, issue reports, and maintenance needs.
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...] [-- --google]
  *
  * The data is generated from a fixed random seed, so every run produces the same rows (dates move with the day you seed).
@@ -900,12 +901,16 @@ const NEED_TITLES = ["Oil change", "Brake noise", "Headlight out", "Tire wear", 
 
 const activeVehicles = () => SEED_VEHICLES.filter((vehicle) => vehicle.status === "active");
 
+/** Every other maintenance report gets a maintenance need made from it. */
+const movesToMaintenance = (type, index) => type === "maintenance" && index % 2 === 0;
+
 const generatedIssueReports = () => {
   const vehicles = activeVehicles();
   const types = ["maintenance", "maintenance", "low_gas", "dirty", "other"];
   return Array.from({ length: 32 }, (_, index) => {
     const type = types[index % types.length];
-    const status = ["pending", "resolved", "cancelled"][index % 3];
+    // Feature 14: reports that became maintenance needs (see generatedMaintenanceNeeds) are closed as moved.
+    const status = movesToMaintenance(type, index) ? "moved_to_maintenance" : ["pending", "resolved", "cancelled"][index % 3];
     const vehicle = vehicles[index % vehicles.length].universityId;
     return {
       vehicle,
@@ -915,7 +920,7 @@ const generatedIssueReports = () => {
       type,
       description: ISSUE_COPY[type][index % ISSUE_COPY[type].length],
       status,
-      resolvedAt: status === "resolved" ? isoDay(-((index % 20) + 1)) : null,
+      resolvedAt: status === "resolved" || status === "moved_to_maintenance" ? isoDay(-((index % 20) + 1)) : null,
     };
   });
 };
@@ -926,7 +931,7 @@ const maintenanceStatus = (index) => ["Open", "In Progress", "Completed", "Cance
 
 const generatedMaintenanceNeeds = () => {
   const fromReports = SEED_ISSUE_REPORTS.flatMap((report, issueReportIndex) => {
-    if (report.type !== "maintenance" || issueReportIndex % 2 !== 0) return [];
+    if (!movesToMaintenance(report.type, issueReportIndex)) return [];
     const status = maintenanceStatus(issueReportIndex);
     return [
       {
@@ -985,12 +990,134 @@ const generatedMileageLogs = () => {
 export const SEED_MILEAGE_LOGS = generatedMileageLogs();
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Service logs (Feature 13)                                                                                           */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+/**
+ * Two services per vehicle: one between its first two mileage readings and one after its last, so odometers only climb.
+ * The later service closes out the vehicle's completed maintenance need, when it has one.
+ * Like the API, each service log gets its own mileage log.
+ */
+const generatedServiceLogs = () =>
+  activeVehicles()
+    .slice(0, 12)
+    .flatMap((vehicle, vehicleIndex) => {
+      const readings = SEED_MILEAGE_LOGS.filter((log) => log.vehicle === vehicle.universityId);
+      const completedNeed = SEED_MAINTENANCE_NEEDS.findIndex(
+        (need) => need.vehicle === vehicle.universityId && need.status === "Completed",
+      );
+      return [
+        { daysAgo: 75 + vehicleIndex, miles: readings[0].odometerReading + 50 },
+        { daysAgo: 15 + vehicleIndex, miles: readings[2].odometerReading + 100 },
+      ].map(({ daysAgo, miles }, step) => ({
+        vehicle: vehicle.universityId,
+        user: MAINTENANCE_EMAILS[(vehicleIndex + step) % MAINTENANCE_EMAILS.length],
+        serviceType: SEED_SERVICE_TYPES[(vehicleIndex * 2 + step) % SEED_SERVICE_TYPES.length].name,
+        miles,
+        servicedAt: isoDay(-daysAgo),
+        maintenanceNeedIndex: step === 1 && completedNeed !== -1 ? completedNeed : null,
+      }));
+    });
+
+export const SEED_SERVICE_LOGS = generatedServiceLogs();
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* Notes (Feature 14)                                                                                                  */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+/**
+ * Short threads, oldest first: `[who, content, isVisible = true]`. `who` is a role on the parent, resolved per record.
+ * Staff-only notes (`false`) are only shown to admins, area admins, and maintenance users.
+ */
+const REQUEST_THREADS = [
+  [
+    ["requester", "Can we leave 30 minutes earlier than planned?"],
+    ["areaAdmin", "That works. I'll update the reservation."],
+  ],
+  // No reply yet, so the requester can still delete it.
+  [["requester", "We may have two more people joining. Is there room?"]],
+  [
+    ["areaAdmin", "Waiting on the department budget code before I approve this.", false],
+    ["secondAdmin", "Budget code confirmed with the department.", false],
+    ["areaAdmin", "Approved. Keys are at the front desk."],
+  ],
+  [
+    ["areaAdmin", "Please return the vehicle with a full tank."],
+    ["requester", "Will do, thanks!"],
+  ],
+  [["admin", "Heads up: the main lot is closed Saturday morning. Pick up from the north lot."]],
+];
+
+const REPORT_THREADS = [
+  [
+    ["author", "Noticed this right after we got back from the trip."],
+    ["assignee", "Thanks, I'll take a look this week."],
+  ],
+  [["assignee", "Ordered the part. It should arrive Thursday.", false]],
+  [["author", "There's a photo in the shared drive if that helps."]],
+];
+
+const NEED_THREADS = [
+  [
+    ["author", "Pulling this one from the rotation until it's fixed."],
+    ["assignee", "Scheduled with the shop for Monday."],
+  ],
+  [
+    ["assignee", "Vendor quoted $240. Waiting on approval.", false],
+    ["admin", "Approved.", false],
+  ],
+  [["author", "Second time this month. Keep an eye on it."]],
+];
+
+const NOTE_ADMIN = "admin@oc.edu";
+
+/** Every note for one parent, spaced a few hours apart starting `daysAgo` days ago. */
+const thread = (parentKey, parentIndex, lines, people, daysAgo) =>
+  lines.map(([who, content, isVisible = true], position) => ({
+    parentKey,
+    parentIndex,
+    author: people[who],
+    content,
+    isVisible,
+    daysAgo,
+    hoursLater: position * 3,
+  }));
+
+const generatedNotes = () => {
+  // requester@oc.edu's own requests, so the test account has threads to read, plus the hand-written requests.
+  const requesterRequests = SEED_REQUESTS.flatMap((row, index) => (row.requester === "requester@oc.edu" ? [index] : []));
+  const requestIndexes = [...new Set([...requesterRequests.slice(0, 5), ...NAMED_REQUESTS.map((_, index) => index).slice(0, 15)])];
+
+  const requestNotes = requestIndexes.flatMap((requestIndex, i) => {
+    const { area, requester } = SEED_REQUESTS[requestIndex];
+    const [areaAdmin = NOTE_ADMIN, secondAdmin = NOTE_ADMIN] = areaAdminsOf(area);
+    const people = { requester, areaAdmin, secondAdmin, admin: NOTE_ADMIN };
+    return thread("vehicleRequestId", requestIndex, REQUEST_THREADS[i % REQUEST_THREADS.length], people, (i % 10) + 1);
+  });
+
+  const reportNotes = SEED_ISSUE_REPORTS.slice(0, 9).flatMap((report, reportIndex) => {
+    const people = { author: report.author, assignee: report.assignee ?? MAINTENANCE_EMAILS[0], admin: NOTE_ADMIN };
+    return thread("issueReportId", reportIndex, REPORT_THREADS[reportIndex % REPORT_THREADS.length], people, (reportIndex % 7) + 1);
+  });
+
+  const needNotes = SEED_MAINTENANCE_NEEDS.flatMap((need, needIndex) => {
+    const people = { author: need.author, assignee: need.assignee ?? MAINTENANCE_EMAILS[1], admin: NOTE_ADMIN };
+    return thread("maintenanceNeedId", needIndex, NEED_THREADS[needIndex % NEED_THREADS.length], people, (needIndex % 5) + 1);
+  });
+
+  return [...requestNotes, ...reportNotes, ...needNotes];
+};
+
+export const SEED_NOTES = generatedNotes();
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /* Writing it all                                                                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 /** Records that point at vehicles, requests, or users go before those rows are replaced. */
 const clearSampleTables = async (transaction) => {
   for (const model of [
+    db.note,
     db.serviceLog,
     db.maintenanceNeed,
     db.issueReport,
@@ -1031,8 +1158,9 @@ const seedSampleTables = async ({ areaIds, transaction }) => {
   await db.destination.bulkCreate(SEED_DESTINATIONS, { transaction });
 };
 
-/** Feature 8: create SEED_REQUESTS with their drivers, ordered stops, and vehicles. */
+/** Feature 8: create SEED_REQUESTS with their drivers, ordered stops, and vehicles. Returns their ids in order. */
 const seedRequests = async ({ areaIds, google, transaction }) => {
+  const requestIds = [];
   const byKey = (rows, key) => Object.fromEntries(rows.map((row) => [key(row), row]));
   const users = byKey(await db.user.findAll({ transaction }), (user) => user.email);
   const drivers = byKey(await db.driver.findAll({ transaction }), (row) => `${row.firstName} ${row.lastName}`);
@@ -1058,6 +1186,7 @@ const seedRequests = async ({ areaIds, google, transaction }) => {
       },
       { transaction },
     );
+    requestIds.push(request.id);
 
     await db.vehicleRequestDriver.bulkCreate(
       links.drivers.map((name) => ({ vehicleRequestId: request.id, driverId: drivers[name].id })),
@@ -1072,9 +1201,14 @@ const seedRequests = async ({ areaIds, google, transaction }) => {
       { transaction },
     );
   }
+
+  return requestIds;
 };
 
-/** Features 9–11: mileage logs, issue reports, and maintenance needs for the seeded fleet. */
+/**
+ * Features 9–11 and 13: mileage logs, issue reports, maintenance needs, and service logs for the seeded fleet.
+ * Returns the created report and need ids in SEED_ISSUE_REPORTS / SEED_MAINTENANCE_NEEDS order.
+ */
 const seedOperations = async ({ transaction }) => {
   const users = Object.fromEntries((await db.user.findAll({ transaction })).map((user) => [user.email, user.id]));
   const vehicles = Object.fromEntries((await db.vehicle.findAll({ transaction })).map((vehicle) => [vehicle.universityId, vehicle.id]));
@@ -1103,21 +1237,26 @@ const seedOperations = async ({ transaction }) => {
     );
   }
 
-  await db.maintenanceNeed.bulkCreate(
-    SEED_MAINTENANCE_NEEDS.map((need) => ({
-      issueReportId: need.issueReportIndex == null ? null : reports[need.issueReportIndex].id,
-      authorId: users[need.author],
-      vehicleId: vehicles[need.vehicle],
-      assigneeId: need.assignee ? users[need.assignee] : null,
-      title: need.title,
-      description: need.description,
-      outOfService: need.outOfService,
-      priority: need.priority,
-      status: need.status,
-      resolvedAt: need.resolvedAt,
-    })),
-    { transaction },
-  );
+  const needs = [];
+  for (const need of SEED_MAINTENANCE_NEEDS) {
+    needs.push(
+      await db.maintenanceNeed.create(
+        {
+          issueReportId: need.issueReportIndex == null ? null : reports[need.issueReportIndex].id,
+          authorId: users[need.author],
+          vehicleId: vehicles[need.vehicle],
+          assigneeId: need.assignee ? users[need.assignee] : null,
+          title: need.title,
+          description: need.description,
+          outOfService: need.outOfService,
+          priority: need.priority,
+          status: need.status,
+          resolvedAt: need.resolvedAt,
+        },
+        { transaction },
+      ),
+    );
+  }
 
   await db.mileageLog.bulkCreate(
     SEED_MILEAGE_LOGS.map((log) => ({
@@ -1128,6 +1267,49 @@ const seedOperations = async ({ transaction }) => {
     })),
     { transaction },
   );
+
+  const serviceTypes = Object.fromEntries((await db.serviceType.findAll({ transaction })).map((type) => [type.name, type.id]));
+  for (const log of SEED_SERVICE_LOGS) {
+    const mileageLog = await db.mileageLog.create(
+      { vehicleId: vehicles[log.vehicle], userId: users[log.user], odometerReading: log.miles, recordedAt: log.servicedAt },
+      { transaction },
+    );
+    await db.serviceLog.create(
+      {
+        userId: users[log.user],
+        vehicleId: vehicles[log.vehicle],
+        serviceTypeId: serviceTypes[log.serviceType],
+        mileageLogId: mileageLog.id,
+        maintenanceNeedId: log.maintenanceNeedIndex == null ? null : needs[log.maintenanceNeedIndex].id,
+        servicedAt: log.servicedAt,
+      },
+      { transaction },
+    );
+  }
+
+  return { reportIds: reports.map(({ id }) => id), needIds: needs.map(({ id }) => id) };
+};
+
+/** Feature 14: note threads, created oldest first so later ids are later replies. */
+const seedNotes = async ({ parentIds, transaction }) => {
+  const users = Object.fromEntries((await db.user.findAll({ transaction })).map((user) => [user.email, user.id]));
+  const HOUR_MS = 60 * 60 * 1000;
+  const now = Date.now();
+
+  for (const note of SEED_NOTES) {
+    const createdAt = new Date(now - note.daysAgo * DAY_MS + note.hoursLater * HOUR_MS);
+    await db.note.create(
+      {
+        [note.parentKey]: parentIds[note.parentKey][note.parentIndex],
+        authorId: users[note.author],
+        content: note.content,
+        isVisible: note.isVisible,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      { transaction },
+    );
+  }
 };
 
 /**
@@ -1175,8 +1357,12 @@ export const seed = async ({ keep = [], google = false } = {}) => {
     }
 
     await seedSampleTables({ areaIds, transaction });
-    await seedRequests({ areaIds, google, transaction });
-    await seedOperations({ transaction });
+    const requestIds = await seedRequests({ areaIds, google, transaction });
+    const { reportIds, needIds } = await seedOperations({ transaction });
+    await seedNotes({
+      parentIds: { vehicleRequestId: requestIds, issueReportId: reportIds, maintenanceNeedId: needIds },
+      transaction,
+    });
 
     return keptUsers.map((user) => user.email);
   });
@@ -1190,6 +1376,7 @@ export const seed = async ({ keep = [], google = false } = {}) => {
       `${SEED_SERVICE_TYPES.length} service types, ${SEED_DRIVERS.length} drivers, ${SEED_DESTINATIONS.length} destinations.`,
       `Added ${SEED_REQUESTS.length} vehicle requests.`,
       `Added ${SEED_ISSUE_REPORTS.length} issue reports, ${SEED_MAINTENANCE_NEEDS.length} maintenance needs, and ${SEED_MILEAGE_LOGS.length} mileage logs.`,
+      `Added ${SEED_SERVICE_LOGS.length} service logs and ${SEED_NOTES.length} notes.`,
       kept.length ? `Kept: ${kept.join(", ")}.` : "",
       missing.length ? `Not found (nothing kept): ${missing.join(", ")}.` : "",
     ]

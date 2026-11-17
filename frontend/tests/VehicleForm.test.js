@@ -145,17 +145,6 @@ const field = async (name, label) =>
 const textField = (label) => field("VTextField", label);
 const selectField = (label) => field("VSelect", label);
 
-const identifierField = async () => {
-  const match = await waitFor(() => {
-    const found = wrapper
-      .findAllComponents({ name: "VTextField" })
-      .find((component) => ["VIN", "Serial"].includes(component.props("label")));
-    expect(found).toBeDefined();
-    return found;
-  });
-  return match;
-};
-
 const defaults = {
   areaId: 1,
   vehicleTypeId: 1,
@@ -172,21 +161,39 @@ const defaults = {
   status: "active",
 };
 
+/**
+ * Every field of one kind, by label. `findAllComponents` wraps each match (and the wrapper listens for every DOM
+ * event), so `fill` looks each kind up once instead of once per field.
+ */
+const fieldsByLabel = (name) => new Map(wrapper.findAllComponents({ name }).map((component) => [component.props("label"), component]));
+
 const fill = async (overrides = {}) => {
   const values = { ...defaults, ...overrides };
-  await (await selectField("Area")).setValue(values.areaId);
-  await (await selectField("Vehicle Type")).setValue(values.vehicleTypeId);
-  await (await textField("University Id")).setValue(values.universityId);
-  await (await identifierField()).setValue(values.identifier);
-  await (await textField("Make")).setValue(values.make);
-  await (await textField("Model")).setValue(values.model);
-  await (await textField("Year")).setValue(values.year);
-  await (await textField("Color")).setValue(values.color);
-  await (await textField("Passenger Capacity")).setValue(values.passengerCapacity);
-  await (await textField("Purchase Date")).setValue(values.purchasedAt);
-  await (await textField("License Plate")).setValue(values.licensePlate);
-  await (await textField("License Plate Expiration Date")).setValue(values.licensePlateExpirationDate);
-  await (await selectField("Status")).setValue(values.status);
+  const selects = await waitFor(() => {
+    const found = fieldsByLabel("VSelect");
+    expect(found.has("Vehicle Type")).toBe(true);
+    return found;
+  });
+  await selects.get("Area").setValue(values.areaId);
+  await selects.get("Vehicle Type").setValue(values.vehicleTypeId);
+
+  // The identifier is labelled VIN or Serial once a vehicle type is chosen, so text fields are found after that.
+  const texts = await waitFor(() => {
+    const found = fieldsByLabel("VTextField");
+    expect(found.has("VIN") || found.has("Serial")).toBe(true);
+    return found;
+  });
+  await texts.get("University Id").setValue(values.universityId);
+  await (texts.get("VIN") ?? texts.get("Serial")).setValue(values.identifier);
+  await texts.get("Make").setValue(values.make);
+  await texts.get("Model").setValue(values.model);
+  await texts.get("Year").setValue(values.year);
+  await texts.get("Color").setValue(values.color);
+  await texts.get("Passenger Capacity").setValue(values.passengerCapacity);
+  await texts.get("Purchase Date").setValue(values.purchasedAt);
+  await texts.get("License Plate").setValue(values.licensePlate);
+  await texts.get("License Plate Expiration Date").setValue(values.licensePlateExpirationDate);
+  await selects.get("Status").setValue(values.status);
   await settle();
 };
 
