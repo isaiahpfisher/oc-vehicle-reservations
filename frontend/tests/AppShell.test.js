@@ -72,6 +72,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     expect(content.textContent).toContain("OC");
     // Pages come from route `meta.nav` (Features 3–8, 10–12), grouped into sections by `meta.navGroup`.
     // Feature 11 adds Maintenance Needs in Fleet, after Service Types.
+    // Feature 15 adds Vehicle Type Instructions in Fleet, after Vehicle Types.
     const mainNav = content.querySelector('[aria-label="Main navigation"]');
     expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
       "Requests",
@@ -79,6 +80,7 @@ describe("App shell (ui-style-system.mdc)", () => {
       "Destinations",
       "Vehicles",
       "Vehicle Types",
+      "Vehicle Type Instructions",
       "Issue Reports",
       "Service Types",
       "Maintenance Needs",

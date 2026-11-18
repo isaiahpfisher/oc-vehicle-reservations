@@ -16,6 +16,7 @@ import vehicleRequestVehicleModel from "./vehicleRequestVehicle.model.js";
 import issueReportModel from "./issueReport.model.js";
 import mileageLogModel from "./mileageLog.model.js";
 import maintenanceNeedModel from "./maintenanceNeed.model.js";
+import vehicleTypeInstructionModel from "./vehicleTypeInstruction.model.js";
 
 const db = {};
 db.Sequelize = Sequelize;
@@ -38,6 +39,7 @@ db.vehicleRequestVehicle = vehicleRequestVehicleModel(sequelize, Sequelize);
 db.issueReport = issueReportModel(sequelize, Sequelize);
 db.mileageLog = mileageLogModel(sequelize, Sequelize);
 db.maintenanceNeed = maintenanceNeedModel(sequelize, Sequelize);
+db.vehicleTypeInstruction = vehicleTypeInstructionModel(sequelize, Sequelize);
 
 db.user.hasMany(db.session, {
   foreignKey: "userId",
@@ -280,6 +282,30 @@ db.vehicle.hasMany(db.maintenanceNeed, {
 db.maintenanceNeed.belongsTo(db.vehicle, {
   foreignKey: "vehicleId",
   as: "vehicle",
+  onDelete: "RESTRICT",
+});
+
+db.vehicleType.hasMany(db.vehicleTypeInstruction, {
+  foreignKey: "vehicleTypeId",
+  as: "vehicleTypeInstructions",
+  onDelete: "RESTRICT",
+});
+
+db.vehicleTypeInstruction.belongsTo(db.vehicleType, {
+  foreignKey: "vehicleTypeId",
+  as: "vehicleType",
+  onDelete: "RESTRICT",
+});
+
+db.area.hasMany(db.vehicleTypeInstruction, {
+  foreignKey: "areaId",
+  as: "vehicleTypeInstructions",
+  onDelete: "RESTRICT",
+});
+
+db.vehicleTypeInstruction.belongsTo(db.area, {
+  foreignKey: "areaId",
+  as: "area",
   onDelete: "RESTRICT",
 });
 

@@ -996,6 +996,7 @@ const clearSampleTables = async (transaction) => {
     db.mileageLog,
     db.vehicleRequest,
     db.vehicle,
+    db.vehicleTypeInstruction,
     db.vehicleType,
     db.serviceType,
     db.driver,

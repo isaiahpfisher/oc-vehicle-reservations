@@ -12,6 +12,7 @@ import placeRoutes from "./place.routes.js";
 import issueReportRoutes from "./issueReport.routes.js";
 import mileageLogRoutes from "./mileageLog.routes.js";
 import maintenanceNeedRoutes from "./maintenanceNeed.routes.js";
+import vehicleTypeInstructionRoutes from "./vehicleTypeInstruction.routes.js";
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.use("/places", placeRoutes);
 router.use("/issue-reports", issueReportRoutes);
 router.use("/mileage-logs", mileageLogRoutes);
 router.use("/maintenance-needs", maintenanceNeedRoutes);
+router.use("/vehicle-type-instructions", vehicleTypeInstructionRoutes);
 
 export default router;
