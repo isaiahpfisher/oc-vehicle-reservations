@@ -238,6 +238,10 @@ Most views only get slight updates. There are very few new views.
   - Upcoming trips
 - Changing a vehicle's status to retired when it has upcoming trips should open a confirmation dialog that lists the upcoming trips
 - Add sections for mileage log and service log. They're currently just linked to from this page. The last few entries should be shown on this page, with a link to the full page. Maintenance users get access to both.
+  - Each card shows its latest 5 entries and how many there are in all ("Latest 5 of 7 readings"), with **View all** in the card footer. The two cards sit side by side at the same height.
+  - A mileage row shows the date and who logged it, and on the right the reading plus the miles since the reading before it ("+1,000 mi"; the oldest says "First reading").
+  - A service row is one visit (logs with the same day and odometer reading): the date and who did it, the reading on the right, and the services as chips in name order — two, then a "+N" chip whose tooltip lists the rest.
+  - When there are no entries, the card says why logging matters (mileage readings keep the estimate and service schedule accurate; services count as due from the purchase date until one is logged).
 - Change the overall style of this page to match the driver's form (for example)
 
 ### [Dialog: Assign Vehicles] - `AssignVehiclesDialog.vue`

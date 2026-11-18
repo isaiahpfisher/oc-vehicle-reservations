@@ -10,17 +10,16 @@ import vehicleServices from "../services/vehicleServices.js";
 import vehicleTypeServices from "../services/vehicleTypeServices.js";
 import { fullName } from "../models/users.js";
 import { formatTripDates } from "../models/requests.js";
-import { formatDay, formatMiles, nameList, vehicleName } from "../models/vehicles.js";
-import { mileageReading, serviceTypeName, userName } from "../models/serviceLogs.js";
-import { addedByName } from "../models/mileageLogs.js";
+import { vehicleName } from "../models/vehicles.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
 import FormSection from "../components/layout/FormSection.vue";
 import PageShell from "../components/layout/PageShell.vue";
-import SectionCard from "../components/layout/SectionCard.vue";
 import MileageLogFormModal from "../components/mileageLogs/MileageLogFormModal.vue";
 import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.vue";
+import RecentMileageLogs from "../components/vehicles/RecentMileageLogs.vue";
+import RecentServiceVisits from "../components/vehicles/RecentServiceVisits.vue";
 import VehicleStatusCard from "../components/vehicles/VehicleStatusCard.vue";
 import Utils from "../config/utils.js";
 
@@ -62,33 +61,19 @@ const serviceTypes = ref([]);
 const serviceNeeds = ref([]);
 const mileageLogOpen = ref(false);
 
-/** US-18.3: the vehicle page shows the last few log entries and links to the full pages. */
-const RECENT_LOGS = 5;
+/** US-18.3: the vehicle page shows the last few log entries (RecentMileageLogs / RecentServiceVisits) and links to the full pages. */
 const newestFirst = (key) => (a, b) => String(b[key]).localeCompare(String(a[key])) || b.id - a.id;
 
 const { data: mileageLogs, error: mileageLogsError, run: getMileageLogs } = useRequest(mileageLogServices.getMileageLogs, {
   initial: [],
   fallback: "Failed to load mileage logs.",
-  select: (res) => [...(res?.data ?? [])].sort(newestFirst("recordedAt")).slice(0, RECENT_LOGS),
+  select: (res) => [...(res?.data ?? [])].sort(newestFirst("recordedAt")),
 });
 
 const { data: serviceLogs, error: serviceLogsError, run: getServiceLogs } = useRequest(serviceLogServices.getServiceLogsByVehicle, {
   initial: [],
   fallback: "Failed to load service logs.",
   select: (res) => [...(res?.data ?? [])].sort(newestFirst("servicedAt")),
-});
-
-/** One row per service visit (same day and odometer), so a visit that logged 14 services is one line, not 14. */
-const serviceVisits = computed(() => {
-  const visits = new Map();
-  serviceLogs.value.forEach((log) => {
-    const key = `${log.servicedAt}|${mileageReading(log)}`;
-    const visit = visits.get(key) ?? { key, servicedAt: log.servicedAt, miles: mileageReading(log), names: [], people: new Set() };
-    visit.names.push(serviceTypeName(log));
-    if (userName(log)) visit.people.add(userName(log));
-    visits.set(key, visit);
-  });
-  return [...visits.values()].slice(0, RECENT_LOGS);
 });
 
 const confirm = useConfirm();
@@ -517,57 +502,10 @@ const createMileageLog = async (payload) => {
 
       <v-row v-if="!isCreate" density="comfortable">
         <v-col cols="12" md="6">
-          <SectionCard title="Mileage log" subtitle="Most recent odometer readings." data-test="recent-mileage-logs">
-            <template #append>
-              <v-btn variant="text" color="primary" class="oc-cta" @click="openMileageLog">+ New Mileage Log</v-btn>
-            </template>
-            <v-alert v-if="mileageLogsError" type="error" density="compact">{{ mileageLogsError }}</v-alert>
-            <v-list v-else-if="mileageLogs.length" density="compact" class="py-0 bg-transparent">
-              <v-list-item
-                v-for="log in mileageLogs"
-                :key="log.id"
-                :title="formatMiles(log.odometerReading)"
-                :subtitle="[formatDay(log.recordedAt), addedByName(log)].filter(Boolean).join(' · ')"
-                class="px-0"
-              />
-            </v-list>
-            <p v-else class="text-body-medium text-medium-emphasis mb-0">No mileage logged yet.</p>
-            <v-btn
-              variant="text"
-              color="primary"
-              class="oc-cta mt-3"
-              :to="{ name: 'vehicle-mileage-logs', params: { vehicleId: route.params.id } }"
-            >
-              View all mileage logs
-            </v-btn>
-          </SectionCard>
+          <RecentMileageLogs :logs="mileageLogs" :error="mileageLogsError" :vehicle-id="route.params.id" @add="openMileageLog" />
         </v-col>
         <v-col cols="12" md="6">
-          <SectionCard title="Service log" subtitle="Most recent services." data-test="recent-service-logs">
-            <template #append>
-              <v-btn variant="text" color="primary" class="oc-cta" @click="openServiceLog">+ New Service Log</v-btn>
-            </template>
-            <v-alert v-if="serviceLogsError" type="error" density="compact">{{ serviceLogsError }}</v-alert>
-            <v-list v-else-if="serviceVisits.length" density="compact" class="py-0 bg-transparent">
-              <v-list-item v-for="visit in serviceVisits" :key="visit.key" class="px-0">
-                <v-list-item-title>
-                  {{ formatDay(visit.servicedAt) }}<template v-if="visit.miles !== ''"> · {{ formatMiles(visit.miles) }}</template>
-                </v-list-item-title>
-                <v-list-item-subtitle class="text-wrap">
-                  {{ nameList(visit.names) }}<template v-if="visit.people.size"> · {{ [...visit.people].join(", ") }}</template>
-                </v-list-item-subtitle>
-              </v-list-item>
-            </v-list>
-            <p v-else class="text-body-medium text-medium-emphasis mb-0">No services logged yet.</p>
-            <v-btn
-              variant="text"
-              color="primary"
-              class="oc-cta mt-3"
-              :to="{ name: 'service-logs', params: { vehicleId: route.params.id } }"
-            >
-              View all service logs
-            </v-btn>
-          </SectionCard>
+          <RecentServiceVisits :logs="serviceLogs" :error="serviceLogsError" :vehicle-id="route.params.id" @add="openServiceLog" />
         </v-col>
       </v-row>
     </div>

@@ -457,6 +457,14 @@ describe("Feature 18 — Vehicle Status", () => {
         data: [
           { id: 1, servicedAt: day(-40), serviceType: { name: "Tire Rotation" }, mileageLog: { odometerReading: 9000 } },
           { id: 2, servicedAt: day(-2), serviceType: { name: "Oil Change" }, mileageLog: { odometerReading: 11900 }, user: { firstName: "Max", lastName: "Fix" } },
+          // Same visit (day and reading) as the oil change: one row, two chips in name order, then "+N".
+          ...["Wipers", "Brakes", "Lights"].map((name, i) => ({
+            id: 3 + i,
+            servicedAt: day(-2),
+            serviceType: { name },
+            mileageLog: { odometerReading: 11900 },
+            user: { firstName: "Max", lastName: "Fix" },
+          })),
         ],
       });
       await openVehicle();
@@ -466,15 +474,22 @@ describe("Feature 18 — Vehicle Status", () => {
         expect(items).toHaveLength(5);
         return items;
       });
+      // Each reading shows how far the vehicle went since the one before; the two oldest aren't listed.
       expect(mileage[0].textContent).toContain("7,000 mi");
-      expect(byTest("recent-mileage-logs").textContent).not.toContain("1,000 mi");
+      expect(mileage[0].textContent).toContain("+1,000 mi");
+      expect(mileage[4].textContent).toContain("3,000 mi");
+      expect(byTest("recent-mileage-logs").textContent).toContain("Latest 5 of 7 readings");
       expect(byTest("recent-mileage-logs").querySelector('a[href="/vehicles/1/mileage-logs"]').textContent).toContain("View all");
 
       const services = byTest("recent-service-logs").querySelectorAll(".v-list-item");
       expect(services).toHaveLength(2);
-      expect(services[0].textContent).toContain("Oil Change");
       expect(services[0].textContent).toContain("11,900 mi");
       expect(services[0].textContent).toContain("Max Fix");
+      const chips = [...services[0].querySelectorAll(".v-chip")].map((chip) => chip.textContent.trim());
+      expect(chips).toEqual(["Brakes", "Lights", "+2"]);
+      expect(services[0].querySelector('[aria-label="2 more services: Oil Change, Wipers"]')).not.toBeNull();
+      expect(services[1].textContent).toContain("Tire Rotation");
+      expect(byTest("recent-service-logs").textContent).toContain("2 visits");
       expect(byTest("recent-service-logs").querySelector('a[href="/service-logs/1"]')).not.toBeNull();
       expect(mileageLogServices.getMileageLogs).toHaveBeenCalledWith(1);
       expect(serviceLogServices.getServiceLogsByVehicle).toHaveBeenCalledWith(1);
