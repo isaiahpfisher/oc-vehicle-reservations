@@ -81,7 +81,18 @@ const vehicle = {
   licensePlate: "ABC123",
   licensePlateExpirationDate: null,
   status: "active",
+  // Feature 18: the list shows the status the API works out (FR-002).
+  condition: {
+    status: "available",
+    reasons: [],
+    mileage: { miles: 0, reading: null, tripMiles: 0, tripCount: 0, unknownTripCount: 0 },
+    services: [],
+    outOfServiceNeeds: [],
+  },
+  upcomingTrips: [],
 };
+
+const withStatus = (status, overrides = {}) => ({ ...vehicle, ...overrides, condition: { ...vehicle.condition, status } });
 
 let roles = adminRoles;
 let wrapper;
@@ -227,7 +238,8 @@ describe("Feature 5 — Vehicles", () => {
         expect(row.textContent).toContain("Toyota");
         expect(row.textContent).toContain("Sienna");
         expect(row.textContent).toContain("gray");
-        expect(row.textContent).toContain("active");
+        // Feature 18 (US-18.1): the six statuses replace `active` / `retired`.
+        expect(row.textContent).toContain("Available");
       });
     });
 
@@ -270,18 +282,19 @@ describe("Feature 5 — Vehicles", () => {
       });
     });
 
+    // Feature 18 (US-18.1): green / yellow / red become the six statuses' colors (success / warning / error).
+    const chips = (color) => document.body.querySelectorAll(`.vehicle-status-chip.text-${color}`);
+
     it("Vehicle rows with green chip", async () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({
-        data: [
-          { ...vehicle, licensePlateExpirationDate: today() },
-          { ...vehicle, id: 2, make: "Honda", licensePlateExpirationDate: "2999-01-01" },
-        ],
+        data: [withStatus("available", { licensePlateExpirationDate: today() }), withStatus("available", { id: 2, make: "Honda" })],
       });
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
-        expect(document.body.querySelectorAll(".vehicle-chip-green")).toHaveLength(2);
+        expect(chips("success")).toHaveLength(2);
+        expect(chips("success")[0].textContent).toContain("Available");
       });
     });
 
@@ -289,26 +302,28 @@ describe("Feature 5 — Vehicles", () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({
         data: [
-          vehicle,
-          { ...vehicle, id: 2, make: "Honda", licensePlateExpirationDate: "2000-01-01" },
+          withStatus("service_due_soon"),
+          withStatus("plate_expired", { id: 2, make: "Honda", licensePlateExpirationDate: "2000-01-01" }),
         ],
       });
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
-        expect(document.body.querySelectorAll(".vehicle-chip-yellow")).toHaveLength(2);
+        expect(chips("warning")).toHaveLength(2);
+        expect(document.body.textContent).toContain("Plate Expired");
       });
     });
 
     it("Vehicle rows with red chip", async () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({
-        data: [{ ...vehicle, status: "retired", licensePlateExpirationDate: "2000-01-01" }],
+        data: [withStatus("out_of_service"), withStatus("service_overdue", { id: 2, make: "Honda" })],
       });
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
-        expect(document.body.querySelector(".vehicle-chip-red")).toBeTruthy();
+        expect(chips("error")).toHaveLength(2);
+        expect(document.body.textContent).toContain("Out of Service");
       });
     });
   });

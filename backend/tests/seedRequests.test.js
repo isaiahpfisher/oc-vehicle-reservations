@@ -6,7 +6,7 @@ import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
 import { REQUEST_STATUSES } from "../app/models/vehicleRequest.model.js";
-import { SEED_AREAS, SEED_REQUESTS, seed, seedTripMiles } from "../scripts/seed.mjs";
+import { SEED_AREAS, SEED_PROBLEM_REQUESTS, SEED_REQUESTS, seed, seedTripMiles } from "../scripts/seed.mjs";
 import { requestInclude } from "../app/helpers/vehicleRequests.js";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
@@ -40,6 +40,10 @@ describe("Feature 8 — Vehicle Request Management seed data", () => {
     await seed();
     const requests = await db.vehicleRequest.findAll({ include: requestInclude() });
 
+    // Feature 18 (US-18.9): a few requests break these rules on purpose, so their vehicle and driver warnings have examples.
+    const onPurpose = (row) => SEED_PROBLEM_REQUESTS.includes(row.purpose);
+    expect(SEED_PROBLEM_REQUESTS.every((purpose) => requests.some((row) => row.purpose === purpose))).toBe(true);
+
     for (const row of requests) {
       const label = row.purpose;
       expect([label, row.endAt >= row.startAt]).toEqual([label, true]);
@@ -49,6 +53,7 @@ describe("Feature 8 — Vehicle Request Management seed data", () => {
       const lastDay = new Date(row.endAt).toISOString().slice(0, 10);
       const drivers = await db.driver.findAll({ where: { id: row.requestDrivers.map(({ driverId }) => driverId) } });
       for (const driver of drivers) {
+        if (onPurpose(row)) continue;
         expect([label, driver.status, driver.licenseExpirationDate >= lastDay]).toEqual([label, "approved", true]);
       }
 
@@ -62,7 +67,9 @@ describe("Feature 8 — Vehicle Request Management seed data", () => {
       // Approval matches status (FR-005), and vehicles match FR-006 and belong to the request's area.
       const approved = ["awaiting_vehicle", "reserved", "returned"].includes(row.status);
       expect([label, row.approverId !== null, row.approvedAt !== null]).toEqual([label, approved, approved]);
-      expect([label, row.requestVehicles.length > 0]).toEqual([label, ["reserved", "returned"].includes(row.status)]);
+      if (!onPurpose(row)) {
+        expect([label, row.requestVehicles.length > 0]).toEqual([label, ["reserved", "returned"].includes(row.status)]);
+      }
       const vehicles = await db.vehicle.findAll({ where: { id: row.requestVehicles.map(({ vehicleId }) => vehicleId) } });
       for (const vehicle of vehicles) {
         expect([label, vehicle.areaId]).toEqual([label, row.areaId]);
@@ -70,7 +77,7 @@ describe("Feature 8 — Vehicle Request Management seed data", () => {
     }
 
     // No vehicle is on two overlapping trips that still hold it.
-    const holding = requests.filter(({ status }) => !["cancelled", "denied"].includes(status));
+    const holding = requests.filter((row) => !["cancelled", "denied"].includes(row.status) && !onPurpose(row));
     for (const a of holding) {
       for (const b of holding) {
         if (a.id >= b.id || a.startAt >= tripEnd(b) || b.startAt >= tripEnd(a)) continue;

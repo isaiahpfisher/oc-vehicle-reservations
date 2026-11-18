@@ -2,8 +2,12 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
+import vehicleServices from "../services/vehicleServices.js";
+import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
 import PageShell from "../components/layout/PageShell.vue";
+import AffectedTripsNotice from "../components/vehicles/AffectedTripsNotice.vue";
+import VehicleStatusChip from "../components/vehicles/VehicleStatusChip.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -56,8 +60,34 @@ const vehicleItems = computed(() => {
       ? vehicles.value
       : vehicles.value.filter((vehicle) => areaAdminAreaIds.value.map(Number).includes(Number(vehicle.areaId)));
 
-  return rows.map((vehicle) => ({ title: vehicleLabel(vehicle), value: vehicle.id }));
+  return rows.map((vehicle) => ({ title: vehicleLabel(vehicle), value: vehicle.id, status: vehicle.condition?.status }));
 });
+
+/** Admins and the trip's area admins can open its request; maintenance users can't (Feature 8). */
+const canOpenTrip = (trip) => hasRole("admin") || areaAdminAreaIds.value.map(Number).includes(Number(trip.area?.id));
+
+const vehicleStatus = (id) => vehicles.value.find((vehicle) => vehicle.id === id)?.condition?.status;
+
+/**
+ * Feature 18, US-18.11: taking a vehicle out of service warns about the trips it's booked for,
+ * so whoever manages them can be told.
+ */
+const { data: upcomingTrips, run: getUpcomingTrips } = useRequest(vehicleServices.getVehicle, {
+  initial: [],
+  select: (res) => res?.data?.upcomingTrips ?? [],
+});
+
+const takesOutOfService = computed(
+  () => !!form.value.vehicleId && form.value.outOfService === true && ["Open", "In Progress"].includes(form.value.status),
+);
+
+watch(
+  () => form.value.vehicleId,
+  (vehicleId) => {
+    upcomingTrips.value = [];
+    if (vehicleId) getUpcomingTrips(vehicleId);
+  },
+);
 
 const assigneeItems = computed(() =>
   assignees.value.map((person) => ({ title: `${person.firstName} ${person.lastName}`, value: person.id })),
@@ -224,7 +254,18 @@ load();
       <v-select v-model="form.priority" :items="priorities" label="Priority" />
       <v-select v-model="form.status" :items="statuses" label="Status" />
       <v-text-field v-if="resolveDateVisible" v-model="form.resolvedAt" label="Resolve Date" type="date" />
-      <v-select v-model="form.vehicleId" :items="vehicleItems" item-title="title" item-value="value" label="Vehicle" />
+      <v-select v-model="form.vehicleId" :items="vehicleItems" item-title="title" item-value="value" label="Vehicle">
+        <template #item="{ props: itemProps, item }">
+          <v-list-item v-bind="itemProps" data-test="vehicle-choice">
+            <template v-if="vehicleStatus(item.value)" #append><VehicleStatusChip :status="vehicleStatus(item.value)" /></template>
+          </v-list-item>
+        </template>
+      </v-select>
+      <AffectedTripsNotice
+        v-if="takesOutOfService && upcomingTrips.length"
+        :trips="upcomingTrips"
+        :can-open-trip="canOpenTrip"
+      />
       <v-textarea v-model="form.description" label="Description" rows="4" no-resize />
 
       <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
@@ -240,6 +281,7 @@ load();
 </template>
 
 <style scoped>
+
 .v-btn.oc-cta:disabled {
   opacity: 1;
   background-color: rgba(var(--v-theme-on-surface), 0.12) !important;

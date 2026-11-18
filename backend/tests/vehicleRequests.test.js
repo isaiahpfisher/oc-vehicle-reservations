@@ -613,7 +613,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(Object.keys(forOverlapping).sort()).toEqual(["B-1", "V-1", "V-2"]);
       expect(forOverlapping["V-1"].conflictingRequestIds).toEqual([first.body.id]);
       expect(forOverlapping["V-2"].conflictingRequestIds).toEqual([]);
-      expect(forOverlapping["B-1"]).toMatchObject({ outOfService: false, milesUntilService: null });
+      // Feature 18 (US-18.6, US-18.7): options report status, problems, and the next service instead of the INTERIM stub.
+      expect(forOverlapping["B-1"]).toMatchObject({
+        status: "available",
+        problems: [],
+        nextService: { milesLeft: null, dueDate: null },
+      });
+      expect(forOverlapping["V-1"].problems.map(({ type }) => type)).toEqual(["booked"]);
       expect(forOverlapping["V-1"].vehicle.passengerCapacity).toBe(12);
 
       expect(byId(await options(later.body.id))["V-1"].conflictingRequestIds).toEqual([]);

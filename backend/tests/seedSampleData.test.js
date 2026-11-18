@@ -3,7 +3,9 @@
  * Spec: features/feature-8-vehicle-requests.md → Assumptions
  */
 import db from "../app/models/index.js";
-import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_ISSUE_REPORTS, SEED_MAINTENANCE_NEEDS, SEED_MILEAGE_LOGS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
+import request from "supertest";
+import app from "../server.js";
+import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_ISSUE_REPORTS, SEED_MAINTENANCE_NEEDS, SEED_MILEAGE_LOGS, SEED_SERVICE_LOGS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
 
 beforeEach(async () => {
@@ -79,5 +81,57 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     expect(await db.issueReport.count()).toBe(SEED_ISSUE_REPORTS.length);
     expect(await db.maintenanceNeed.count()).toBe(SEED_MAINTENANCE_NEEDS.length);
     expect(await db.mileageLog.count()).toBe(SEED_MILEAGE_LOGS.length);
+  });
+});
+
+/*
+ * Feature 18 — Vehicle Status sample data
+ * Spec: features/feature-18-vehicle-status.md
+ */
+describe("Feature 18 — Vehicle Status sample data", () => {
+  it("Seed gives every vehicle status and vehicle problem an example", async () => {
+    expect((await seed()).exitCode).toBe(0);
+    expect(await db.serviceLog.count()).toBe(SEED_SERVICE_LOGS.length);
+    expect(await db.mileageLog.count()).toBe(SEED_MILEAGE_LOGS.length);
+
+    const { body: admin } = await createUserWithRoles(["admin"], { email: "checker@eagles.oc.edu" });
+    const headers = { Authorization: `Bearer ${admin.token}` };
+
+    const { body: vehicles } = await request(app).get("/api/vehicles").set(headers);
+    const statusOf = Object.fromEntries(vehicles.map((vehicle) => [vehicle.universityId, vehicle.condition]));
+    const statuses = vehicles.map(({ condition }) => condition.status);
+    for (const status of ["retired", "out_of_service", "service_overdue", "plate_expired", "service_due_soon", "available"]) {
+      expect({ status, seeded: statuses.includes(status) }).toEqual({ status, seeded: true });
+    }
+    // Most of the fleet is usable, so the list isn't a wall of warnings.
+    expect(statuses.filter((status) => status === "available").length).toBeGreaterThan(vehicles.length / 2);
+
+    expect(statusOf["ATH-V01"].status).toBe("out_of_service");
+    expect(statusOf["ATH-M01"].status).toBe("service_due_soon");
+    expect(statusOf["MUS-B01"].status).toBe("available");
+    expect(statusOf["MUS-V01"].status).toBe("available");
+    expect(statusOf["HON-S01"]).toMatchObject({ status: "available" });
+    expect(statusOf["HON-S01"].services.every(({ lastServicedAt }) => lastServicedAt === null)).toBe(true);
+    expect(vehicles.some(({ condition }) => condition.mileage.tripCount > 0)).toBe(true);
+
+    const { body: requests } = await request(app).get("/api/requests").set(headers);
+    const problemsOn = (purpose) => {
+      const found = requests.find((row) => row.purpose === purpose);
+      return Object.values(found.vehicleProblems).flat().map(({ type }) => type);
+    };
+    expect(problemsOn("Track meet at Oklahoma State")).toContain("out_of_service");
+    expect(problemsOn("Soccer match at Southern Nazarene")).toContain("service_due");
+    expect(problemsOn("Choir tour: Abilene and Lubbock")).toEqual(["service_due"]);
+    expect(problemsOn("Cross country meet at UCO")).toContain("retired");
+    expect(problemsOn("Recruiting dinner in Norman")).toEqual(["booked"]);
+    expect(problemsOn("Coaching clinic at Oklahoma State")).toEqual(["booked"]);
+    expect(problemsOn("Honor choir clinic in Tulsa")).toEqual([]);
+    const airportRun = requests.find(({ purpose, vehicles: assigned }) =>
+      purpose === "International student airport run" && assigned.some(({ universityId }) => universityId === "STU-V01"));
+    expect(Object.values(airportRun.vehicleProblems).flat().map(({ type }) => type)).toContain("plate_expires");
+
+    const honor = requests.find(({ purpose }) => purpose === "Honor choir clinic in Tulsa");
+    const { body: honorDetail } = await request(app).get(`/api/requests/${honor.id}`).set(headers);
+    expect(Object.values(honorDetail.driverProblems).flat().map(({ type }) => type)).toEqual(["license_expires"]);
   });
 });

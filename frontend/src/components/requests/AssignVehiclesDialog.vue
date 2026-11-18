@@ -4,6 +4,8 @@ import requestServices from "../../services/requestServices.js";
 import { useRequest } from "../../composables/useRequest.js";
 import Utils from "../../config/utils.js";
 import { capacityCheck, vehicleLabel } from "../../models/requests.js";
+import { nextServiceText, problemKinds } from "../../models/vehicles.js";
+import ProblemList from "../vehicles/ProblemList.vue";
 
 const open = defineModel({ type: Boolean, default: false });
 
@@ -34,13 +36,17 @@ watch(open, (isOpen) => {
   getOptions(props.request.id);
 });
 
-const serviceDue = (option) =>
-  option.milesUntilService !== null &&
-  props.request.estimatedMiles !== null &&
-  option.milesUntilService < props.request.estimatedMiles;
+/** Feature 18: blocking problems (FR-005) can't be newly assigned; the rest are warnings (FR-006). */
+const assignedIds = computed(() => props.request.vehicles.map(({ id }) => id));
+const blocking = (option) => option.problems.filter((problem) => problem.blocking);
+const chips = (option) => problemKinds(option.problems);
+const isAssigned = (option) => assignedIds.value.includes(option.vehicle.id);
+/** Already-assigned vehicles stay selectable so they can be removed (FR-005). */
+const isDisabled = (option) => blocking(option).length > 0 && !isAssigned(option);
+const serviceDue = (option) => option.problems.some(({ type }) => type === "service_due");
 
 const isHidden = (option) =>
-  (onlyShow.value.includes("available") && (option.conflictingRequestIds.length > 0 || option.outOfService)) ||
+  (onlyShow.value.includes("available") && blocking(option).length > 0) ||
   (onlyShow.value.includes("service") && serviceDue(option));
 
 // Selected vehicles stay listed even when a filter would hide them.
@@ -54,7 +60,12 @@ const capacity = computed(() =>
   ),
 );
 
-const toggle = (id) => {
+const toggle = (option) => {
+  if (isDisabled(option)) {
+    return;
+  }
+
+  const id = option.vehicle.id;
   selected.value = selected.value.includes(id) ? selected.value.filter((value) => value !== id) : [...selected.value, id];
 };
 
@@ -113,12 +124,14 @@ const submit = async () => {
             v-for="option in shown"
             :key="option.vehicle.id"
             :active="selected.includes(option.vehicle.id)"
+            :disabled="isDisabled(option)"
             color="primary"
             data-test="vehicle-option"
-            @click="toggle(option.vehicle.id)"
+            :data-vehicle="option.vehicle.universityId"
+            @click="toggle(option)"
           >
             <template #prepend>
-              <v-checkbox-btn :model-value="selected.includes(option.vehicle.id)" readonly class="mr-2" />
+              <v-checkbox-btn :model-value="selected.includes(option.vehicle.id)" :disabled="isDisabled(option)" readonly class="mr-2" />
             </template>
             <v-list-item-title class="font-weight-medium">
               {{ vehicleLabel(option.vehicle) }}
@@ -126,17 +139,27 @@ const submit = async () => {
             </v-list-item-title>
             <v-list-item-subtitle>
               {{ option.vehicle.vehicleType?.name }} · {{ option.vehicle.passengerCapacity }} seats
-              <template v-if="option.milesUntilService !== null">
-                · service in {{ option.milesUntilService }} mi
-              </template>
+              <template v-if="nextServiceText(option.nextService)"> · {{ nextServiceText(option.nextService) }}</template>
             </v-list-item-subtitle>
+            <ProblemList
+              v-if="option.problems.length"
+              :problems="option.problems"
+              :assigned="isAssigned(option)"
+              class="option-problems text-body-small mt-1"
+              data-test="option-problems"
+            />
             <template #append>
               <div class="d-flex flex-wrap justify-end ga-1">
-                <v-chip v-if="option.conflictingRequestIds.length" size="small" color="error" variant="tonal" label>
-                  Reserved
+                <v-chip
+                  v-for="chip in chips(option)"
+                  :key="chip.type"
+                  size="small"
+                  :color="chip.blocking ? 'error' : 'warning'"
+                  variant="tonal"
+                  label
+                >
+                  {{ chip.label }}
                 </v-chip>
-                <v-chip v-if="option.outOfService" size="small" color="error" variant="tonal" label>Out of service</v-chip>
-                <v-chip v-if="serviceDue(option)" size="small" color="warning" variant="tonal" label>Service due</v-chip>
               </div>
             </template>
           </v-list-item>
@@ -174,6 +197,11 @@ const submit = async () => {
 </template>
 
 <style scoped>
+/* Disabled rows stay readable so the reason can be read (US-18.6). */
+.v-list-item--disabled .option-problems {
+  opacity: 1;
+}
+
 /* On phones the selection summary takes its own line above the buttons. */
 @media (max-width: 599px) {
   .assign-summary {

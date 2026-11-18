@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import vehicleServices from "../services/vehicleServices.js";
 import { useConfirm } from "../composables/useConfirm.js";
@@ -7,6 +7,8 @@ import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
 import ListState from "../components/common/ListState.vue";
 import PageShell from "../components/layout/PageShell.vue";
+import VehicleStatusChip from "../components/vehicles/VehicleStatusChip.vue";
+import { VEHICLE_STATUS_OPTIONS, needsAttention, statusLines } from "../models/vehicles.js";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -20,13 +22,6 @@ const {
   error,
   run: getVehicles,
 } = useRequest(vehicleServices.getVehicles, { initial: [], fallback: "Failed to fetch vehicles." });
-
-const today = () => {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-};
 
 const managesArea = (areaId) => areaAdminAreaIds.value.map(Number).includes(Number(areaId));
 
@@ -43,30 +38,60 @@ const visibleVehicles = computed(() => {
   return vehicles.value.filter((vehicle) => ids.has(Number(vehicle.areaId)));
 });
 
-const tone = (vehicle) => {
-  if (vehicle.status === "retired") {
-    return "red";
-  }
+// US-18.2: filter by status, type, make, model, color, and year; US-18.13: or just what needs attention.
+const blankFilters = () => ({ status: null, type: null, make: null, model: null, color: null, year: null });
+const filters = ref(blankFilters());
+const attentionOnly = ref(false);
+const showFilters = ref(false);
 
-  if (
-    vehicle.status === "active" &&
-    vehicle.licensePlateExpirationDate &&
-    vehicle.licensePlateExpirationDate >= today()
-  ) {
-    return "green";
-  }
+const typeName = (vehicle) => vehicle.vehicleType?.name ?? "";
 
-  return "yellow";
+const FIELDS = {
+  type: typeName,
+  make: (vehicle) => vehicle.make,
+  model: (vehicle) => vehicle.model,
+  color: (vehicle) => vehicle.color,
+  year: (vehicle) => vehicle.year,
 };
 
-const toneColor = { red: "error", green: "success" };
+const choices = (pick) =>
+  [...new Set(visibleVehicles.value.map(pick).filter((value) => value !== "" && value != null))].sort((a, b) =>
+    String(a).localeCompare(String(b), undefined, { numeric: true }),
+  );
+
+const fieldOptions = computed(() => Object.fromEntries(Object.entries(FIELDS).map(([key, pick]) => [key, choices(pick)])));
+
+/** Filters inside the "Filters" panel, for its badge. */
+const detailFilterCount = computed(() => Object.keys(FIELDS).filter((key) => filters.value[key] != null).length);
+const attentionCount = computed(() => visibleVehicles.value.filter(needsAttention).length);
+const activeFilterCount = computed(() => Object.values(filters.value).filter((value) => value != null).length + (attentionOnly.value ? 1 : 0));
+
+const filtered = computed(() =>
+  visibleVehicles.value.filter(
+    (vehicle) =>
+      (!attentionOnly.value || needsAttention(vehicle)) &&
+      (!filters.value.status || vehicle.condition?.status === filters.value.status) &&
+      Object.entries(FIELDS).every(([key, pick]) => filters.value[key] == null || pick(vehicle) === filters.value[key]),
+  ),
+);
+
+const clearFilters = () => {
+  filters.value = blankFilters();
+  attentionOnly.value = false;
+};
+
+// ui-style-system.mdc: changing filters returns to page 1.
+watch([filters, attentionOnly], () => (page.value = 1), { deep: true });
 
 const headers = [
-  { title: "Make", key: "make", sortable: false, width: "20%" },
-  { title: "Model", key: "model", sortable: false, width: "20%" },
-  { title: "Color", key: "color", sortable: false, width: "20%" },
-  { title: "Status", key: "status", sortable: false, width: "20%", align: "center" },
-  { title: "Actions", key: "actions", sortable: false, width: "20%", align: "center" },
+  { title: "Make", key: "make", sortable: false },
+  { title: "Model", key: "model", sortable: false },
+  { title: "Year", key: "year", sortable: false },
+  { title: "Color", key: "color", sortable: false },
+  { title: "Type", key: "type", sortable: false, value: typeName },
+  // Wide enough for the longest chip ("Service Due Soon") so it never crops.
+  { title: "Status", key: "status", sortable: false, align: "center", minWidth: "190px", nowrap: true },
+  { title: "Actions", key: "actions", sortable: false, align: "center", nowrap: true },
 ];
 
 const confirmDelete = useConfirm();
@@ -98,31 +123,114 @@ onMounted(getVehicles);
       </v-btn>
     </template>
 
+    <!-- Same layout as the request list: quick filters in one row, the rest behind "Filters". -->
+    <div class="d-flex flex-wrap align-center ga-3 mb-4">
+      <v-select
+        v-model="filters.status"
+        :items="VEHICLE_STATUS_OPTIONS"
+        label="Status"
+        variant="outlined"
+        density="compact"
+        hide-details
+        clearable
+        class="vehicle-status-filter"
+        data-test="filter-status"
+      />
+      <v-btn
+        :variant="showFilters || detailFilterCount ? 'tonal' : 'outlined'"
+        :color="detailFilterCount ? 'primary' : 'secondary'"
+        prepend-icon="mdi-tune-variant"
+        height="40"
+        class="oc-cta"
+        :aria-expanded="showFilters"
+        data-test="toggle-filters"
+        @click="showFilters = !showFilters"
+      >
+        Filters
+        <v-badge v-if="detailFilterCount" :content="detailFilterCount" color="primary" inline />
+      </v-btn>
+      <v-btn
+        :variant="attentionOnly ? 'flat' : 'outlined'"
+        color="primary"
+        :prepend-icon="attentionOnly ? 'mdi-check' : 'mdi-alert-outline'"
+        height="40"
+        class="oc-cta"
+        :aria-pressed="attentionOnly"
+        title="Out of service, service overdue, plate expired, or service due soon"
+        data-test="needs-attention"
+        @click="attentionOnly = !attentionOnly"
+      >
+        Needs attention
+        <v-badge v-if="attentionCount" :content="attentionCount" :color="attentionOnly ? 'surface' : 'primary'" inline />
+      </v-btn>
+    </div>
+
+    <v-expand-transition>
+      <div v-show="showFilters" data-test="vehicle-filters">
+        <v-card border flat class="mb-4 pa-4">
+          <v-row density="comfortable">
+            <v-col
+              v-for="(label, key) in { type: 'Type', make: 'Make', model: 'Model', color: 'Color', year: 'Year' }"
+              :key="key"
+              cols="6"
+              md="4"
+            >
+              <v-select
+                v-model="filters[key]"
+                :items="fieldOptions[key]"
+                :label="label"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                :data-test="`filter-${key}`"
+              />
+            </v-col>
+            <v-col cols="6" md="4" class="d-flex align-center justify-end">
+              <v-btn
+                variant="text"
+                color="secondary"
+                class="oc-cta"
+                :disabled="!activeFilterCount"
+                data-test="clear-filters"
+                @click="clearFilters"
+              >
+                Clear filters
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-card>
+      </div>
+    </v-expand-transition>
+
     <ListState
       :loading
       :error
       :empty="!vehicles.length"
+      :no-results="!filtered.length"
       empty-title="No vehicles yet. Create your first vehicle."
       empty-icon="mdi-car-outline"
+      no-results-title="No vehicles match these filters"
+      no-results-text="Clear filters to see every vehicle."
     >
       <v-data-table
         v-model:page="page"
         class="vehicles-table"
         :headers="headers"
-        :items="visibleVehicles"
+        :items="filtered"
         :items-per-page="ITEMS_PER_PAGE"
         :items-per-page-options="[ITEMS_PER_PAGE]"
         item-value="id"
       >
         <template #[`item.status`]="{ item }">
-          <v-chip
-            :color="tone(item) === 'yellow' ? '#FFE500' : toneColor[tone(item)]"
-            :class="`vehicle-chip-${tone(item)}`"
-            size="small"
-            variant="flat"
-          >
-            {{ item.status }}
-          </v-chip>
+          <!-- Hover the chip for why (US-18.1), without opening the vehicle. -->
+          <v-tooltip v-if="item.condition && statusLines(item.condition).length" location="top" max-width="320">
+            <template #activator="{ props: tip }">
+              <VehicleStatusChip v-bind="tip" :status="item.condition.status" />
+            </template>
+            <div v-for="line in statusLines(item.condition)" :key="line.text">{{ line.text }}</div>
+          </v-tooltip>
+          <VehicleStatusChip v-else :status="item.condition?.status" />
         </template>
 
         <template #[`item.actions`]="{ item }">
@@ -159,18 +267,12 @@ onMounted(getVehicles);
 </template>
 
 <style scoped>
-.vehicles-table :deep(table) {
-  table-layout: fixed;
-  width: 100%;
+.vehicle-status-filter {
+  flex: 0 1 220px;
+  min-width: 180px;
 }
 
-.vehicles-table :deep(th),
-.vehicles-table :deep(td) {
-  width: 20%;
-}
-
-.vehicles-table :deep(.vehicle-chip-yellow) {
-  background-color: #ffe500 !important;
-  color: #1a1a1a !important;
+.vehicles-table :deep(th) {
+  white-space: nowrap;
 }
 </style>

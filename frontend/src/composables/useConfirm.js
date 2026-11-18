@@ -4,6 +4,7 @@ import Utils from "../config/utils";
 const defaults = {
   title: "Are you sure?",
   message: "",
+  items: [],
   confirmText: "Confirm",
   cancelText: "Cancel",
   confirmColor: "primary",

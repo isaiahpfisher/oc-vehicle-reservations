@@ -17,6 +17,7 @@ import TripDetailsFields from "../components/requests/TripDetailsFields.vue";
 import DestinationStops from "../components/requests/DestinationStops.vue";
 import DriversField from "../components/requests/DriversField.vue";
 import AssignVehiclesDialog from "../components/requests/AssignVehiclesDialog.vue";
+import ProblemList from "../components/vehicles/ProblemList.vue";
 import {
   OPEN_STATUSES,
   STATUS_OPTIONS,
@@ -126,6 +127,22 @@ const canManage = computed(
 const canEdit = computed(() => isCreate.value || canManage.value || (isOwner.value && request.value?.status === "pending"));
 const canCancel = computed(() => isOwner.value && !canManage.value && OPEN_STATUSES.includes(request.value?.status));
 const approved = computed(() => canManage.value && !!request.value?.approvedAt);
+/**
+ * Feature 18, US-18.9: problems with assigned vehicles and drivers. The API sends them only to managers and only for
+ * pending, awaiting, or reserved trips that haven't ended; the page checks too so a stale copy never shows them.
+ */
+const showProblems = computed(
+  () => !!request.value && OPEN_STATUSES.includes(request.value.status) && tripBounds(request.value)[1] >= new Date(new Date().toDateString()),
+);
+const vehicleProblems = (vehicle) => (showProblems.value ? (request.value.vehicleProblems?.[vehicle.id] ?? []) : []);
+const driverWarnings = computed(() =>
+  showProblems.value
+    ? request.value.drivers.flatMap((driver) =>
+        (request.value.driverProblems?.[driver.id] ?? []).map((problem) => ({ driver, problem })),
+      )
+    : [],
+);
+
 const capacity = computed(() =>
   request.value ? capacityCheck(request.value.vehicles, request.value.numberOfPeople) : { seats: 0, short: false },
 );
@@ -545,6 +562,17 @@ const saveVehicles = async (vehicleIds) => {
         <v-form ref="driversFormRef" @submit.prevent="saveSection('drivers')">
           <SectionCard title="Drivers" :subtitle="canEdit ? 'Only approved drivers with a current license are listed.' : ''">
             <DriversField v-model="driverIds" :options="driverOptions" :readonly="!canEdit" :drivers="request.drivers" />
+            <v-alert
+              v-for="{ driver, problem } in driverWarnings"
+              :key="`${driver.id}-${problem.type}`"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="mt-2"
+              data-test="driver-problem"
+            >
+              {{ personName(driver) }}: {{ problem.message }}
+            </v-alert>
             <div v-if="approved && dirty.drivers" class="approval-note mt-4">
               Saving will send this request back to pending for re-approval.
             </div>
@@ -576,14 +604,26 @@ const saveVehicles = async (vehicleIds) => {
           </template>
           <template v-if="request.vehicles.length">
             <v-list density="compact" class="py-0 bg-transparent">
-              <v-list-item
-                v-for="vehicle in request.vehicles"
-                :key="vehicle.id"
-                :title="vehicleLabel(vehicle)"
-                :subtitle="`${vehicle.universityId} · ${vehicle.passengerCapacity} seats`"
-                prepend-icon="mdi-car-side"
-                class="px-0"
-              />
+              <template v-for="vehicle in request.vehicles" :key="vehicle.id">
+                <v-list-item
+                  :title="vehicleLabel(vehicle)"
+                  :subtitle="`${vehicle.universityId} · ${vehicle.passengerCapacity} seats`"
+                  prepend-icon="mdi-car-side"
+                  class="px-0"
+                />
+                <!-- One warning per vehicle, its problems grouped a line per kind (US-18.9). -->
+                <v-alert
+                  v-if="vehicleProblems(vehicle).length"
+                  type="warning"
+                  variant="tonal"
+                  density="compact"
+                  :icon="false"
+                  class="mb-2"
+                  data-test="vehicle-problems"
+                >
+                  <ProblemList :problems="vehicleProblems(vehicle)" plain />
+                </v-alert>
+              </template>
             </v-list>
             <v-alert v-if="capacity.short" type="warning" variant="tonal" density="compact" class="mt-2" data-test="capacity-warning">
               {{ capacity.seats }} seats for {{ request.numberOfPeople }} people.

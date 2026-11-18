@@ -163,6 +163,7 @@
 - **FR-004**: Each service type is next due at the vehicle's last service of that type plus the type's mile or day frequency. A vehicle never serviced for a type counts from its purchase date and its initial mileage (default to 0)
 - **FR-005**: Assigning a vehicle that is retired, out of service, or booked for an overlapping trip returns `400`. Vehicles already on the request are not rejected.
 - **FR-006**: Vehicles whose service comes due or whose plate expires during the trip are flagged but can still be assigned. These flags and FR-005's problems show in the assign dialog and on the request.
+- **FR-007**: On a request, a driver whose license is expired or expires before the trip ends is flagged (US-18.9). Like FR-006, it is a warning on the request page, shown only to admins and area admins who manage the request.
 
 ---
 
@@ -172,6 +173,15 @@
 - Maintenance users can access GET /api/vehicles
 - Issue reports do not change a vehicle's status. Only maintenance needs do.
 - Service types cannot be deleted if they are used by service logs.
+- Vehicles have no initial-mileage column ("No new data"), so FR-003 and FR-004's initial mileage is always 0.
+- A "completed trip" (FR-003) is a request the vehicle is assigned to whose trip has ended and whose status is not `cancelled` or `denied`. A `reserved` trip nobody marked `returned` still counts. A trip is "since" a reading when its start date is after the reading's recorded date.
+- Service is **overdue** once the estimated mileage passes the due mileage or today passes the due date, and **due soon** when 500 miles or fewer or 14 days or fewer remain (FR-002).
+- A license plate is valid through its expiration date. It is **expired** when that date is before today, and flagged for a trip when it is before the trip's last day. A vehicle with no expiration date is never flagged.
+- Service due during a trip (FR-006) uses the vehicle's estimated mileage today. It does not add miles from other trips scheduled between now and that trip.
+- "Booked for an overlapping trip" (FR-005) is Feature 8's existing reservation conflict: another request that is not `cancelled` or `denied`, has the vehicle, and overlaps the trip's time.
+- A request is flagged (US-18.9, US-18.10) only while it is `pending`, `awaiting_vehicle`, or `reserved` and its trip has not ended.
+- Status is added to the existing vehicle, vehicle request, vehicle-options, and maintenance-need-options responses. No endpoint is added (see API Requirements).
+- This changes earlier features: Feature 8 assigning a booked vehicle is now `400` (it was only flagged), the assign dialog lists the area's retired vehicles (disabled), and Feature 5's red/yellow/green chips are replaced by the six statuses.
 
 ## Edge Cases
 
@@ -180,8 +190,8 @@ N/A
 ## Success Criteria
 
 - **SC-001**: Every Gherkin scenario has at least one automated test before merge.
-- **SC-002**: Signed-in admin, area admin, and maintenance user can create, view, edit, and delete service logs on one screen.
-- **SC-003**: `npm test` passes for service logs API and service logs view behavior.
+- **SC-002**: Signed-in admin, area admin, and maintenance users see why each vehicle has its status on the vehicle page.
+- **SC-003**: `npm test` passes for vehicle status API and view behavior.
 
 ---
 
@@ -193,7 +203,13 @@ No new data introduced in this feature.
 
 ## API Requirements
 
-No new API endpoints required for this feature.
+No new API endpoints required for this feature. Existing responses gain fields:
+
+- `GET /api/vehicles` and `GET /api/vehicles/:vehicleId`: each vehicle gains `vehicleType` and `condition` (`status`, `reasons`, `mileage`, `services`, `outOfServiceNeeds`). The single vehicle also gains `upcomingTrips`.
+- `GET /api/requests/:requestId/vehicle-options`: each option is `{ vehicle, conflictingRequestIds, status, problems, nextService }`, and the area's retired vehicles are included.
+- `PUT /api/requests/:requestId` with `vehicles`: a newly added vehicle that is retired, out of service, or booked returns `400` (FR-005).
+- `GET /api/requests` and `GET /api/requests/:requestId` for a manager of the request: `vehicleProblems` (by vehicle id). The single request also gains `driverProblems` (by driver id, FR-007).
+- `GET /api/maintenance-needs/options`: each vehicle gains `condition`.
 
 ---
 
@@ -433,6 +449,7 @@ Most views only get slight updates. There are very few new views.
 | US-18.3  | Vehicle page lists open out-of-service maintenance needs only                                                    | `backend/tests/vehicleStatus.test.js`  | `Vehicle page lists open out-of-service maintenance needs only`                                                    |
 | US-18.3  | Vehicle page lists upcoming trips only                                                                           | `backend/tests/vehicleStatus.test.js`  | `Vehicle page lists upcoming trips only`                                                                           |
 | US-18.3  | Vehicle page shows upcoming trips                                                                                | `frontend/tests/VehicleStatus.test.js` | `Vehicle page shows upcoming trips`                                                                                |
+| US-18.3  | Vehicle page shows upcoming trips when there are many                                                            | `frontend/tests/VehicleStatus.test.js` | `Vehicle page shows upcoming trips when there are many`                                                            |
 | US-18.3  | Vehicle page shows recent mileage and service logs with links to the full pages                                  | `frontend/tests/VehicleStatus.test.js` | `Vehicle page shows recent mileage and service logs with links to the full pages`                                  |
 | US-18.3  | Maintenance user sees the vehicle page read-only but can add mileage and service logs                            | `frontend/tests/VehicleStatus.test.js` | `Maintenance user sees the vehicle page read-only but can add mileage and service logs`                            |
 | US-18.3  | Maintenance user cannot create, edit, or delete vehicles                                                         | `backend/tests/vehicleStatus.test.js`  | `Maintenance user cannot create, edit, or delete vehicles`                                                         |
@@ -491,7 +508,10 @@ Most views only get slight updates. There are very few new views.
 | US-18.9  | Moving a request's end date past a service due date flags the vehicle                                            | `backend/tests/vehicleStatus.test.js`  | `Moving a request's end date past a service due date flags the vehicle`                                            |
 | US-18.9  | Changing a request's destinations so the trip passes the next due mileage flags the vehicle                      | `backend/tests/vehicleStatus.test.js`  | `Changing a request's destinations so the trip passes the next due mileage flags the vehicle`                      |
 | US-18.9  | Requester viewing their own request does not get vehicle problems                                                | `backend/tests/vehicleStatus.test.js`  | `Requester viewing their own request does not get vehicle problems`                                                |
+| US-18.9  | Driver whose license expires before the trip ends is flagged on the request                                      | `backend/tests/vehicleStatus.test.js`  | `Driver whose license expires before the trip ends is flagged on the request`                                      |
+| US-18.9  | Driver license problems show as a warning on that driver in the request's Drivers section                        | `frontend/tests/VehicleStatus.test.js` | `Driver license problems show as a warning on that driver in the request's Drivers section`                        |
 | US-18.9  | Each problem shows as a warning on its vehicle in the request's Vehicles section                                 | `frontend/tests/VehicleStatus.test.js` | `Each problem shows as a warning on its vehicle in the request's Vehicles section`                                 |
+| US-18.9  | Several services due before the trip ends read as one sentence                                                   | `frontend/tests/VehicleStatus.test.js` | `Several services due before the trip ends read as one sentence`                                                   |
 | US-18.9  | Past, cancelled, denied, and returned requests do not show vehicle warnings                                      | `frontend/tests/VehicleStatus.test.js` | `Past, cancelled, denied, and returned requests do not show vehicle warnings`                                      |
 | US-18.10 | Vehicle Request list shows requests with problematic vehicles                                                    | `backend/tests/vehicleStatus.test.js`  | `Vehicle Request list shows requests with problematic vehicles`                                                    |
 | US-18.10 | Vehicle Request list shows requests with problematic vehicles                                                    | `frontend/tests/VehicleStatus.test.js` | `Vehicle Request list shows requests with problematic vehicles`                                                    |
@@ -503,6 +523,7 @@ Most views only get slight updates. There are very few new views.
 | US-18.11 | Upcoming trips are not shown when out of service is off                                                          | `frontend/tests/VehicleStatus.test.js` | `Upcoming trips are not shown when out of service is off`                                                          |
 | US-18.11 | Upcoming trips are not shown for a completed or canceled need                                                    | `frontend/tests/VehicleStatus.test.js` | `Upcoming trips are not shown for a completed or canceled need`                                                    |
 | US-18.11 | Changing the selected vehicle updates the upcoming trips shown                                                   | `frontend/tests/VehicleStatus.test.js` | `Changing the selected vehicle updates the upcoming trips shown`                                                   |
+| US-18.11 | Affected trips link to their requests for admins and area admins                                                 | `frontend/tests/VehicleStatus.test.js` | `Affected trips link to their requests for admins and area admins`                                                 |
 | US-18.11 | Vehicle with no upcoming trips shows no warning                                                                  | `frontend/tests/VehicleStatus.test.js` | `Vehicle with no upcoming trips shows no warning`                                                                  |
 | US-18.11 | Maintenance need vehicle dropdown shows each vehicle's status                                                    | `frontend/tests/VehicleStatus.test.js` | `Maintenance need vehicle dropdown shows each vehicle's status`                                                    |
 | US-18.12 | When a user retires a vehicle, they're warned about affected requests                                            | `frontend/tests/VehicleStatus.test.js` | `When a user retires a vehicle, they're warned about affected requests`                                            |
@@ -526,7 +547,7 @@ Most views only get slight updates. There are very few new views.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-003** satisfied)
+- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-007** satisfied)
 - [ ] **Success Criteria (SC-001**–**SC-003)** met
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
@@ -542,6 +563,4 @@ Most views only get slight updates. There are very few new views.
 
 ## Delivered to later features
 
-- A service log db table
-- `GET /api/service-logs` returns every service log for any valid session with `admin`, `area_admin`, or `maintenance` role
-- `GET /api/service-logs/vehicle/:vehicleId` returns every service log for a vehicle for any valid session with `admin`, `area_admin`, or `maintenance` role
+- None. This feature removes the `INTERIM` service-status stub (`backend/app/helpers/vehicleService.js`) that Feature 8 left for Features 9, 11, and 13.

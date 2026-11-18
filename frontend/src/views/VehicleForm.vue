@@ -3,14 +3,25 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
+import mileageLogServices from "../services/mileageLogServices.js";
 import serviceLogServices from "../services/serviceLogServices.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import vehicleTypeServices from "../services/vehicleTypeServices.js";
 import { fullName } from "../models/users.js";
+import { formatTripDates } from "../models/requests.js";
+import { formatDay, formatMiles, nameList, vehicleName } from "../models/vehicles.js";
+import { mileageReading, serviceTypeName, userName } from "../models/serviceLogs.js";
+import { addedByName } from "../models/mileageLogs.js";
+import { useConfirm } from "../composables/useConfirm.js";
+import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
+import FormSection from "../components/layout/FormSection.vue";
 import PageShell from "../components/layout/PageShell.vue";
+import SectionCard from "../components/layout/SectionCard.vue";
+import MileageLogFormModal from "../components/mileageLogs/MileageLogFormModal.vue";
 import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.vue";
+import VehicleStatusCard from "../components/vehicles/VehicleStatusCard.vue";
 import Utils from "../config/utils.js";
 
 const route = useRoute();
@@ -49,6 +60,38 @@ const serviceLogSaved = ref("");
 const serviceUsers = ref([]);
 const serviceTypes = ref([]);
 const serviceNeeds = ref([]);
+const mileageLogOpen = ref(false);
+
+/** US-18.3: the vehicle page shows the last few log entries and links to the full pages. */
+const RECENT_LOGS = 5;
+const newestFirst = (key) => (a, b) => String(b[key]).localeCompare(String(a[key])) || b.id - a.id;
+
+const { data: mileageLogs, error: mileageLogsError, run: getMileageLogs } = useRequest(mileageLogServices.getMileageLogs, {
+  initial: [],
+  fallback: "Failed to load mileage logs.",
+  select: (res) => [...(res?.data ?? [])].sort(newestFirst("recordedAt")).slice(0, RECENT_LOGS),
+});
+
+const { data: serviceLogs, error: serviceLogsError, run: getServiceLogs } = useRequest(serviceLogServices.getServiceLogsByVehicle, {
+  initial: [],
+  fallback: "Failed to load service logs.",
+  select: (res) => [...(res?.data ?? [])].sort(newestFirst("servicedAt")),
+});
+
+/** One row per service visit (same day and odometer), so a visit that logged 14 services is one line, not 14. */
+const serviceVisits = computed(() => {
+  const visits = new Map();
+  serviceLogs.value.forEach((log) => {
+    const key = `${log.servicedAt}|${mileageReading(log)}`;
+    const visit = visits.get(key) ?? { key, servicedAt: log.servicedAt, miles: mileageReading(log), names: [], people: new Set() };
+    visit.names.push(serviceTypeName(log));
+    if (userName(log)) visit.people.add(userName(log));
+    visits.set(key, visit);
+  });
+  return [...visits.values()].slice(0, RECENT_LOGS);
+});
+
+const confirm = useConfirm();
 
 const visibleAreas = computed(() => {
   if (hasRole("admin")) {
@@ -61,7 +104,11 @@ const visibleAreas = computed(() => {
 
 const areaItems = computed(() => visibleAreas.value.map((area) => ({ title: area.name, value: area.id })));
 const typeItems = computed(() => vehicleTypes.value.map((type) => ({ title: type.name, value: type.id })));
-const statusItems = ["active", "retired"];
+// Stored lowercase; shown capitalized.
+const statusItems = [
+  { title: "Active", value: "active" },
+  { title: "Retired", value: "retired" },
+];
 
 const selectedType = computed(() => vehicleTypes.value.find((type) => type.id === form.value.vehicleTypeId));
 const identifierLabel = computed(() => (selectedType.value?.identifier === "Serial" ? "Serial" : "VIN"));
@@ -134,6 +181,8 @@ const load = async () => {
 
     loaded.value = data;
     form.value = fromVehicle(data);
+    getMileageLogs(data.id);
+    getServiceLogs(data.id);
   } catch (error) {
     if (error.response?.status === 403) {
       await router.replace({ name: "home" });
@@ -147,6 +196,39 @@ const load = async () => {
 };
 
 watch(() => [route.name, route.params.id], load, { immediate: true });
+
+/** After a log is added, status and mileage change; reload them without touching unsaved form edits. */
+const refreshStatus = async () => {
+  try {
+    const { data } = await vehicleServices.getVehicle(route.params.id);
+    loaded.value = { ...loaded.value, condition: data.condition, upcomingTrips: data.upcomingTrips };
+  } catch {
+    // The page keeps the status it already shows; the logs below still update.
+  }
+};
+
+const canOpenTrip = (trip) => hasRole("admin") || managesArea(trip.area?.id);
+
+/** US-18.12: retiring a vehicle that is booked asks first and names the trips. */
+const confirmRetire = () => {
+  const trips = loaded.value?.upcomingTrips ?? [];
+  if (form.value.status !== "retired" || loaded.value?.status === "retired" || !trips.length) {
+    return true;
+  }
+
+  return confirm({
+    title: "Retire vehicle",
+    message: `${vehicleName(loaded.value)} is assigned to ${trips.length} upcoming trip${trips.length === 1 ? "" : "s"}. Retiring it leaves ${trips.length === 1 ? "that trip" : "them"} needing another vehicle.`,
+    // Long lists stop at five so the dialog stays readable.
+    items: [
+      ...trips.slice(0, 5).map((trip) => `${trip.purpose} · ${formatTripDates(trip)} · ${trip.area?.name}`),
+      ...(trips.length > 5 ? [`…and ${trips.length - 5} more`] : []),
+    ],
+    confirmText: "Retire Vehicle",
+    confirmColor: "error",
+    maxWidth: 520,
+  });
+};
 
 const currentId = computed(() => (isCreate.value ? null : Number(route.params.id)));
 
@@ -229,6 +311,10 @@ const submit = async (event) => {
       return;
     }
 
+    if (!(await confirmRetire())) {
+      return;
+    }
+
     const response = await vehicleServices.updateVehicle(route.params.id, payload());
     if (response?.status !== 200) {
       formError.value = "Failed to save vehicle.";
@@ -298,70 +384,199 @@ const openServiceLog = async () => {
 const createServiceLog = async (payload) => {
   await serviceLogServices.createServiceLog({ ...payload, vehicleId: Number(route.params.id) });
   serviceLogSaved.value = "Service log created.";
+  await Promise.all([getServiceLogs(route.params.id), getMileageLogs(route.params.id), refreshStatus()]);
+};
+
+const openMileageLog = () => {
+  serviceLogSaved.value = "";
+  mileageLogOpen.value = true;
+};
+
+const createMileageLog = async (payload) => {
+  await mileageLogServices.createMileageLog({ ...payload, vehicleId: Number(route.params.id) });
+  serviceLogSaved.value = "Mileage log created.";
+  await Promise.all([getMileageLogs(route.params.id), refreshStatus()]);
 };
 </script>
 
 <template>
-  <PageShell :title="title" :breadcrumbs :loading :error="loadError" :max-width="720">
-    <template v-if="!isCreate" #actions>
-      <router-link class="vehicle-form__mileage" :to="{ name: 'vehicle-mileage-logs', params: { vehicleId: route.params.id } }">
-        Mileage log
-      </router-link>
-      <router-link class="vehicle-form__service" :to="{ name: 'service-logs', params: { vehicleId: route.params.id } }">
-        Service log
-      </router-link>
-      <button type="button" class="vehicle-form__service" @click="openServiceLog">
-        + New Service Log
-      </button>
-    </template>
+  <PageShell
+    :title="title"
+    :subtitle="isCreate ? 'Add a vehicle to an area\'s fleet.' : ''"
+    :breadcrumbs
+    :loading
+    :error="loadError"
+    :max-width="1040"
+    centered
+  >
+    <div class="d-flex flex-column ga-6">
+      <VehicleStatusCard v-if="!isCreate && loaded?.condition" :vehicle="loaded" :can-open-trip="canOpenTrip" />
 
-    <v-form @submit.prevent="submit">
-      <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" :disabled="readOnly" />
-      <v-select
-        v-model="form.vehicleTypeId"
-        :items="typeItems"
-        item-title="title"
-        item-value="value"
-        label="Vehicle Type"
-        :disabled="readOnly"
-      />
-      <v-text-field v-model="form.universityId" label="University Id" :disabled="readOnly" />
-      <v-text-field v-model="form.identifier" :label="identifierLabel" :disabled="readOnly" />
-      <v-text-field v-model="form.make" label="Make" :disabled="readOnly" />
-      <v-text-field v-model="form.model" label="Model" :disabled="readOnly" />
-      <v-text-field
-        :model-value="form.year"
-        label="Year"
-        type="number"
-        step="1"
-        max="9999"
-        :disabled="readOnly"
-        @update:model-value="setYear"
-        @keydown="onYearKeydown"
-      />
-      <v-text-field v-model="form.color" label="Color" :disabled="readOnly" />
-      <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" :disabled="readOnly" />
-      <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" :disabled="readOnly" />
-      <v-text-field v-model="form.licensePlate" label="License Plate" :disabled="readOnly" />
-      <v-text-field
-        v-model="form.licensePlateExpirationDate"
-        label="License Plate Expiration Date"
-        type="date"
-        :disabled="readOnly"
-      />
-      <v-select v-model="form.status" :items="statusItems" label="Status" :disabled="readOnly" />
+      <v-form @submit.prevent="submit">
+        <FormSection title="Assignment" subtitle="The area that manages it, and whether it's still in the fleet. Retired vehicles can't be assigned to trips.">
+          <v-row density="comfortable">
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.status" :items="statusItems" label="Status" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+          </v-row>
+        </FormSection>
 
-      <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
-      <v-alert v-if="serviceLogSaved" type="success" density="compact" class="mb-4">{{ serviceLogSaved }}</v-alert>
+        <FormSection title="Identity" subtitle="How the university and the manufacturer identify it. Service schedules count from the purchase date until a service is logged.">
+          <v-row density="comfortable">
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="form.vehicleTypeId"
+                :items="typeItems"
+                item-title="title"
+                item-value="value"
+                label="Vehicle Type"
+                hide-details="auto"
+                :disabled="readOnly"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.universityId" label="University Id" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.identifier" :label="identifierLabel" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+          </v-row>
+        </FormSection>
 
-      <div class="d-flex ga-2 mt-2">
-        <button v-if="!readOnly" type="submit" class="vehicle-form__save" :disabled="saving" :aria-busy="saving" @click="submit">
-          {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
-        </button>
-        <button type="button" class="vehicle-form__cancel" :disabled="saving" @click="cancel">Cancel</button>
-      </div>
-    </v-form>
+        <FormSection title="Description" subtitle="What it is and how many people it carries.">
+          <v-row density="comfortable">
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.make" label="Make" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.model" label="Model" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field
+                :model-value="form.year"
+                label="Year"
+                type="number"
+                step="1"
+                max="9999"
+                hide-details="auto"
+                :disabled="readOnly"
+                @update:model-value="setYear"
+                @keydown="onYearKeydown"
+              />
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field v-model="form.color" label="Color" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+          </v-row>
+        </FormSection>
 
+        <FormSection title="Registration" subtitle="Vehicles whose plate expires before a trip ends are flagged when they're assigned.">
+          <v-row density="comfortable">
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.licensePlate" label="License Plate" hide-details="auto" :disabled="readOnly" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                v-model="form.licensePlateExpirationDate"
+                label="License Plate Expiration Date"
+                type="date"
+                hide-details="auto"
+                :disabled="readOnly"
+              />
+            </v-col>
+          </v-row>
+        </FormSection>
+
+        <v-divider />
+        <v-alert v-if="formError" type="error" density="compact" class="mt-6">{{ formError }}</v-alert>
+        <div class="d-flex justify-end ga-2 pt-6">
+          <v-btn color="secondary" variant="text" class="vehicle-form__cancel" :disabled="saving" @click="cancel">Cancel</v-btn>
+          <v-btn
+            v-if="!readOnly"
+            type="submit"
+            color="primary"
+            variant="elevated"
+            class="oc-cta vehicle-form__save"
+            :disabled="saving"
+            :aria-busy="saving"
+            @click="submit"
+          >
+            {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
+          </v-btn>
+        </div>
+      </v-form>
+
+      <v-row v-if="!isCreate" density="comfortable">
+        <v-col cols="12" md="6">
+          <SectionCard title="Mileage log" subtitle="Most recent odometer readings." data-test="recent-mileage-logs">
+            <template #append>
+              <v-btn variant="text" color="primary" class="oc-cta" @click="openMileageLog">+ New Mileage Log</v-btn>
+            </template>
+            <v-alert v-if="mileageLogsError" type="error" density="compact">{{ mileageLogsError }}</v-alert>
+            <v-list v-else-if="mileageLogs.length" density="compact" class="py-0 bg-transparent">
+              <v-list-item
+                v-for="log in mileageLogs"
+                :key="log.id"
+                :title="formatMiles(log.odometerReading)"
+                :subtitle="[formatDay(log.recordedAt), addedByName(log)].filter(Boolean).join(' · ')"
+                class="px-0"
+              />
+            </v-list>
+            <p v-else class="text-body-medium text-medium-emphasis mb-0">No mileage logged yet.</p>
+            <v-btn
+              variant="text"
+              color="primary"
+              class="oc-cta mt-3"
+              :to="{ name: 'vehicle-mileage-logs', params: { vehicleId: route.params.id } }"
+            >
+              View all mileage logs
+            </v-btn>
+          </SectionCard>
+        </v-col>
+        <v-col cols="12" md="6">
+          <SectionCard title="Service log" subtitle="Most recent services." data-test="recent-service-logs">
+            <template #append>
+              <v-btn variant="text" color="primary" class="oc-cta" @click="openServiceLog">+ New Service Log</v-btn>
+            </template>
+            <v-alert v-if="serviceLogsError" type="error" density="compact">{{ serviceLogsError }}</v-alert>
+            <v-list v-else-if="serviceVisits.length" density="compact" class="py-0 bg-transparent">
+              <v-list-item v-for="visit in serviceVisits" :key="visit.key" class="px-0">
+                <v-list-item-title>
+                  {{ formatDay(visit.servicedAt) }}<template v-if="visit.miles !== ''"> · {{ formatMiles(visit.miles) }}</template>
+                </v-list-item-title>
+                <v-list-item-subtitle class="text-wrap">
+                  {{ nameList(visit.names) }}<template v-if="visit.people.size"> · {{ [...visit.people].join(", ") }}</template>
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+            <p v-else class="text-body-medium text-medium-emphasis mb-0">No services logged yet.</p>
+            <v-btn
+              variant="text"
+              color="primary"
+              class="oc-cta mt-3"
+              :to="{ name: 'service-logs', params: { vehicleId: route.params.id } }"
+            >
+              View all service logs
+            </v-btn>
+          </SectionCard>
+        </v-col>
+      </v-row>
+    </div>
+
+    <v-snackbar :model-value="!!serviceLogSaved" color="success" timeout="3000" @update:model-value="serviceLogSaved = ''">
+      {{ serviceLogSaved }}
+    </v-snackbar>
+
+    <MileageLogFormModal v-if="!isCreate" v-model="mileageLogOpen" :save="createMileageLog" />
     <ServiceLogFormModal
       v-if="!isCreate"
       v-model="serviceLogOpen"
@@ -372,54 +587,3 @@ const createServiceLog = async (payload) => {
     />
   </PageShell>
 </template>
-
-<style scoped>
-.vehicle-form__save,
-.vehicle-form__cancel {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: 4px;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-}
-
-.vehicle-form__save {
-  border: 0;
-  background: #801328;
-  color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-}
-
-.vehicle-form__save:disabled,
-.vehicle-form__cancel:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.vehicle-form__cancel {
-  border: 0;
-  background: transparent;
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.vehicle-form__mileage,
-.vehicle-form__service {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 16px;
-  color: rgb(var(--v-theme-primary));
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-decoration: none;
-}
-
-button.vehicle-form__service {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-</style>
