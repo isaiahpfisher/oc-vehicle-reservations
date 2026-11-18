@@ -11,6 +11,7 @@ import vehicleRequestRoutes from "./vehicleRequest.routes.js";
 import placeRoutes from "./place.routes.js";
 import issueReportRoutes from "./issueReport.routes.js";
 import mileageLogRoutes from "./mileageLog.routes.js";
+import serviceLogRoutes from "./serviceLog.routes.js";
 import maintenanceNeedRoutes from "./maintenanceNeed.routes.js";
 import vehicleTypeInstructionRoutes from "./vehicleTypeInstruction.routes.js";
 
@@ -33,6 +34,7 @@ router.use("/", vehicleRequestRoutes);
 router.use("/places", placeRoutes);
 router.use("/issue-reports", issueReportRoutes);
 router.use("/mileage-logs", mileageLogRoutes);
+router.use("/service-logs", serviceLogRoutes);
 router.use("/maintenance-needs", maintenanceNeedRoutes);
 router.use("/vehicle-type-instructions", vehicleTypeInstructionRoutes);
 

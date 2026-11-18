@@ -40,6 +40,10 @@ Configure these as GitHub repository secrets. Never commit their values or the S
 | `GOOGLE_MAPS_API_KEY` | Google Maps Platform key used by the backend (Feature 8) |
 | `PORT` | `3021` |
 | `SEQUELIZE_SYNC_ALTER` | `false`. New tables are still created; set `true` for one deploy to add columns to existing tables. |
+| `SUPABASE_URL` | Supabase project URL for area logo storage (Feature 17), e.g. `https://<project>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key. Server-only; never expose it to the frontend. |
+
+The workflow sets `AREA_LOGO_PREFIX=prod`, so production logos go in the `prod/` folder of the `area-logos` bucket. Don't use `prod` as your local prefix.
 
 ---
 

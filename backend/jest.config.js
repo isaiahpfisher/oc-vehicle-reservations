@@ -3,6 +3,7 @@ export default {
   testEnvironment: "node",
   transform: {},
   testMatch: ["**/tests/**/*.test.js"],
+  globalSetup: "./tests/globalSetup.js",
   setupFiles: ["./tests/setup.js"],
   modulePathIgnorePatterns: ["<rootDir>/deploy/"],
   maxWorkers: 1,

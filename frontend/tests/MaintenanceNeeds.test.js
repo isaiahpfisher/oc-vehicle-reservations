@@ -10,6 +10,8 @@ import apiClient from "../src/services/services.js";
 import maintenanceNeedServices from "../src/services/maintenanceNeedServices.js";
 import issueReportServices from "../src/services/issueReportServices.js";
 import vehicleServices from "../src/services/vehicleServices.js";
+import serviceLogServices from "../src/services/serviceLogServices.js";
+import serviceTypeServices from "../src/services/serviceTypeServices.js";
 import userServices from "../src/services/userServices.js";
 import vehicleRequestServices from "../src/services/vehicleRequestServices.js";
 import { signInAs, vuetify } from "./testUtils.js";
@@ -24,6 +26,14 @@ vi.mock("../src/services/issueReportServices.js", () => ({
 
 vi.mock("../src/services/vehicleServices.js", () => ({
   default: { getVehicles: vi.fn(), getVehicle: vi.fn() },
+}));
+
+vi.mock("../src/services/serviceLogServices.js", () => ({
+  default: { createServiceLog: vi.fn() },
+}));
+
+vi.mock("../src/services/serviceTypeServices.js", () => ({
+  default: { getServiceTypes: vi.fn() },
 }));
 
 vi.mock("../src/services/userServices.js", () => ({
@@ -184,6 +194,8 @@ beforeEach(async () => {
   issueReportServices.getIssueReports.mockResolvedValue({ data: [] });
   vehicleServices.getVehicles.mockResolvedValue({ data: [] });
   userServices.getUsers.mockResolvedValue({ data: [] });
+  serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [] });
+  serviceLogServices.createServiceLog.mockResolvedValue({ status: 201, data: { id: 1 } });
   userServices.getUser.mockResolvedValue({ data: { roles: adminRoles } });
   vehicleRequestServices.getVehicleRequests.mockResolvedValue({ data: [] });
   maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [] });
@@ -562,6 +574,41 @@ describe("Feature 11 — Maintenance Needs", () => {
   });
 
   describe("US-11.4 — Maintenance need actions", () => {
+    it("Admin user creates a service log from a maintenance need", async () => {
+      // Feature 13: a maintenance need row can record the service performed for that need.
+      signIn();
+      serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [{ id: 1, name: "Oil Change" }] });
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [need] });
+      await mountAppAt("/maintenance-needs");
+
+      await waitFor(() => expect(document.body.querySelector('[aria-label="Create service log"]')).toBeTruthy());
+      document.body.querySelector('[aria-label="Create service log"]').click();
+      await settle();
+
+      const userField = await field("VCombobox", "User");
+      expect(userField.props("items").map((person) => person.id)).toEqual([john.id, jello.id]);
+      await userField.setValue(john.id);
+      await (await field("VCombobox", "Service Type")).setValue(1);
+      await (await textField("Mileage")).setValue("12050");
+      await (await textField("Serviced At")).setValue("2026-07-02");
+      const needField = await selectField("Maintenance Need");
+      expect(needField.props("disabled")).toBe(true);
+      expect(needField.props("modelValue")).toBe(1);
+      await clickNamed("Create");
+
+      await waitFor(() => expect(serviceLogServices.createServiceLog).toHaveBeenCalledTimes(1));
+      expect(serviceLogServices.createServiceLog).toHaveBeenCalledWith({
+        userId: 3,
+        serviceTypeId: 1,
+        miles: 12050,
+        maintenanceNeedId: 1,
+        servicedAt: "2026-07-02",
+        vehicleId: 1,
+      });
+      expect(router.currentRoute.value.path).toBe("/maintenance-needs");
+      expect(document.body.textContent).toContain("Service log created.");
+    });
+
     it("Maintenance need rows have edit and delete actions", async () => {
       signIn();
       maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [need] });

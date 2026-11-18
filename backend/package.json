@@ -14,7 +14,9 @@
     "make-area-admin": "node scripts/make-area-admin.mjs",
     "make-requester": "node scripts/make-requester.mjs",
     "make-maintenance": "node scripts/make-maintenance.mjs",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "drop-extra-indexes": "node scripts/drop-extra-indexes.mjs",
+    "reset-local-data": "node scripts/reset-local-data.mjs"
   },
   "keywords": [
     "node.js",
@@ -23,6 +25,7 @@
   ],
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -30,6 +33,7 @@
     "google-auth-library": "^11.3.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^2.5.0",
     "mysql2": "^3.12.0",
     "sequelize": "^6.37.5",
     "winston": "^3.17.0",

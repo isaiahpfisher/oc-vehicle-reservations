@@ -991,6 +991,7 @@ export const SEED_MILEAGE_LOGS = generatedMileageLogs();
 /** Records that point at vehicles, requests, or users go before those rows are replaced. */
 const clearSampleTables = async (transaction) => {
   for (const model of [
+    db.serviceLog,
     db.maintenanceNeed,
     db.issueReport,
     db.mileageLog,

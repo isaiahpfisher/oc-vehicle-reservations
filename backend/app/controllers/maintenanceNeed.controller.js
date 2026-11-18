@@ -385,6 +385,11 @@ exports.remove = async (req, res) => {
       return res.status(403).send({ message: AREA_MESSAGE });
     }
 
+    // Feature 13: a service log can record the work done for this need.
+    if ((await db.serviceLog.count({ where: { maintenanceNeedId: existing.id } })) > 0) {
+      return res.status(400).send({ message: "Maintenance need is used by a service log and can't be deleted." });
+    }
+
     await existing.destroy();
     return res.status(200).send({ message: "Maintenance need deleted." });
   } catch (err) {

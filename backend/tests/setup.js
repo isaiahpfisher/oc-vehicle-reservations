@@ -15,10 +15,15 @@ process.env.NODE_ENV = "test";
 // Google Routes calls are billed: tests never use a real key, even one exported in the shell,
 // and any request that still reaches Google fails loudly. Tests that need Routes stub `fetch` themselves.
 delete process.env.GOOGLE_MAPS_API_KEY;
+delete process.env.SUPABASE_URL;
+delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 const realFetch = globalThis.fetch;
 globalThis.fetch = (url, ...args) => {
   if (String(url).includes("googleapis.com")) {
     throw new Error(`Tests must not call Google APIs (${url}). Stub fetch instead.`);
+  }
+  if (String(url).includes("supabase.co")) {
+    throw new Error(`Tests must not call Supabase (${url}). Stub storage instead.`);
   }
   return realFetch(url, ...args);
 };

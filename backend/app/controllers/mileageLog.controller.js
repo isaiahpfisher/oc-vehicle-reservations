@@ -1,6 +1,6 @@
 import db from "../models/index.js";
 import logger from "../config/logger.js";
-import { canAccessArea } from "../authorization/authorization.js";
+import { canAccessArea, holdsAnyRole } from "../authorization/authorization.js";
 
 const exports = {};
 
@@ -117,12 +117,13 @@ const dateField = (value) => {
 const findVehicle = async (vehicleId) => db.vehicle.findByPk(vehicleId, { attributes: ["id", "universityId", "areaId"] });
 
 const allowVehicle = (user, vehicle, res) => {
-  if (!canAccessArea(user, vehicle.areaId)) {
-    forbid(res);
-    return false;
+  // Feature 13: maintenance records mileage for any vehicle.
+  if (holdsAnyRole(user, ["maintenance"]) || canAccessArea(user, vehicle.areaId)) {
+    return true;
   }
 
-  return true;
+  forbid(res);
+  return false;
 };
 
 const loadLog = async (req, res) => {
@@ -280,6 +281,11 @@ exports.remove = async (req, res) => {
     const log = await loadLog(req, res);
     if (!log) {
       return;
+    }
+
+    // Feature 13: a service log points at the reading taken during that service.
+    if ((await db.serviceLog.count({ where: { mileageLogId: log.id } })) > 0) {
+      return res.status(400).send({ message: "Mileage log is used by a service log and can't be deleted." });
     }
 
     await log.destroy();

@@ -106,6 +106,7 @@ describe("App shell (ui-style-system.mdc)", () => {
 
     const mainNav = drawer().querySelector('[aria-label="Main navigation"]');
     expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
+      "Vehicles",
       "Issue Reports",
       "Service Types",
       "Maintenance Needs",
@@ -157,6 +158,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     const tooltips = () =>
       wrapper.findComponent({ name: "VNavigationDrawer" }).findAllComponents({ name: "VTooltip" }).map((tooltip) => tooltip.props());
     expect(tooltips().map(({ text, disabled }) => [text, disabled])).toEqual([
+      ["Vehicles", false],
       ["Issue Reports", false],
       ["Service Types", false],
       ["Maintenance Needs", false],

@@ -4,7 +4,7 @@
 **Branch pattern:** `feature/15-vehicle-type-instructions`
 **Status:** Draft
 **Created:** 2026-11-09
-**Input:** Signed-in admin and area admin users manage vehicle type instructions.
+**Input:** Signed-in admin and area admin users manage vehicle type instructions. An instruction stores the message for a vehicle type: designated parking, where to get the keys, what to do on return (fill with gas, clean up, where to put the keys), and who to contact if there is an issue. An admin supplies the default. An area can override that default. Instructions are added and edited with a dialog. A different spec sends this message in an email.
 **Depends on:** Feature 2 [Areas], Feature 3 [Roles], Feature 4 [Vehicle Types]
 
 ---

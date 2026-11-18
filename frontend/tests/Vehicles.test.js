@@ -43,6 +43,7 @@ vi.mock("../src/services/vehicleServices.js", () => ({
 const adminRoles = [{ id: 1, role: "admin", areaId: null, area: null }];
 const areaAdminRoles = [{ id: 3, role: "area_admin", areaId: 1, area: { id: 1, name: "Athletics" } }];
 const maintenanceRoles = [{ id: 2, role: "maintenance", areaId: null, area: null }];
+const requesterRoles = [];
 
 const signedInUser = {
   userId: 2,
@@ -399,7 +400,7 @@ describe("Feature 5 — Vehicles", () => {
     });
 
     it("Signed-in user without admin or area admin role does not see nav link", async () => {
-      signIn(maintenanceRoles);
+      signIn(requesterRoles);
       await mountAppAt("/");
 
       await waitFor(() => expect(navLabels()).not.toContain("Vehicles"));
@@ -421,7 +422,7 @@ describe("Feature 5 — Vehicles", () => {
     });
 
     it("Signed-in user without admin or area admin role accesses vehicles page", async () => {
-      signIn(maintenanceRoles);
+      signIn(requesterRoles);
       await mountAppAt("/vehicles");
       expect(router.currentRoute.value.path).toBe("/");
     });
@@ -433,9 +434,35 @@ describe("Feature 5 — Vehicles", () => {
     });
 
     it("Signed-in user without admin or area admin role accesses a vehicle page", async () => {
-      signIn(maintenanceRoles);
+      signIn(requesterRoles);
       await mountAppAt("/vehicles/1");
       expect(router.currentRoute.value.path).toBe("/");
+    });
+
+    it("Maintenance user sees vehicles but cannot edit them", async () => {
+      // Feature 13: maintenance opens a vehicle to record mileage, service, and maintenance needs.
+      signIn(maintenanceRoles);
+      vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle] });
+      await mountAppAt("/vehicles");
+
+      await waitFor(() => expect(navLabels()).toContain("Vehicles"));
+      expect(document.body.textContent).not.toContain("+ New Vehicle");
+      expect(document.body.querySelector('[aria-label="Edit vehicle"]')).toBeNull();
+      expect(document.body.querySelector('[aria-label="Delete vehicle"]')).toBeNull();
+      document.body.querySelector('[aria-label="View vehicle"]').click();
+      await settle();
+
+      await waitFor(() => {
+        expect(router.currentRoute.value.path).toBe("/vehicles/1");
+        const fields = wrapper.findAllComponents({ name: "VTextField" });
+        expect(fields.length).toBeGreaterThan(0);
+        expect(fields.every((field) => field.props("disabled"))).toBe(true);
+        expect(wrapper.findAllComponents({ name: "VSelect" }).every((field) => field.props("disabled"))).toBe(true);
+      });
+      expect(document.body.querySelector("button.vehicle-form__save")).toBeNull();
+      expect(document.body.textContent).toContain("Mileage log");
+      expect(document.body.textContent).toContain("Service log");
+      expect(document.body.textContent).toContain("+ New Service Log");
     });
 
     it("Area admin user accesses a vehicle outside their areas", async () => {

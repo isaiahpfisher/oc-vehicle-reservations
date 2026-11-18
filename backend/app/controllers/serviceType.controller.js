@@ -178,6 +178,11 @@ exports.remove = async (req, res) => {
       return res.status(404).send({ message: `Service type with id=${serviceTypeId} not found.` });
     }
 
+    // Feature 13: a service log records which service type was performed.
+    if ((await db.serviceLog.count({ where: { serviceTypeId } })) > 0) {
+      return res.status(400).send({ message: "Service type is used by a service log and can't be deleted." });
+    }
+
     await db.serviceType.destroy({ where: { id: serviceTypeId } });
 
     return res.status(200).send({ message: "Service type deleted successfully." });
