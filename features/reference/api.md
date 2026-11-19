@@ -42,7 +42,7 @@ User payload: `{ id, firstName, lastName, email, createdAt, roles: [{ id, role, 
 | `GET` | `/api/users` | Admin | `200` array of users, sorted by last then first name. |
 | `GET` | `/api/users/:id` | Self or admin | `200` with that user, plus `driver`: `{ status, licenseState, licenseExpirationDate, phoneNumber }` for the linked driver, or `null`. Another user (non-admin) → `404`. |
 | `PUT` | `/api/users/:id` | Admin | `200` with the user. Body `{ "roles": [{ "role": "maintenance" }, { "role": "area_admin", "areaId": 2 }] }` replaces all roles in one transaction. Name and email in the body are ignored. |
-| `DELETE` | `/api/users/:id` | Admin | `204` with no body. Deletes the user's sessions and roles. A linked driver is kept with `userId` set to `null`. |
+| `DELETE` | `/api/users/:id` | Admin | `204` with no body. Deletes the user's sessions and roles. A linked driver is kept with `userId` set to `null`. A user who wrote notes is `400` `{ "message": "User has notes and can't be deleted." }` (Feature 14). |
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -249,7 +249,7 @@ Success body: `{ "id", "name", "address_line_1", "address_line_2", "city", "stat
 
 Every route requires a Bearer token. Role checks are in the controller. A missing or invalid session is `401` `{ "message": "Unauthorized." }`. A signed-in user who is not allowed is `403` `{ "message": "Forbidden." }`.
 
-`authorId` is the signed-in user on create and is ignored in the body. It does not change on update. `vehicleRequestId` and `assigneeId` are optional and may be `null`. `type` is `low_gas`, `dirty`, `maintenance`, or `other`. `status` is `pending`, `resolved`, or `cancelled`. `resolvedAt` is `YYYY-MM-DD` when status is `resolved`, and must be omitted or `null` otherwise. `description` is trimmed.
+`authorId` is the signed-in user on create and is ignored in the body. It does not change on update. `vehicleRequestId` and `assigneeId` are optional and may be `null`. An `assigneeId` must be an admin, a maintenance user, or an area admin of the vehicle's area, otherwise `400` `{ "message": "Assignee must be an admin, an area admin for this vehicle, or a maintenance user." }` (Feature 14, US-14.6). `type` is `low_gas`, `dirty`, `maintenance`, or `other`. `status` is `pending`, `resolved`, `cancelled`, or `moved_to_maintenance` (Feature 14: closed because the work moved to a maintenance need). `resolvedAt` is `YYYY-MM-DD` when status is `resolved` or `moved_to_maintenance`, and must be omitted or `null` otherwise. `description` is trimmed.
 
 `GET /api/issue-reports` with no query returns every report for an admin and area-scoped reports for an area admin, newest id first. Another signed-in user receives `403`. `?userId=` returns reports whose `authorId` is that user. An admin may request any user. An area admin's results stay inside their areas. Any other signed-in user may request only their own id. `?vehicleId=` returns reports for that vehicle. An admin may request any vehicle. An area admin may request it only when the vehicle is in an area they administer. Both query filters apply together. A missing report is `404`, not `403`. The author may `GET` their own report. `PUT` and `DELETE` do not allow an author who is not an admin or area admin for that vehicle's area.
 
@@ -258,12 +258,13 @@ Every route requires a Bearer token. Role checks are in the controller. A missin
 | `GET` | `/api/issue-reports` | Bearer | `200` array. Admin: every report. Area admin: reports whose vehicle is in an area they administer. |
 | `GET` | `/api/issue-reports?userId=` | Bearer | `200` array of that author's reports, still limited by the caller's role. |
 | `GET` | `/api/issue-reports?vehicleId=` | Bearer | `200` array for that vehicle when the caller may see it. |
+| `GET` | `/api/issue-reports/assignees?vehicleId=` | Admin or area admin (`authorizeRoles`, so `401` is `{ "message": "Unauthorized! No token provided." }`) | `200` array of `{ "id", "firstName", "lastName", "roles" }`: admins, maintenance users, and area admins of that vehicle's area, sorted by last name. `roles` lists the qualifying roles. Bad id → `400` `{ "message": "Invalid vehicle id." }`; missing vehicle → `404` `{ "message": "Vehicle not found." }`. (Feature 14, US-14.6) |
 | `GET` | `/api/issue-reports/:issueReportId` | Bearer | `200` with one issue report. Admin, area admin for that vehicle's area, or the author. |
 | `POST` | `/api/issue-reports` | Bearer | `201` with the created issue report. Any signed-in user. |
 | `PUT` | `/api/issue-reports/:issueReportId` | Bearer | `200` with the updated issue report. Admin, or area admin for the report's current vehicle and the vehicle in the body. |
 | `DELETE` | `/api/issue-reports/:issueReportId` | Bearer | `200` `{ "message": "Issue report deleted successfully." }`. |
 
-Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId", "type", "description", "status", "resolvedAt", "author", "assignee", "vehicle", "vehicleRequest", "createdAt", "updatedAt" }`. `author` and `assignee` are `{ "id", "firstName", "lastName" }` or `null`. `vehicle` is `{ "id", "universityId" }`. `vehicleRequest` is `{ "id", "purpose" }` or `null`.
+Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId", "type", "description", "status", "resolvedAt", "author", "assignee", "vehicle", "vehicleRequest", "createdAt", "updatedAt" }`. `author` and `assignee` are `{ "id", "firstName", "lastName" }` or `null`. `vehicle` is `{ "id", "universityId", "areaId" }` (`areaId` added by Feature 14, US-14.6). `vehicleRequest` is `{ "id", "purpose" }` or `null`.
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -275,9 +276,9 @@ Success body: `{ "id", "vehicleId", "vehicleRequestId", "authorId", "assigneeId"
 | Missing or whitespace-only `description` | `400` | `{ "message": "Missing description." }` |
 | Missing `status` | `400` | `{ "message": "Missing status." }` |
 | `status` is not one of the allowed values | `400` | `{ "message": "Invalid status." }` |
-| `status` is `resolved` and `resolvedAt` is missing | `400` | `{ "message": "Missing resolved date." }` |
+| `status` is `resolved` or `moved_to_maintenance` and `resolvedAt` is missing | `400` | `{ "message": "Missing resolved date." }` |
 | `resolvedAt` is not a real `YYYY-MM-DD` date | `400` | `{ "message": "Invalid resolved date." }` |
-| `resolvedAt` is sent when `status` is not `resolved` | `400` | `{ "message": "Resolved date must be empty." }` |
+| `resolvedAt` is sent when `status` is not `resolved` or `moved_to_maintenance` | `400` | `{ "message": "Resolved date must be empty." }` |
 | `vehicleId` does not exist | `404` | `{ "message": "Vehicle not found." }` |
 | `vehicleRequestId` does not exist | `404` | `{ "message": "Vehicle request not found." }` |
 | `assigneeId` does not exist | `404` | `{ "message": "Assignee not found." }` |
@@ -362,7 +363,7 @@ Success body: `{ "id", "userId", "vehicleId", "serviceTypeId", "mileageLogId", "
 
 Every `/api/maintenance-needs` route uses `authorizeRoles("admin", "area_admin", "maintenance")`. Admins and maintenance users see every need and every vehicle. An area admin sees and changes needs only when the vehicle is in an area they administer. A missing token is `401` `{ "message": "Unauthorized! No token provided." }`. A signed-in user without one of those roles is `403` `{ "message": "One of these roles is required: admin, area_admin, maintenance." }`. An area admin using a vehicle outside their areas is `403` `{ "message": "Unauthorized for this area." }`.
 
-`authorId` is always the signed-in user. A body `authorId` is ignored. `issueReportId` must be null unless the signed-in user is an admin or area admin. On create, a non-null `issueReportId` copies the issue report: title `Maintenance Needed`, that report's vehicle, assignee, and description, `outOfService` true, priority `None`, status `Open`, and `resolvedAt` null.
+`authorId` is always the signed-in user. A body `authorId` is ignored. `issueReportId` must be null unless the signed-in user is an admin or area admin. On create, a non-null `issueReportId` fills every field the body leaves out from the issue report: title `Maintenance Needed`, that report's vehicle, assignee (only if they have the maintenance role), and description, `outOfService` true, priority `None`, status `Open`, and `resolvedAt` null. Fields the body sends are kept, and the issue report is set to `moved_to_maintenance` with today's `resolvedAt` in the same transaction (Feature 14, US-14.7).
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
@@ -399,6 +400,36 @@ Success body: `{ "id", "issueReportId", "authorId", "vehicleId", "assigneeId", "
 | `issueReportId` does not exist | `400` | `{ "message": "Issue report id does not exist." }` |
 | `issueReportId` is already used by a maintenance need | `400` | `{ "message": "Issue report already belongs to a maintenance need." }` |
 | Maintenance need id does not exist | `404` | `{ "message": "Maintenance need does not exist." }` |
+
+## Notes (Feature 14)
+
+Every note route uses `authenticate`. The caller must be able to read the note's parent, by that parent's own rules: a vehicle request's requester or an admin / area admin of its area (Feature 8); an issue report's author or an admin / area admin of the vehicle's area (Feature 10); any admin or maintenance user, or an area admin of the vehicle's area, for a maintenance need (Feature 11). Hidden notes (`isVisible: false`) are only returned to admins, area admins, and maintenance users.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/requests/:requestId/notes` | Can read the vehicle request | `200` array of notes, oldest `createdAt` first |
+| `GET` | `/api/issue-reports/:issueReportId/notes` | Can read the issue report | `200` array, same order |
+| `GET` | `/api/maintenance-needs/:maintenanceNeedId/notes` | Can read the maintenance need | `200` array, same order |
+| `GET` | `/api/notes/:noteId` | Can read the parent (and the note, if hidden) | `200` with one note |
+| `POST` | `/api/notes` | Can read the parent | `201` with the created note. Body: exactly one of `vehicleRequestId`, `issueReportId`, `maintenanceNeedId`; `content`; optional `isVisible` (default `true`) and `includeInEmail` (default `false`, unused for now). `authorId` is always the signed-in user. |
+| `DELETE` | `/api/notes/:noteId` | Admin, or the author while no one else has posted after it on the same parent | `204` with no body |
+
+Success body: `{ "id", "vehicleRequestId", "issueReportId", "maintenanceNeedId", "authorId", "author", "content", "isVisible", "includeInEmail", "createdAt", "updatedAt" }`. `author` is `{ "id", "firstName", "lastName" }`. Two of the three parent ids are `null`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Parent id in the URL or body is not a whole number | `400` | `{ "message": "Invalid request id." }`, `"Invalid issue report id."`, or `"Invalid maintenance need id."` |
+| Note id is not a whole number | `400` | `{ "message": "Invalid note id." }` |
+| Body has none, or more than one, of the parent ids | `400` | `{ "message": "Exactly one of vehicleRequestId, issueReportId, or maintenanceNeedId is required." }` |
+| `content` missing, not text, or empty after trimming and sanitizing | `400` | `{ "message": "Note content is required." }` |
+| `isVisible` / `includeInEmail` not a boolean | `400` | `{ "message": "isVisible must be true or false." }` / `{ "message": "includeInEmail must be true or false." }` |
+| Parent does not exist | `404` | `{ "message": "Vehicle request with id=12 not found." }` (or `Issue report …` / `Maintenance need …`) |
+| Note does not exist, or is hidden and the caller can't see hidden notes | `404` | `{ "message": "Note with id=1 not found." }` |
+| Caller can't read the parent | `403` | `{ "message": "You do not have access to this record." }` |
+| `isVisible: false` from a user without admin, area admin, or maintenance | `403` | `{ "message": "Only admins, area admins, and maintenance users can post hidden notes." }` |
+| Non-admin deleting someone else's note | `403` | `{ "message": "You can only delete your own notes." }` |
+| Non-admin deleting their note after someone else posted on the same parent | `400` | `{ "message": "Notes can only be deleted before someone replies." }` |
 
 ## Conventions
 

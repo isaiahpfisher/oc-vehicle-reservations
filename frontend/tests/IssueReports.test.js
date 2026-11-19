@@ -12,6 +12,8 @@ import vehicleServices from "../src/services/vehicleServices.js";
 import userServices from "../src/services/userServices.js";
 import vehicleRequestServices from "../src/services/vehicleRequestServices.js";
 import maintenanceNeedServices from "../src/services/maintenanceNeedServices.js";
+import noteServices from "../src/services/noteServices.js";
+import { todayInput } from "../src/models/issueReports.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
@@ -25,6 +27,7 @@ vi.mock("../src/services/issueReportServices.js", () => ({
     createIssueReport: vi.fn(),
     updateIssueReport: vi.fn(),
     removeIssueReport: vi.fn(),
+    getAssignees: vi.fn(),
   },
 }));
 
@@ -38,6 +41,10 @@ vi.mock("../src/services/userServices.js", () => ({
 
 vi.mock("../src/services/vehicleRequestServices.js", () => ({
   default: { getVehicleRequests: vi.fn() },
+}));
+
+vi.mock("../src/services/noteServices.js", () => ({
+  default: { getNotes: vi.fn(), getNote: vi.fn(), createNote: vi.fn(), removeNote: vi.fn() },
 }));
 
 vi.mock("../src/services/maintenanceNeedServices.js", () => ({
@@ -146,25 +153,38 @@ const clickNamed = async (text) => {
   await settle();
 };
 
+// Feature 14 (US-14.6): create and edit moved from dialogs to the issue report page; these helpers drive that page.
 const openCreate = async () => {
   await clickNamed("+ New Issue Report");
-  await waitFor(() => expect(document.body.textContent).toContain("New issue report"));
+  await waitFor(() => expect(router.currentRoute.value.name).toBe("issueReportCreate"));
+  await waitFor(() => expect(document.body.querySelector('[data-test="submit"]')).toBeTruthy());
 };
 
 const openEdit = async () => {
   await waitFor(() => expect(document.body.querySelector('[aria-label="Edit issue report"]')).toBeTruthy());
   document.body.querySelector('[aria-label="Edit issue report"]').click();
   await settle();
+  await waitFor(() => expect(router.currentRoute.value.name).toBe("issueReport"));
+  await waitFor(() => expect(document.body.querySelector('[data-test="issue-report-form"]')).toBeTruthy());
+};
+
+const byTest = (name) => document.body.querySelector(`[data-test="${name}"]`);
+
+const clickTest = async (name) => {
+  byTest(name).click();
+  await settle();
 };
 
 const fillRequired = async (overrides = {}) => {
-  await (await field("VSelect", "Vehicle")).setValue(overrides.vehicleId ?? 3);
-  await (await field("VSelect", "Type")).setValue(overrides.type ?? "low_gas");
+  await (await field("VAutocomplete", "Vehicle")).setValue(overrides.vehicleId ?? 3);
+  await clickTest(`type-${overrides.type ?? "low_gas"}`);
   await (await field("VTextarea", "Description")).setValue(overrides.description ?? "Tank is on empty.");
   if (overrides.status) {
-    await (await field("VSelect", "Status")).setValue(overrides.status);
+    await clickTest(`status-${overrides.status}`);
   }
 };
+
+const submit = () => clickTest("submit");
 
 beforeEach(async () => {
   signInAs(null);
@@ -179,6 +199,10 @@ beforeEach(async () => {
   vehicleRequestServices.getVehicleRequests.mockResolvedValue({ data: [campusVisit] });
   maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [] });
   maintenanceNeedServices.createMaintenanceNeed.mockResolvedValue({ status: 201, data: { id: 1, title: "Maintenance Needed" } });
+  // Feature 14 (US-14.6): the report page loads the report (with its vehicle's area) and its notes.
+  issueReportServices.getIssueReport.mockResolvedValue({ data: { ...janeReport, vehicle: { ...janeReport.vehicle, areaId: 1 } } });
+  noteServices.getNotes.mockResolvedValue({ data: [] });
+  issueReportServices.getAssignees.mockResolvedValue({ data: [{ ...alex, roles: ["maintenance"] }] });
   await router.push("/login");
   await router.isReady();
 });
@@ -197,24 +221,24 @@ describe("Feature 10 — Issue Report", () => {
       await openCreate();
 
       const labels = [
-        ...wrapper.findAllComponents({ name: "VSelect" }),
+        ...wrapper.findAllComponents({ name: "VAutocomplete" }),
         ...wrapper.findAllComponents({ name: "VTextarea" }),
       ].map((item) => item.props("label"));
-      expect(labels).toEqual(expect.arrayContaining(["Vehicle", "Vehicle request", "Type", "Description", "Status", "Assignee"]));
+      expect(labels).toEqual(expect.arrayContaining(["Vehicle", "Trip (optional)", "Description", "Assignee (optional)"]));
       expect(labels).not.toContain("Author");
-      expect((await field("VSelect", "Status")).props("modelValue")).toBe("pending");
-      expect(wrapper.findAllComponents({ name: "VTextField" }).some((item) => item.props("label") === "Resolved date")).toBe(false);
+      expect(document.body.querySelector('[role="radiogroup"]').textContent).toContain("Low gas");
+      expect(byTest("status-pending").getAttribute("aria-checked")).toBe("true");
+      expect(wrapper.findAllComponents({ name: "VTextField" }).some((item) => item.props("label") === "Resolved on")).toBe(false);
     });
 
     it("User saves issue report", async () => {
       signIn();
       const saved = { status: 201, data: janeReport };
       issueReportServices.createIssueReport.mockResolvedValue(saved);
-      issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [] }).mockResolvedValue({ data: [janeReport] });
       await mountAppAt("/issue-reports");
       await openCreate();
       await fillRequired();
-      await clickNamed("Create");
+      await submit();
 
       await waitFor(() => expect(issueReportServices.createIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.createIssueReport).toHaveBeenCalledWith({
@@ -227,46 +251,42 @@ describe("Feature 10 — Issue Report", () => {
         resolvedAt: null,
       });
       expect(saved.status).toBe(201);
+      // The new report opens on its page.
+      await waitFor(() => expect(router.currentRoute.value.fullPath).toBe("/issue-reports/1"));
       await waitFor(() => {
-        expect(wrapper.text()).toContain("V-100");
-        expect(wrapper.text()).toContain("Low gas");
-        expect(wrapper.text()).toContain("Pending");
-        expect(wrapper.text()).toContain("Tank is on empty.");
-        expect(wrapper.text()).toContain("Jane Doe");
+        expect(document.body.querySelector("h2").textContent).toBe("Low gas · V-100");
+        expect(byTest("status-chip").textContent).toContain("Pending");
+        expect(document.body.textContent).toContain("Reported by Jane Doe");
       });
     });
 
     it("User saves issue report with a vehicle request and assignee", async () => {
       signIn();
+      // Feature 14 (US-14.6): trips come from the request lists; picking one with a single vehicle fills it in.
+      apiClient.get.mockImplementation((url) =>
+        Promise.resolve({
+          data: ["requests", "me/requests"].includes(url) ? [{ ...campusVisit, startAt: "2026-11-02", endAt: "2026-11-02", allDay: true, status: "reserved", vehicles: [vehicle] }] : { roles: signedInUser.roles },
+        }),
+      );
       const saved = {
         status: 201,
-        data: {
-          ...janeReport,
-          vehicleRequestId: 12,
-          assigneeId: 5,
-          type: "dirty",
-          description: "Interior needs cleaning.",
-          assignee: alex,
-          vehicleRequest: campusVisit,
-        },
+        data: { ...janeReport, vehicleRequestId: 12, assigneeId: 5, type: "dirty", description: "Interior needs cleaning.", assignee: alex, vehicleRequest: campusVisit },
       };
       issueReportServices.createIssueReport.mockResolvedValue(saved);
-      issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [] }).mockResolvedValue({ data: [saved.data] });
       await mountAppAt("/issue-reports");
       await openCreate();
-      await fillRequired({ type: "dirty", description: "Interior needs cleaning." });
-      await (await field("VSelect", "Vehicle request")).setValue(12);
-      await (await field("VSelect", "Assignee")).setValue(5);
-      await clickNamed("Create");
+      await (await field("VAutocomplete", "Trip (optional)")).setValue(12);
+      expect((await field("VAutocomplete", "Vehicle")).props("modelValue")).toBe(3);
+      await clickTest("type-dirty");
+      await (await field("VTextarea", "Description")).setValue("Interior needs cleaning.");
+      await (await field("VAutocomplete", "Assignee (optional)")).setValue(5);
+      await submit();
 
       await waitFor(() => expect(issueReportServices.createIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.createIssueReport.mock.calls[0][0].vehicleRequestId).toBe(12);
+      expect(issueReportServices.createIssueReport.mock.calls[0][0].vehicleId).toBe(3);
       expect(issueReportServices.createIssueReport.mock.calls[0][0].assigneeId).toBe(5);
       expect(saved.status).toBe(201);
-      await waitFor(() => {
-        expect(wrapper.text()).toContain("Campus visit");
-        expect(wrapper.text()).toContain("Alex Kim");
-      });
     });
 
     it("User saves a resolved issue report", async () => {
@@ -278,11 +298,11 @@ describe("Feature 10 — Issue Report", () => {
       issueReportServices.createIssueReport.mockResolvedValue(saved);
       await mountAppAt("/issue-reports");
       await openCreate();
-      await (await field("VSelect", "Status")).setValue("resolved");
-      await waitFor(() => expect(document.body.textContent).toContain("Resolved date"));
       await fillRequired({ type: "other", description: "Spare key is missing.", status: "resolved" });
-      await (await field("VTextField", "Resolved date")).setValue("2026-10-23");
-      await clickNamed("Create");
+      // Resolving starts the date at today; it can be changed.
+      expect((await field("VTextField", "Resolved on")).props("modelValue")).toBe(todayInput());
+      await (await field("VTextField", "Resolved on")).setValue("2026-10-23");
+      await submit();
 
       await waitFor(() => expect(issueReportServices.createIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.createIssueReport.mock.calls[0][0].status).toBe("resolved");
@@ -294,36 +314,36 @@ describe("Feature 10 — Issue Report", () => {
       signIn();
       await mountAppAt("/issue-reports");
       await openCreate();
-      await (await field("VSelect", "Type")).setValue("low_gas");
+      await clickTest("type-low_gas");
       await (await field("VTextarea", "Description")).setValue("Tank is on empty.");
-      await clickNamed("Create");
+      await submit();
 
       expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(byTest("section-vehicle").textContent).toContain("Choose the vehicle."));
     });
 
     it("User creates issue report with missing type", async () => {
       signIn();
       await mountAppAt("/issue-reports");
       await openCreate();
-      await (await field("VSelect", "Vehicle")).setValue(3);
+      await (await field("VAutocomplete", "Vehicle")).setValue(3);
       await (await field("VTextarea", "Description")).setValue("Tank is on empty.");
-      await clickNamed("Create");
+      await submit();
 
       expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(byTest("section-problem").textContent).toContain("Choose the kind of problem."));
     });
 
     it("User creates issue report with missing description", async () => {
       signIn();
       await mountAppAt("/issue-reports");
       await openCreate();
-      await (await field("VSelect", "Vehicle")).setValue(3);
-      await (await field("VSelect", "Type")).setValue("low_gas");
-      await clickNamed("Create");
+      await (await field("VAutocomplete", "Vehicle")).setValue(3);
+      await clickTest("type-low_gas");
+      await submit();
 
       expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(byTest("section-problem").textContent).toContain("Describe the problem."));
     });
 
     it("User creates issue report with a whitespace-only description", async () => {
@@ -331,24 +351,24 @@ describe("Feature 10 — Issue Report", () => {
       await mountAppAt("/issue-reports");
       await openCreate();
       await fillRequired({ description: " " });
-      await clickNamed("Create");
+      await submit();
 
       expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(byTest("section-problem").textContent).toContain("Describe the problem."));
     });
 
     it("User creates issue report with missing status", async () => {
+      // Feature 14 (US-14.6): status is a toggle that always holds a value, so it can't be left empty.
       signIn();
       await mountAppAt("/issue-reports");
       await openCreate();
-      await (await field("VSelect", "Vehicle")).setValue(3);
-      await (await field("VSelect", "Type")).setValue("low_gas");
-      await (await field("VTextarea", "Description")).setValue("Tank is on empty.");
-      await (await field("VSelect", "Status")).setValue(null);
-      await clickNamed("Create");
+      await fillRequired();
+      await clickTest("status-pending");
+      expect(byTest("status-pending").getAttribute("aria-checked")).toBe("true");
+      await submit();
 
-      expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(issueReportServices.createIssueReport).toHaveBeenCalledTimes(1));
+      expect(issueReportServices.createIssueReport.mock.calls[0][0].status).toBe("pending");
     });
 
     it("User creates a resolved issue report with missing resolved date", async () => {
@@ -356,10 +376,11 @@ describe("Feature 10 — Issue Report", () => {
       await mountAppAt("/issue-reports");
       await openCreate();
       await fillRequired({ status: "resolved" });
-      await clickNamed("Create");
+      await (await field("VTextField", "Resolved on")).setValue("");
+      await submit();
 
       expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(byTest("section-status").textContent).toContain("Enter the date it was closed."));
     });
   });
 
@@ -439,72 +460,72 @@ describe("Feature 10 — Issue Report", () => {
     it("Admin edits an issue report description", async () => {
       signIn();
       const saved = { status: 200, data: { ...janeReport, description: "Tank is below a quarter." } };
-      issueReportServices.getIssueReports
-        .mockResolvedValueOnce({ data: [janeReport] })
-        .mockResolvedValue({ data: [saved.data] });
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
       issueReportServices.updateIssueReport.mockResolvedValue(saved);
       await mountAppAt("/issue-reports");
       await openEdit();
       await (await field("VTextarea", "Description")).setValue("Tank is below a quarter.");
-      await clickNamed("Save");
+      await submit();
 
       await waitFor(() => expect(issueReportServices.updateIssueReport).toHaveBeenCalledTimes(1));
+      expect(issueReportServices.updateIssueReport.mock.calls[0][1].description).toBe("Tank is below a quarter.");
       expect(saved.status).toBe(200);
-      await waitFor(() => expect(wrapper.text()).toContain("Tank is below a quarter."));
+      await waitFor(() => expect(document.body.textContent).toContain("Changes saved."));
+      expect((await field("VTextarea", "Description")).props("modelValue")).toBe("Tank is below a quarter.");
     });
 
     it("Admin edits an issue report type", async () => {
       signIn();
       const saved = { status: 200, data: { ...janeReport, type: "maintenance" } };
-      issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [janeReport] }).mockResolvedValue({ data: [saved.data] });
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
       issueReportServices.updateIssueReport.mockResolvedValue(saved);
       await mountAppAt("/issue-reports");
       await openEdit();
-      await (await field("VSelect", "Type")).setValue("maintenance");
-      await clickNamed("Save");
+      await clickTest("type-maintenance");
+      await submit();
 
       await waitFor(() => expect(issueReportServices.updateIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.updateIssueReport.mock.calls[0][1].type).toBe("maintenance");
       expect(saved.status).toBe(200);
-      await waitFor(() => expect(wrapper.text()).toContain("Maintenance"));
+      await waitFor(() => expect(document.body.querySelector("h2").textContent).toBe("Maintenance · V-100"));
     });
 
     it("Admin edits an issue report to resolved", async () => {
       signIn();
       const saved = { status: 200, data: { ...janeReport, status: "resolved", resolvedAt: "2026-10-24" } };
-      issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [janeReport] }).mockResolvedValue({ data: [saved.data] });
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
       issueReportServices.updateIssueReport.mockResolvedValue(saved);
       await mountAppAt("/issue-reports");
       await openEdit();
-      await (await field("VSelect", "Status")).setValue("resolved");
-      await (await field("VTextField", "Resolved date")).setValue("2026-10-24");
-      await clickNamed("Save");
+      await clickTest("status-resolved");
+      await (await field("VTextField", "Resolved on")).setValue("2026-10-24");
+      await submit();
 
       await waitFor(() => expect(issueReportServices.updateIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.updateIssueReport.mock.calls[0][1].status).toBe("resolved");
       expect(issueReportServices.updateIssueReport.mock.calls[0][1].resolvedAt).toBe("2026-10-24");
       expect(saved.status).toBe(200);
-      await waitFor(() => {
-        expect(wrapper.text()).toContain("Resolved");
-        expect(wrapper.text()).toContain("2026-10-24");
-      });
+      await waitFor(() => expect(byTest("status-chip").textContent).toContain("Resolved"));
+      expect((await field("VTextField", "Resolved on")).props("modelValue")).toBe("2026-10-24");
     });
 
     it("Admin clears an issue report assignee", async () => {
       signIn();
-      const assigned = { ...janeReport, assigneeId: 5, assignee: alex };
+      const assigned = { ...janeReport, assigneeId: 5, assignee: alex, vehicle: { ...janeReport.vehicle, areaId: 1 } };
       const saved = { status: 200, data: { ...janeReport, assigneeId: null, assignee: null } };
-      issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [assigned] }).mockResolvedValue({ data: [saved.data] });
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [assigned] });
+      issueReportServices.getIssueReport.mockResolvedValue({ data: assigned });
       issueReportServices.updateIssueReport.mockResolvedValue(saved);
       await mountAppAt("/issue-reports");
       await openEdit();
-      await (await field("VSelect", "Assignee")).setValue(null);
-      await clickNamed("Save");
+      expect((await field("VAutocomplete", "Assignee (optional)")).props("modelValue")).toBe(5);
+      await (await field("VAutocomplete", "Assignee (optional)")).setValue(null);
+      await submit();
 
       await waitFor(() => expect(issueReportServices.updateIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.updateIssueReport.mock.calls[0][1].assigneeId).toBeNull();
       expect(saved.status).toBe(200);
-      await waitFor(() => expect(wrapper.text()).not.toContain("Alex Kim"));
+      await waitFor(() => expect((wrapper.findAllComponents({ name: "VAutocomplete" }).find((c) => c.props("label") === "Assignee (optional)")).props("modelValue")).toBeNull());
     });
 
     it("Admin edits an issue report to have a missing description", async () => {
@@ -513,10 +534,10 @@ describe("Feature 10 — Issue Report", () => {
       await mountAppAt("/issue-reports");
       await openEdit();
       await (await field("VTextarea", "Description")).setValue("");
-      await clickNamed("Save");
+      await submit();
 
       expect(issueReportServices.updateIssueReport).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
+      await waitFor(() => expect(byTest("section-problem").textContent).toContain("Describe the problem."));
     });
 
     it("Admin deletes an issue report", async () => {
@@ -539,16 +560,16 @@ describe("Feature 10 — Issue Report", () => {
     it("Area admin edits an issue report in their area", async () => {
       signIn(areaAdminRoles);
       const saved = { status: 200, data: { ...janeReport, description: "Tank is below a quarter." } };
-      issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [janeReport] }).mockResolvedValue({ data: [saved.data] });
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
       issueReportServices.updateIssueReport.mockResolvedValue(saved);
       await mountAppAt("/issue-reports");
       await openEdit();
       await (await field("VTextarea", "Description")).setValue("Tank is below a quarter.");
-      await clickNamed("Save");
+      await submit();
 
       await waitFor(() => expect(issueReportServices.updateIssueReport).toHaveBeenCalledTimes(1));
       expect(saved.status).toBe(200);
-      await waitFor(() => expect(wrapper.text()).toContain("Tank is below a quarter."));
+      await waitFor(() => expect(document.body.textContent).toContain("Changes saved."));
     });
   });
 
@@ -562,86 +583,81 @@ describe("Feature 10 — Issue Report", () => {
 });
 
 const maintenanceButtons = () =>
-  [...document.body.querySelectorAll('button[aria-label="Create maintenance need"]')];
+  [...document.body.querySelectorAll('[aria-label="Create maintenance need"], [data-test="create-maintenance-need"]')];
+
+// Feature 14 (US-14.7): Create Maintenance Need moved from the issue reports list to the issue report page.
+// It opens the maintenance need form filled in from the report instead of creating the need right away.
+const openReport = async (report, needs = []) => {
+  issueReportServices.getIssueReport.mockResolvedValue({ data: { ...report, vehicle: { ...report.vehicle, areaId: 1 } } });
+  maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: needs });
+  await mountAppAt(`/issue-reports/${report.id}`);
+  await waitFor(() => expect(byTest("issue-report-form")).toBeTruthy());
+  await settle();
+};
 
 describe("Feature 11 — Maintenance Needs", () => {
   describe("US-11.2 — Create maintenance need from issue report", () => {
     it("Admin user sees Create Maintenance Need on a maintenance issue report", async () => {
       signIn();
-      const reports = [
-        { ...janeReport, id: 1, type: "maintenance" },
-        { ...janeReport, id: 2, type: "maintenance", description: "Brakes." },
-      ];
-      issueReportServices.getIssueReports.mockResolvedValue({ data: reports });
+      // Not on the list any more.
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [{ ...janeReport, type: "maintenance" }] });
       await mountAppAt("/issue-reports");
+      await waitFor(() => expect(wrapper.text()).toContain("Tank is on empty."));
+      expect(maintenanceButtons()).toHaveLength(0);
+      wrapper.unmount();
 
-      await waitFor(() => expect(maintenanceButtons()).toHaveLength(2));
-      const tooltips = wrapper.findAllComponents({ name: "VTooltip" }).filter((tooltip) => tooltip.props("text") === "Create maintenance need");
-      expect(tooltips).toHaveLength(2);
+      await openReport({ ...janeReport, id: 4, type: "maintenance" });
+      await waitFor(() => expect(byTest("create-maintenance-need")).toBeTruthy());
+      expect(byTest("create-maintenance-need").getAttribute("href")).toBe("/maintenance-needs/new?issueReportId=4");
     });
 
     it("Create Maintenance Need is unavailable when the issue type is not maintenance", async () => {
       signIn();
-      issueReportServices.getIssueReports.mockResolvedValue({
-        data: [
-          { ...janeReport, id: 1, type: "low_gas" },
-          { ...janeReport, id: 2, type: "dirty", description: "Muddy." },
-        ],
-      });
-      await mountAppAt("/issue-reports");
+      await openReport({ ...janeReport, id: 4, type: "low_gas" });
 
-      await waitFor(() => {
-        const buttons = maintenanceButtons();
-        expect(buttons).toHaveLength(2);
-        expect(buttons.every((button) => button.disabled)).toBe(true);
-      });
+      expect(byTest("maintenance")).toBeNull();
+      expect(maintenanceButtons()).toHaveLength(0);
     });
 
     it("Create Maintenance Need is unavailable when that issue report already has a maintenance need", async () => {
       signIn();
-      issueReportServices.getIssueReports.mockResolvedValue({
-        data: [{ ...janeReport, id: 7, type: "maintenance" }],
-      });
-      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [{ id: 1, issueReportId: 7 }] });
-      await mountAppAt("/issue-reports");
+      await openReport({ ...janeReport, id: 7, type: "maintenance" }, [
+        { id: 1, issueReportId: 7, title: "Oil change", status: "Open", priority: "High" },
+      ]);
 
-      await waitFor(() => {
-        const buttons = maintenanceButtons();
-        expect(buttons).toHaveLength(1);
-        expect(buttons[0].disabled).toBe(true);
-      });
+      await waitFor(() => expect(byTest("view-maintenance-need")).toBeTruthy());
+      expect(byTest("linked-need-title").textContent).toBe("Oil change");
+      expect(byTest("view-maintenance-need").getAttribute("href")).toBe("/maintenance-needs/1");
+      expect(maintenanceButtons()).toHaveLength(0);
     });
 
     it("Admin user creates a maintenance need from an issue report", async () => {
       signIn();
-      const report = {
-        ...janeReport,
-        id: 4,
-        type: "maintenance",
-        vehicleId: 3,
-        assigneeId: 5,
-        description: "Oil change needed.",
-      };
-      const created = {
-        id: 9,
-        title: "Maintenance Needed",
-        vehicleId: 3,
-        assigneeId: 5,
-        description: "Oil change needed.",
-        status: "Open",
-        priority: "None",
-        outOfService: true,
-        author: janeReport.author,
-        assignee: alex,
-        vehicle: { ...vehicle, areaId: 1 },
-        createdAt: "2026-11-06T12:00:00.000Z",
-      };
-      issueReportServices.getIssueReports.mockResolvedValue({ data: [report] });
-      maintenanceNeedServices.createMaintenanceNeed.mockResolvedValue({ status: 201, data: created });
-      await mountAppAt("/issue-reports");
+      const report = { ...janeReport, id: 4, type: "maintenance", vehicleId: 3, assigneeId: 5, assignee: alex, description: "Oil change needed." };
+      maintenanceNeedServices.getMaintenanceNeedOptions.mockResolvedValue({
+        data: {
+          vehicles: [{ id: 3, color: "White", make: "Ford", model: "Transit", licensePlate: "ABC-123", areaId: 1 }],
+          assignees: [alex],
+        },
+      });
+      maintenanceNeedServices.createMaintenanceNeed.mockResolvedValue({ status: 201, data: { id: 9, issueReportId: 4 } });
+      await openReport(report);
 
-      await waitFor(() => expect(maintenanceButtons()[0]?.disabled).toBe(false));
-      maintenanceButtons()[0].click();
+      await waitFor(() => expect(byTest("create-maintenance-need")).toBeTruthy());
+      byTest("create-maintenance-need").click();
+      await settle();
+      await waitFor(() => expect(router.currentRoute.value.fullPath).toBe("/maintenance-needs/new?issueReportId=4"));
+
+      // Filled in from the report, and still editable.
+      await waitFor(() => expect(byTest("from-issue-report")?.textContent).toContain("Maintenance · V-100"));
+      // Feature 14 (US-14.7): it says up front that the report will be closed.
+      expect(byTest("from-issue-report").textContent).toContain("Moved to maintenance");
+      expect(wrapper.findAllComponents({ name: "VTextField" }).find((c) => c.props("label") === "Title").props("modelValue")).toBe("Oil change needed.");
+      expect((await field("VSelect", "Vehicle")).props("modelValue")).toBe(3);
+      expect((await field("VSelect", "Assignee")).props("modelValue")).toBe(5);
+      expect((await field("VTextarea", "Description")).props("modelValue")).toBe("Oil change needed.");
+      await (await field("VSelect", "Priority")).setValue("High");
+      await clickNamed("Create");
 
       await waitFor(() => expect(maintenanceNeedServices.createMaintenanceNeed).toHaveBeenCalledTimes(1));
       expect(maintenanceNeedServices.createMaintenanceNeed).toHaveBeenCalledWith({
@@ -649,19 +665,189 @@ describe("Feature 11 — Maintenance Needs", () => {
         vehicleId: 3,
         assigneeId: 5,
         description: "Oil change needed.",
-        title: "Maintenance Needed",
+        title: "Oil change needed.",
         outOfService: true,
-        priority: "None",
+        priority: "High",
         status: "Open",
         resolvedAt: null,
         authorId: 2,
       });
-      await waitFor(() => expect(maintenanceButtons()[0].disabled).toBe(true));
+      // Back to the report, which now links to its need and says it was closed.
+      await waitFor(() => expect(router.currentRoute.value.fullPath).toBe("/issue-reports/4"));
+      await waitFor(() => expect(document.body.textContent).toContain("This report is now Moved to maintenance."));
+    });
 
-      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [created] });
-      await router.push("/maintenance-needs");
+    it("Cancel on a need started from an issue report returns to the report", async () => {
+      signIn();
+      issueReportServices.getIssueReport.mockResolvedValue({ data: { ...janeReport, id: 4, type: "maintenance" } });
+      maintenanceNeedServices.getMaintenanceNeedOptions.mockResolvedValue({ data: { vehicles: [], assignees: [] } });
+      await mountAppAt("/maintenance-needs/new?issueReportId=4");
+      await waitFor(() => expect(byTest("from-issue-report")).toBeTruthy());
+
+      await clickNamed("Cancel");
+      await waitFor(() => expect(router.currentRoute.value.fullPath).toBe("/issue-reports/4"));
+      expect(maintenanceNeedServices.createMaintenanceNeed).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("Feature 14 — Notes", () => {
+  describe("US-14.6 — Issue report page", () => {
+    it("Issue reports list opens the issue report page", async () => {
+      // A requester can't manage reports, but can still open their own.
+      signIn([], { userId: 2 });
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
+      issueReportServices.getIssueReport.mockResolvedValue({ data: { ...janeReport, vehicle: { ...janeReport.vehicle, areaId: 1 } } });
+      apiClient.get.mockImplementation((url) => Promise.resolve({ data: url.endsWith("/notes") ? [] : { roles: [] } }));
+      await mountAppAt("/issue-reports");
+
+      const view = await waitFor(() => {
+        const match = document.body.querySelector('[aria-label="View issue report"]');
+        expect(match).toBeTruthy();
+        return match;
+      });
+      expect(document.body.querySelector('[aria-label="Edit issue report"]')).toBeNull();
+      // The description links to the same page.
+      const link = [...document.body.querySelectorAll("a")].find((el) => el.textContent.trim() === "Tank is on empty.");
+      expect(link.getAttribute("href")).toBe("/issue-reports/1");
+
+      view.click();
       await settle();
-      await waitFor(() => expect(document.body.textContent).toContain("Maintenance Needed"));
+
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("issueReport"));
+      expect(router.currentRoute.value.params.issueReportId).toBe("1");
+      await waitFor(() => expect(document.body.querySelector("h2")?.textContent).toBe("Low gas · V-100"));
+      expect(issueReportServices.getIssueReport).toHaveBeenCalledWith("1");
+    });
+  });
+
+  describe("US-14.8 — Find issue reports", () => {
+    const reports = [
+      { ...janeReport, id: 1, createdAt: "2026-11-01T12:00:00.000Z" },
+      { ...musicReport, id: 2, type: "maintenance", createdAt: "2026-11-03T12:00:00.000Z" },
+      {
+        ...janeReport,
+        id: 3,
+        type: "dirty",
+        status: "resolved",
+        description: "Mud on the floor mats.",
+        assigneeId: 5,
+        assignee: alex,
+        vehicle: { id: 5, universityId: "V-150" },
+        vehicleRequest: campusVisit,
+        createdAt: "2026-11-02T12:00:00.000Z",
+      },
+    ];
+
+    const rowTexts = () => [...document.body.querySelectorAll(".v-data-table tbody tr")].map((row) => row.textContent);
+    const descriptions = () => rowTexts().map((text) => reports.find((report) => text.includes(report.description))?.description);
+
+    const mountList = async () => {
+      signIn();
+      issueReportServices.getIssueReports.mockResolvedValue({ data: reports });
+      await mountAppAt("/issue-reports");
+      await waitFor(() => expect(rowTexts()).toHaveLength(3));
+    };
+
+    it("Issue reports table shows only the key columns", async () => {
+      await mountList();
+
+      const headers = [...document.body.querySelectorAll(".v-data-table thead th")].map((th) => th.textContent.trim());
+      expect(headers).toEqual(["Issue", "Vehicle", "Status", "Reported", "Actions"]);
+      // Type and reporter ride along under the description instead of taking columns.
+      expect(rowTexts()[0]).toContain("Maintenance · Jane Doe");
+      expect(rowTexts()[0]).toContain("Pending");
+      expect(rowTexts()[0]).toContain("Nov 3, 2026");
+    });
+
+    it("Issue reports table fits small screens without scrolling sideways", async () => {
+      // Desktop: the short columns have fixed widths; Issue takes the rest and truncates.
+      await mountList();
+      const widths = [...document.body.querySelectorAll(".v-data-table thead th")].map((th) => th.style.width);
+      expect(widths).toEqual(["", "120px", "136px", "136px", "104px"]);
+      expect(document.body.querySelector('[data-test="issue-mobile-row"]')).toBeNull();
+      wrapper.unmount();
+
+      // Phones: one compact row per report with everything that matters.
+      const width = window.innerWidth;
+      window.innerWidth = 390;
+      window.dispatchEvent(new Event("resize"));
+      try {
+        await mountList();
+        await waitFor(() => expect(document.body.querySelectorAll('[data-test="issue-mobile-row"]')).toHaveLength(3));
+        const first = document.body.querySelector('[data-test="issue-mobile-row"]');
+        expect(first.querySelector("td").getAttribute("colspan")).toBe("5");
+        for (const text of ["Music issue.", "Maintenance · Jane Doe", "Pending", "V-200", "Nov 3, 2026"]) {
+          expect(first.textContent).toContain(text);
+        }
+        expect(first.querySelector('[aria-label="Edit issue report"]')).not.toBeNull();
+      } finally {
+        window.innerWidth = width;
+        window.dispatchEvent(new Event("resize"));
+      }
+    });
+
+    it("User searches issue reports", async () => {
+      await mountList();
+      const search = await field("VTextField", "Search");
+
+      // Any of the report's details, any order, any case.
+      for (const [text, expected] of [
+        ["alex", ["Mud on the floor mats."]],
+        ["v-200", ["Music issue."]],
+        ["EMPTY tank", ["Tank is on empty."]],
+        ["campus visit", ["Mud on the floor mats."]],
+      ]) {
+        await search.setValue(text);
+        await settle();
+        expect(descriptions()).toEqual(expected);
+      }
+      expect(byTest("result-count").textContent).toContain("Showing 1 of 3");
+
+      await search.setValue("nothing like this");
+      await settle();
+      expect(document.body.textContent).toContain("No issue reports match");
+      await clickTest("clear-filters");
+      await waitFor(() => expect(rowTexts()).toHaveLength(3));
+      expect(byTest("result-count")).toBeNull();
+    });
+
+    it("User filters issue reports by status and type", async () => {
+      await mountList();
+
+      await (await field("VSelect", "Status")).setValue("pending");
+      await settle();
+      expect(descriptions()).toEqual(["Music issue.", "Tank is on empty."]);
+
+      await (await field("VSelect", "Type")).setValue("low_gas");
+      await settle();
+      expect(descriptions()).toEqual(["Tank is on empty."]);
+
+      // Feature 14: the new closing status is a filter choice too.
+      expect((await field("VSelect", "Status")).props("items").map(({ value }) => value)).toContain("moved_to_maintenance");
+      await (await field("VSelect", "Status")).setValue(null);
+      await (await field("VSelect", "Type")).setValue("dirty");
+      await settle();
+      expect(descriptions()).toEqual(["Mud on the floor mats."]);
+    });
+
+    it("User sorts issue reports", async () => {
+      await mountList();
+      // Newest first by default.
+      expect(descriptions()).toEqual(["Music issue.", "Mud on the floor mats.", "Tank is on empty."]);
+
+      const header = (title) => [...document.body.querySelectorAll(".v-data-table thead th")].find((th) => th.textContent.trim() === title);
+      header("Vehicle").click();
+      await settle();
+      expect(descriptions()).toEqual(["Tank is on empty.", "Mud on the floor mats.", "Music issue."]);
+      header("Vehicle").click();
+      await settle();
+      expect(descriptions()).toEqual(["Music issue.", "Mud on the floor mats.", "Tank is on empty."]);
+
+      header("Status").click();
+      await settle();
+      // Pending before Resolved.
+      expect(descriptions()[2]).toBe("Mud on the floor mats.");
     });
   });
 });

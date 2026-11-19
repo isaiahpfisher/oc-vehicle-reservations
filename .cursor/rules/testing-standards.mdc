@@ -32,8 +32,9 @@ When a later feature changes an earlier feature's access (e.g. Feature 3 made ar
 ### Test database
 *   The database is `vehicles-db-test` (copy `backend/.env.test.example` to `backend/.env.test`). Its name **must** end in `-test`; `syncTestDatabase()` refuses to touch any other database.
 *   `tests/setup.js` loads the test env with `override: true` so variables exported in your shell can never point tests at the dev database. Do not weaken this.
-*   Call `syncTestDatabase()` in `beforeEach`. The first call in a file drops and recreates every table; later calls truncate, which also resets auto-increment ids. Tests may rely on an empty database with ids starting at 1; they must not alter the schema.
-*   Never run two backend test runs at the same time: they share one database and wipe each other's rows.
+*   Call `syncTestDatabase()` in `beforeEach`. Jest's global setup builds the schema once per run; each call truncates the tables written since the last reset (any table whose AUTO_INCREMENT isn't 1), which also resets auto-increment ids. Tests may rely on an empty database with ids starting at 1; they must not alter the schema.
+*   Test files run in parallel (`maxWorkers: "50%"`), each Jest worker on its own database: worker 1 uses `vehicles-db-test`, worker N `vehicles-db-wN-test` (`tests/workerDatabase.js`). Global setup recreates them all each run. A file must not depend on another file's rows.
+*   Never run two backend test runs at the same time: runs share those databases and wipe each other's rows.
 *   Flaky failures or sudden slowness: check system load (`uptime`) before changing tests or code.
 
 ## Frontend (Vitest + @vue/test-utils)
