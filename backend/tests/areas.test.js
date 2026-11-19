@@ -2,9 +2,11 @@
  * Feature 2 — Area Management
  * Spec: features/feature-2-area-management.md
  */
+import { jest } from "@jest/globals";
 import request from "supertest";
 import app from "../server.js";
 import db from "../app/models/index.js";
+import { storage } from "../app/services/areaLogoStorage.js";
 import { syncTestDatabase, createUserWithRoles } from "./helpers.js";
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
@@ -406,5 +408,160 @@ describe("Feature 5 — areas with vehicles", () => {
       message: "Area has vehicles. Delete vehicles or reassign them to a different area first.",
     });
     expect(await db.area.count({ where: { id: area.id } })).toBe(1);
+  });
+});
+
+const publicLogo = (areaId, filename) =>
+  `https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/${areaId}/${filename}`;
+
+const pngFile = {
+  buffer: Buffer.from("png"),
+  filename: "example.png",
+  contentType: "image/png",
+};
+
+const stubStorage = ({ files = [], url = publicLogo(1, "example.png") } = {}) => {
+  jest.spyOn(storage, "enabled").mockReturnValue(true);
+  jest.spyOn(storage, "upload").mockResolvedValue(undefined);
+  jest.spyOn(storage, "list").mockResolvedValue(files);
+  jest.spyOn(storage, "remove").mockResolvedValue(undefined);
+  jest.spyOn(storage, "publicUrl").mockReturnValue(url);
+};
+
+describe("Feature 17 — Area logo", () => {
+  beforeEach(() => {
+    process.env.AREA_LOGO_PREFIX = "test";
+  });
+
+  afterEach(() => {
+    delete process.env.AREA_LOGO_PREFIX;
+    jest.restoreAllMocks();
+  });
+
+  describe("US-17.1 — Upload area logo", () => {
+    it("User uploads logo", async () => {
+      const headers = await signIn();
+      const url = publicLogo(1, "example.png");
+      stubStorage({ files: [{ id: "file", name: "example.png" }], url });
+
+      const response = await request(app)
+        .post("/api/areas")
+        .set(headers)
+        .field("name", "Athletics")
+        .attach("logo", pngFile.buffer, { filename: pngFile.filename, contentType: pngFile.contentType });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toMatchObject({ name: "Athletics", logo: url });
+      expect(storage.upload).toHaveBeenCalledWith("test/1/example.png", expect.any(Buffer), "image/png");
+
+      const stored = await db.area.findByPk(response.body.id);
+      expect(stored.logo).toBe(url);
+    });
+  });
+
+  describe("US-17.2 — Edit area logo", () => {
+    it("User uploads logo on edit", async () => {
+      const headers = await signIn();
+      const created = await createArea(headers, { logo: publicLogo(1, "old.png") });
+      const url = publicLogo(1, "example.png");
+      stubStorage({
+        files: [
+          { id: "old", name: "old.png" },
+          { id: "next", name: "example.png" },
+        ],
+        url,
+      });
+
+      const response = await request(app)
+        .put(`/api/areas/${created.body.id}`)
+        .set(headers)
+        .field("name", "Athletics")
+        .attach("logo", pngFile.buffer, { filename: pngFile.filename, contentType: pngFile.contentType });
+
+      expect(response.status).toBe(200);
+      expect(response.body.logo).toBe(url);
+      expect(storage.upload).toHaveBeenCalledWith("test/1/example.png", expect.any(Buffer), "image/png");
+      expect(storage.remove).toHaveBeenCalledWith(["test/1/old.png"]);
+      expect(await db.area.findByPk(created.body.id)).toMatchObject({ logo: url });
+    });
+
+    it("User removes logo", async () => {
+      const headers = await signIn();
+      const created = await createArea(headers, { logo: publicLogo(1, "example.png") });
+      stubStorage({ files: [{ id: "file", name: "example.png" }] });
+
+      const response = await request(app)
+        .put(`/api/areas/${created.body.id}`)
+        .set(headers)
+        .field("name", "Athletics")
+        .field("removeLogo", "true");
+
+      expect(response.status).toBe(200);
+      expect(response.body.logo).toBe("");
+      expect(storage.remove).toHaveBeenCalledWith(["test/1/example.png"]);
+      expect(storage.upload).toHaveBeenCalledWith("test/.keep.png", expect.any(Buffer), "image/png");
+      expect(await db.area.findByPk(created.body.id)).toMatchObject({ logo: "" });
+    });
+  });
+
+  describe("US-17.3 — Delete area with logo", () => {
+    it("User deletes an area with a logo", async () => {
+      const headers = await signIn();
+      const created = await createArea(headers, { logo: publicLogo(1, "example.png") });
+      stubStorage({ files: [{ id: "file", name: "example.png" }] });
+
+      const response = await request(app).delete(`/api/areas/${created.body.id}`).set(headers);
+
+      expect(response.status).toBe(200);
+      expect(storage.remove).toHaveBeenCalledWith(["test/1/example.png"]);
+      expect(storage.upload).toHaveBeenCalledWith("test/.keep.png", expect.any(Buffer), "image/png");
+      expect(await db.area.count({ where: { id: created.body.id } })).toBe(0);
+    });
+  });
+
+  describe("Edge cases", () => {
+    it("rejects an unsupported logo file", async () => {
+      const headers = await signIn();
+
+      const response = await request(app)
+        .post("/api/areas")
+        .set(headers)
+        .field("name", "Athletics")
+        .attach("logo", Buffer.from("gif"), { filename: "logo.gif", contentType: "image/gif" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Unsupported file type." });
+      expect(await db.area.count()).toBe(0);
+    });
+
+    it("rejects a logo over 2 MB", async () => {
+      const headers = await signIn();
+
+      const response = await request(app)
+        .post("/api/areas")
+        .set(headers)
+        .field("name", "Athletics")
+        .attach("logo", Buffer.alloc(2 * 1024 * 1024 + 1), { filename: "big.png", contentType: "image/png" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "File must be under 2 MB." });
+      expect(await db.area.count()).toBe(0);
+    });
+
+    it("keeps the saved area when the logo upload fails", async () => {
+      const headers = await signIn();
+      stubStorage();
+      storage.upload.mockRejectedValue(new Error("storage down"));
+
+      const response = await request(app)
+        .post("/api/areas")
+        .set(headers)
+        .field("name", "Athletics")
+        .attach("logo", pngFile.buffer, { filename: pngFile.filename, contentType: pngFile.contentType });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ message: "Failed to upload logo." });
+      expect(await db.area.findOne()).toMatchObject({ name: "Athletics", logo: "" });
+    });
   });
 });

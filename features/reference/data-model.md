@@ -33,7 +33,7 @@ Users are only created by Google sign-in (`POST /api/login`).
 | ------ | ---- | ----- |
 | `id` | INTEGER | Primary key, auto-increment |
 | `name` | STRING | Required, trimmed, unique, max 255 |
-| `logo` | TEXT | Required. Trimmed. Empty string when no logo. A non-empty value is an `http` or `https` URL. |
+| `logo` | TEXT | Required. Trimmed. Empty string when no logo. A non-empty value is an `http` or `https` URL. An uploaded logo is the public Supabase URL for `area-logos/{AREA_LOGO_PREFIX}/{id}/{filename}` (Feature 17). Production prefix is `prod`. |
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 

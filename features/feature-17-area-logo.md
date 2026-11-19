@@ -95,7 +95,7 @@ logo: example.png
 {
   "id": 1,
   "name": "Athletics",
-  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/1/example.png",
+  "logo": "https://vehicle-registration.supabase.co/storage/v1/object/public/area-logos/prod/1/example.png",
   "createdAt": "2026-07-02T12:00:00.000Z",
   "updatedAt": "2026-07-02T12:00:00.000Z"
 }
@@ -111,7 +111,7 @@ logo: example.png
 ### [View: Areas page] 
 
 Implementation notes:
-- For Area Logo, the line in the table shows the rendered logo in appropriate size and the filename. There is an icon to upload a new file and another icon to remove the file right by the logo.
+- For Area Logo, the rendered logo is the first cell in the row. The filename and the upload and remove icons stay in the Logo column. Those icons keep the same position whether or not that row has a logo.
 
 ### [View: AreaFormModal ] 
 
@@ -126,8 +126,10 @@ No updated data model.
 
 - The bucket is public. The browser never receives the Supabase key.
 - Bucket name: `area-logos`
-- Path: `{areaId}/{filename}`
-- The server reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, which are off the frontend and out of Git.
+- Path: `{AREA_LOGO_PREFIX}/{areaId}/{filename}`
+- `AREA_LOGO_PREFIX` is an environment variable. Each developer sets their own name. Production sets `prod`. The prefix is part of the public logo URL.
+- Removing a logo or deleting an area removes that area's files only. The prefix folder stays. `reset-local-data` stops the backend, deletes that folder and recreates it, and drops and recreates the databases named by `DB_NAME` in `backend/.env` and `backend/.env.test`.
+- The server reads SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and AREA_LOGO_PREFIX, which are off the frontend and out of Git.
 
 ---
 
@@ -226,13 +228,13 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-002** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-003)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-002** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-003)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ## Out of Scope
 
