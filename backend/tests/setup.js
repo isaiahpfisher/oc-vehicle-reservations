@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import http from "http";
+import { Test } from "supertest";
 import path from "path";
 import { fileURLToPath } from "url";
 import { workerDatabase } from "./workerDatabase.js";
@@ -35,12 +35,12 @@ globalThis.fetch = (url, ...args) => {
 
 // supertest starts the app with `app.listen(0)`, which binds a random port on IPv6 `::`, then sends the request to
 // `127.0.0.1:<port>`. On macOS another program can already hold that port on 127.0.0.1 (Ollama does, at 49168), and
-// the request goes to it instead: a test once got Ollama's `200` for `POST /api/drivers`. Binding test servers to
-// 127.0.0.1 makes the system pick a port that is free there.
-const listen = http.Server.prototype.listen;
-http.Server.prototype.listen = function listenOnLoopback(...args) {
-  if (args[0] === 0 && (args.length === 1 || typeof args[1] === "function")) {
-    return listen.call(this, 0, "127.0.0.1", ...args.slice(1));
-  }
-  return listen.apply(this, args);
+// the request goes to it instead: a test once got Ollama's `200` for `POST /api/drivers`. So when the server is on
+// IPv6, send the request to `[::1]`, which the server itself holds.
+// (Binding to 127.0.0.1 instead does not work: `listen(0, host)` binds asynchronously, and supertest reads
+// `address().port` right after calling `listen`, getting `null`.)
+const serverAddress = Test.prototype.serverAddress;
+Test.prototype.serverAddress = function serverAddressOnOwnLoopback(app, urlPath) {
+  const url = serverAddress.call(this, app, urlPath);
+  return app.address().family === "IPv6" ? url.replace("://127.0.0.1:", "://[::1]:") : url;
 };
