@@ -307,31 +307,31 @@ Exactly one of `vehicleRequestId`, `issueReportId`, or `maintenanceNeedId` must 
 - **When** I request to create a note
 - **Then** the API rejects my request
 
-Scenario: Unauthorized standard user cannot create notes on requests they don't have access to
+#### Scenario: Unauthorized standard user cannot create notes on requests they don't have access to
 
 - **Given** I am sign-in as a standard user
 - **When** I request to create a note on a request I did not make
 - **Then** the API rejects my request
 
-Scenario: Unauthorized area_admin user cannot create notes on requests they don't have access to
+#### Scenario: Unauthorized area_admin user cannot create notes on requests they don't have access to
 
 - **Given** I am sign-in as an area_admin
 - **When** I request to create a note on a request that I do not have access to
 - **Then** the API rejects my request
 
-Scenario: Standard user can create notes
+#### Scenario: Standard user can create notes
 
 - **Given** I am sign-in as a standard user
 - **When** I request to create a note on a request I made
 - **Then** the request is successful
 
-Scenario: Area admin and maintenance users can create notes
+#### Scenario: Area admin and maintenance users can create notes
 
 - **Given** I am sign-in as an area_admin or maintenance user
 - **When** I request to create a note on a request I have access to
 - **Then** the request is successful
 
-Scenario: Admin user can create notes
+#### Scenario: Admin user can create notes
 
 - **Given** I am sign-in as an admin user
 - **When** I request to create a note on any request
@@ -341,7 +341,7 @@ Scenario: Admin user can create notes
 
 ### US-14.2 — View notes on entities
 
-Scenario: Users can view notes on requests, issue reports, maintenance needs
+#### Scenario: Users can view notes on requests, issue reports, maintenance needs
 
 - **Given** I am a signed-in user
 - **When** I open a vehicle request, issue report, or maintenance need that I have access to
@@ -351,19 +351,19 @@ Scenario: Users can view notes on requests, issue reports, maintenance needs
 
 ### US-14.3 — Toggle visibility
 
-Scenario: Admin, area_admins, maintenance users can toggle visibility
+#### Scenario: Admin, area_admins, maintenance users can toggle visibility
 
 - **Given** I am sign-in as a non-standard user
 - **When** I can toggle isVisible when creating a note for a request
 - **Then** that note is only visible to other non-standard users with access to the request
 
-Scenario: Standard user cannot toggle note visibility
+#### Scenario: Standard user cannot toggle note visibility
 
 - **Given** I am sign-in as a standard user
 - **When** I am creating a note
 - **Then** that I cannot toggle note visibility
 
-Scenario: Standard user cannot see notes with isVisible set to false
+#### Scenario: Standard user cannot see notes with isVisible set to false
 
 - **Given** I am sign-in as a standard user
 - **When** viewing a request
@@ -373,7 +373,7 @@ Scenario: Standard user cannot see notes with isVisible set to false
 
 ### US-14.4 — Admin can delete notes
 
-Scenario: Admin can delete all notes
+#### Scenario: Admin can delete all notes
 
 - **Given** I am sign-in as an admin user
 - **When** I view notes on requests
@@ -383,7 +383,7 @@ Scenario: Admin can delete all notes
 
 ### US-14.5 — Users can delete their own notes if no one has responded
 
-Scenario: All sign-in users can delete their own notes if no one has responded
+#### Scenario: All sign-in users can delete their own notes if no one has responded
 
 - **Given** I am sign-in as any kind of user
 - **When** I view notes on a request
@@ -393,46 +393,46 @@ Scenario: All sign-in users can delete their own notes if no one has responded
 
 ### US-14.6 — Issue report page
 
-Scenario: Requester reports an issue from their trip
+#### Scenario: Requester reports an issue from their trip
 
 - **Given** I am signed in without admin, area_admin, or maintenance, and one of my trips has a vehicle
 - **When** I open **Report an issue** from that trip, choose a type, describe the problem, and submit
 - **Then** the report is created for that trip's vehicle as pending and unassigned, and its page opens
 - **And** I never saw status or assignee fields
 
-Scenario: Admin or area admin creates a triaged issue report
+#### Scenario: Admin or area admin creates a triaged issue report
 
 - **Given** I am signed in as an admin or area admin
 - **When** I create a report and choose a status and an assignee
 - **Then** only admins, the vehicle's area admins, and maintenance users are offered as assignees
 - **And** the report is created with that status and assignee
 
-Scenario: Admin or area admin edits an issue report on its page
+#### Scenario: Admin or area admin edits an issue report on its page
 
 - **Given** I am signed in as an admin, or an area admin of the report's vehicle area
 - **When** I open the issue report page, change its details, and click **Save changes**
 - **Then** the report is updated and I stay on the page
 
-Scenario: Author views their issue report read-only
+#### Scenario: Author views their issue report read-only
 
 - **Given** I am signed in as the report's author without admin or area_admin
 - **When** I open the issue report page
 - **Then** I see its details, status, and assignee as text, with no inputs or actions
 - **And** I see its notes at the bottom
 
-Scenario: Admin or area admin deletes an issue report from its page
+#### Scenario: Admin or area admin deletes an issue report from its page
 
 - **Given** I am signed in as an admin, or an area admin of the report's vehicle area
 - **When** I choose **Delete issue report** from **More actions** and confirm
 - **Then** the report is deleted and I return to the issue reports list
 
-Scenario: User without access cannot open an issue report page
+#### Scenario: User without access cannot open an issue report page
 
 - **Given** I am signed in and cannot read the issue report
 - **When** I open its page
 - **Then** I see the API's error message instead of the report
 
-Scenario: Issue reports list opens the issue report page
+#### Scenario: Issue reports list opens the issue report page
 
 - **Given** I am signed in and see an issue report in the list
 - **When** I click **View issue report** on its row
@@ -440,7 +440,7 @@ Scenario: Issue reports list opens the issue report page
 
 ### US-14.7 — Create a maintenance need from an issue report
 
-Scenario: Admin or area admin creates a maintenance need from an issue report
+#### Scenario: Admin or area admin creates a maintenance need from an issue report
 
 - **Given** I manage a `maintenance` issue report with no maintenance need
 - **When** I click **Create maintenance need** on its page, change the pre-filled form, and click **Create**
@@ -448,7 +448,7 @@ Scenario: Admin or area admin creates a maintenance need from an issue report
 - **And** the report's status becomes **Moved to maintenance**, dated today
 - **And** I return to the report, which shows **View maintenance need**
 
-Scenario: Issue reports list has no maintenance need action
+#### Scenario: Issue reports list has no maintenance need action
 
 - **Given** I am signed in as an admin
 - **When** I view the issue reports list
@@ -456,25 +456,25 @@ Scenario: Issue reports list has no maintenance need action
 
 ### US-14.8 — Find issue reports
 
-Scenario: Issue reports table shows only the key columns
+#### Scenario: Issue reports table shows only the key columns
 
 - **Given** there are issue reports
 - **When** I open the issue reports list
 - **Then** I see the Issue, Vehicle, Status, Reported, and Actions columns
 
-Scenario: User searches issue reports
+#### Scenario: User searches issue reports
 
 - **Given** there are issue reports
 - **When** I search by any of their details
 - **Then** only matching reports are listed, and I can clear the search
 
-Scenario: User filters issue reports by status and type
+#### Scenario: User filters issue reports by status and type
 
 - **Given** there are issue reports
 - **When** I choose a status and/or a type
 - **Then** only reports with that status and type are listed
 
-Scenario: User sorts issue reports
+#### Scenario: User sorts issue reports
 
 - **Given** there are issue reports
 - **When** I click a column heading
