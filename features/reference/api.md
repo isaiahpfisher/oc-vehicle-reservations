@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 8 vehicle request routes, Feature 9 mileage log routes, Feature 10 issue report routes, Feature 11 maintenance need routes, and Feature 12 service type routes are in force; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
+**Status:** Feature 1 auth, Feature 2 area routes, Feature 3 user and role routes, Feature 4 vehicle type routes, Feature 5 vehicle routes, Feature 6 destination routes, Feature 7 driver routes, Feature 8 vehicle request routes, Feature 9 mileage log routes, Feature 10 issue report routes, Feature 11 maintenance need routes, and Feature 12 service type routes are in force, with Feature 18 vehicle status added to existing responses; the starter-kit course routes are removed. Mount path defaults to `/api` (see `backend/server.js`).
 
 ## Authentication
 
@@ -116,11 +116,23 @@ Every vehicle route requires a Bearer token. `GET` allows `admin`, `area_admin`,
 
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
-| `GET` | `/api/vehicles` | Admin, area admin, or maintenance | `200` array. Admins and maintenance users receive every vehicle. Area admins receive vehicles whose `areaId` is one of their areas. Ordered by make, then model. |
-| `GET` | `/api/vehicles/:vehicleId` | Admin, area admin, or maintenance | `200` with one vehicle. An area admin asking for another area's vehicle is `403`. Maintenance may read any vehicle. |
+| `GET` | `/api/vehicles` | Admin, area admin, or maintenance | `200` array. Admins and maintenance users receive every vehicle. Area admins receive vehicles whose `areaId` is one of their areas. Ordered by make, then model. Each vehicle includes `vehicleType` (`{ id, name }`) and `condition` (Feature 18, below). |
+| `GET` | `/api/vehicles/:vehicleId` | Admin, area admin, or maintenance | `200` with one vehicle, its `vehicleType`, `condition`, and `upcomingTrips`. An area admin asking for another area's vehicle is `403`. Maintenance may read any vehicle. |
 | `POST` | `/api/vehicles` | Admin or area admin | `201` with the created vehicle. An area admin can only set `areaId` to an area they administer. |
 | `PUT` | `/api/vehicles/:vehicleId` | Admin or area admin | `200` with the updated vehicle. A field omitted from the body keeps its stored value. An area admin cannot edit a vehicle outside their areas, or move one into an area they do not administer. |
 | `DELETE` | `/api/vehicles/:vehicleId` | Admin or area admin | `200`. The vehicle row is removed. An area admin cannot delete a vehicle outside their areas. |
+
+**Vehicle `condition` (Feature 18).** Worked out on every read; nothing is stored.
+
+| Field | Shape |
+| ----- | ----- |
+| `status` | The first that applies: `retired`, `out_of_service`, `service_overdue`, `plate_expired`, `service_due_soon`, `available` (FR-002) |
+| `reasons` | Every reason that applies, in that order: `[{ status, message }]`, e.g. `{ "status": "service_overdue", "message": "Oil Change is overdue by 1,000 mi." }` |
+| `mileage` | `{ miles, reading, tripMiles, tripCount, unknownTripCount }`. `reading` is the latest mileage log `{ odometerReading, recordedAt }` or `null` (then the vehicle starts at 0). Trips are ended, not cancelled or denied, and started after the reading's date (FR-003) |
+| `services` | One per service type, by name: `{ serviceType: { id, name, frequencyDays, frequencyMiles }, lastServicedAt, lastServiceMiles, dueDate, dueMiles, daysLeft, milesLeft, state }`. `state` is `overdue`, `due_soon` (500 mi / 14 days or fewer), `ok`, or `never_due` (no frequency) (FR-004) |
+| `outOfServiceNeeds` | Open or In Progress maintenance needs marked out of service: `[{ id, title, status, priority }]` |
+
+`upcomingTrips` (single vehicle only): `pending`, `awaiting_vehicle`, or `reserved` requests with this vehicle whose trip hasn't ended, soonest first: `[{ id, purpose, startAt, endAt, allDay, status, area: { id, name } }]`.
 
 Create body: `{ "areaId", "vehicleTypeId", "universityId", "make", "model", "year", "identifier", "purchasedAt", "color", "passengerCapacity", "licensePlate", "licensePlateExpirationDate", "status" }`. A blank license plate or expiration date is stored as `null`. The same keys are accepted with underscores (`area_id`, `purchased_at`).
 
@@ -368,7 +380,7 @@ Every `/api/maintenance-needs` route uses `authorizeRoles("admin", "area_admin",
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
 | `GET` | `/api/maintenance-needs` | Admin, area admin, or maintenance | `200` array, newest `createdAt` first. Area admins only receive needs for their vehicles. |
-| `GET` | `/api/maintenance-needs/options` | Admin, area admin, or maintenance | `200` `{ "vehicles", "assignees" }` for the create and edit form. Vehicles follow the same area rule. Assignees are users who hold the maintenance role. |
+| `GET` | `/api/maintenance-needs/options` | Admin, area admin, or maintenance | `200` `{ "vehicles", "assignees" }` for the create and edit form. Vehicles follow the same area rule and each includes `condition` (Feature 18). Assignees are users who hold the maintenance role. |
 | `GET` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for that vehicle, or maintenance | `200` with one maintenance need. |
 | `POST` | `/api/maintenance-needs` | Admin, area admin for that vehicle, or maintenance | `201` with the created maintenance need. |
 | `PUT` | `/api/maintenance-needs/:maintenanceNeedId` | Admin, area admin for the current vehicle and the vehicle in the body, or maintenance | `200` with the updated maintenance need. |
@@ -442,15 +454,17 @@ Success body: `{ "id", "vehicleRequestId", "issueReportId", "maintenanceNeedId",
 | Method | Endpoint | Auth | Success |
 | ------ | -------- | ---- | ------- |
 | `GET` | `/api/me/requests` | Bearer | `200` array of the signed-in user's requests |
-| `GET` | `/api/requests` | `authenticateAreaAdmin` | `200` all requests (admin) or those in managed areas (area admin) |
+| `GET` | `/api/requests` | `authenticateAreaAdmin` | `200` all requests (admin) or those in managed areas (area admin). Each includes `vehicleProblems` (Feature 18, below). |
 | `POST` | `/api/requests` | Bearer | `201` with the created request, owned by the signed-in user |
-| `GET` | `/api/requests/:requestId` | Bearer | `200` if the user owns it or manages its area |
+| `GET` | `/api/requests/:requestId` | Bearer | `200` if the user owns it or manages its area. A manager also receives `vehicleProblems` and `driverProblems` (Feature 18); the requester does not. `POST` and `PUT` responses follow the same rule. |
 | `PUT` | `/api/requests/:requestId` | Bearer | `200` with the updated request. Omitted fields keep their stored values. |
-| `GET` | `/api/requests/:requestId/vehicle-options` | `authenticateAreaAdmin` | `200` array of `{ vehicle, conflictingRequestIds, outOfService, milesUntilService }` for the request's area |
+| `GET` | `/api/requests/:requestId/vehicle-options` | `authenticateAreaAdmin` | `200` array of `{ vehicle, conflictingRequestIds, status, problems, nextService }` for every vehicle in the request's area, retired ones included. `nextService` is `{ milesLeft, dueDate }`: the fewest miles left and earliest due date across service types (Feature 18) |
 
 Body fields: `areaId`, `purpose`, `startAt`, `endAt`, `allDay`, `numberOfPeople`, `drivers` (array of driver ids), `destinations` (ordered array of `{ id }` for saved destinations or `{ name, addressLine1, addressLine2, city, state, zipCode }` for new ones). `PUT` also takes `status` and `vehicles` (array of vehicle ids, managers only).
 
 Responses include `area`, `user`, `approver`, and flattened `drivers`, ordered `destinations`, and `vehicles`. All-day `startAt`/`endAt` are returned as `YYYY-MM-DD`.
+
+**Problems (Feature 18).** A problem is `{ type, blocking, message }`; `service_due` problems also carry `service` (the service type's name) and `due`: `overdue`, `date` (with `dueDate`), or `miles` (with `milesLeft` and `tripMiles`). Types: `retired`, `out_of_service`, `booked` (blocking, FR-005); `service_due`, `plate_expires` (warnings, FR-006); `license_expires` (drivers, FR-007). `vehicleProblems` is `{ <vehicleId>: [problem] }` and `driverProblems` is `{ <driverId>: [problem] }`, listing only ids that have problems. Both are `{}` unless the request is `pending`, `awaiting_vehicle`, or `reserved` and its trip hasn't ended.
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -461,6 +475,7 @@ Responses include `area`, `user`, `approver`, and flattened `drivers`, ordered `
 | More than 10 destinations | `400` | `A trip can have at most 10 destinations.` |
 | Driver not approved / license expired / expires before trip ends | `400` | `<Name> is not an approved driver.` / `<Name>'s license has expired.` / `<Name>'s license expires before the trip ends.` |
 | Vehicle outside the request's area | `400` | `Vehicles must belong to the request's area.` |
+| Newly added vehicle is retired, out of service, or booked for an overlapping trip (vehicles already on the request are kept) | `400` | `Vehicle <universityId> can't be assigned. Retired.` / `… Out of service: <need titles>.` / `… Booked for another trip at the same time.` |
 | Requester assigns vehicles, sets a status other than `cancelled`, or edits a non-pending request | `403` | |
 | Requester calls `GET /api/requests` or `vehicle-options` | `403` | `{ "message": "Area admin role required." }` |
 | Request not found or not visible to the user | `404` | `Vehicle request with id=… not found.` |

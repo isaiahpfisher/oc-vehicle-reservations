@@ -1,21 +1,24 @@
-import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { parseId, requiredInt, requiredText } from "../helpers/fields.js";
 import { MAX_STOPS, estimateMiles, formatAddress } from "../helpers/mileage.js";
-import { getServiceStatuses } from "../helpers/vehicleService.js";
+import {
+  driverProblemsFor,
+  findBookings,
+  loadConditions,
+  tripProblems,
+  unavailableMessage,
+  vehicleProblemsFor,
+} from "../helpers/vehicleStatus.js";
 import { requestInclude, toRequestResponse } from "../helpers/vehicleRequests.js";
 import { REQUEST_STATUSES } from "../models/vehicleRequest.model.js";
 import { canManageRequest, canViewRequest, managedRequestsWhere } from "../authorization/vehicleRequestScope.js";
 
 const exports = {};
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const APPROVED_STATUSES = ["awaiting_vehicle", "reserved"];
 /** Statuses a requester may still cancel from. */
 const OPEN_STATUSES = ["pending", "awaiting_vehicle", "reserved"];
-/** Requests in these statuses don't hold their vehicles. */
-const RELEASED_STATUSES = ["cancelled", "denied"];
 /** Fields a requester fills in. Changing any of them on an approved request resets it to pending. */
 const EDITABLE_FIELDS = ["areaId", "purpose", "startAt", "endAt", "allDay", "numberOfPeople", "drivers", "destinations"];
 const NEW_DESTINATION_FIELDS = ["name", "addressLine1", "addressLine2", "city", "state", "zipCode"];
@@ -38,9 +41,6 @@ const notFound = (res, requestId) => res.status(404).send({ message: `Vehicle re
 
 const dateOnly = (value) => new Date(value).toISOString().slice(0, 10);
 
-/** All-day trips run through the end of their last day. */
-const tripEnd = ({ endAt, allDay }) => new Date(new Date(endAt).getTime() + (allDay ? DAY_MS : 0));
-
 const isBlank = (value) => value === undefined || value === null || (typeof value === "string" && !value.trim());
 
 /** All-day dates are stored as UTC midnight so the calendar day never shifts. */
@@ -59,6 +59,17 @@ const listOrder = [
 ];
 
 const loadRequest = (id) => db.vehicleRequest.findByPk(id, { include: requestInclude() });
+
+/** Feature 18, US-18.9: managers also see problems with the request's vehicles and drivers; requesters don't. */
+const respond = async (request, user) => {
+  const response = toRequestResponse(request);
+  if (!canManageRequest(user, request)) {
+    return response;
+  }
+
+  const [vehicleProblems, driverProblems] = await Promise.all([vehicleProblemsFor([request]), driverProblemsFor(request)]);
+  return { ...response, vehicleProblems: vehicleProblems.get(request.id), driverProblems };
+};
 
 const sortedStops = (request) => [...request.stops].sort((a, b) => a.stopOrder - b.stopOrder);
 
@@ -299,7 +310,9 @@ exports.findAll = async (req, res) => {
       order: listOrder,
     });
 
-    return res.send(requests.map(toRequestResponse));
+    // US-18.10: `GET /requests` is for managers, so every row carries its vehicle problems.
+    const problems = await vehicleProblemsFor(requests);
+    return res.send(requests.map((request) => ({ ...toRequestResponse(request), vehicleProblems: problems.get(request.id) })));
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle requests.");
   }
@@ -331,7 +344,7 @@ exports.findOne = async (req, res) => {
       return notFound(res, requestId);
     }
 
-    return res.send(toRequestResponse(request));
+    return res.send(await respond(request, req.user));
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle request.");
   }
@@ -352,7 +365,7 @@ exports.create = async (req, res) => {
       return request.id;
     });
 
-    return res.status(201).send(toRequestResponse(await loadRequest(requestId)));
+    return res.status(201).send(await respond(await loadRequest(requestId), req.user));
   } catch (err) {
     return sendError(res, err, "Failed to create vehicle request.");
   }
@@ -402,6 +415,13 @@ exports.update = async (req, res) => {
     let vehicleIds = areaId === request.areaId ? currentVehicleIds : [];
     if (assigning) {
       vehicleIds = await resolveVehicles(body.vehicles, areaId);
+
+      // FR-005: newly added vehicles must be usable for the trip as it will be saved; ones already on it stay.
+      const added = vehicleIds.filter((id) => !currentVehicleIds.includes(id));
+      const unavailable = await unavailableMessage(added, { ...request.toJSON(), ...next?.fields });
+      if (unavailable) {
+        return res.status(400).send({ message: unavailable });
+      }
     }
 
     let status = request.status;
@@ -440,13 +460,17 @@ exports.update = async (req, res) => {
       }
     });
 
-    return res.send(toRequestResponse(await loadRequest(request.id)));
+    return res.send(await respond(await loadRequest(request.id), req.user));
   } catch (err) {
     return sendError(res, err, "Failed to update vehicle request.");
   }
 };
 
-/** The request area's vehicles with the facts an admin needs to pick suitable ones (US-8.8). */
+/**
+ * The request area's vehicles with the facts an admin needs to pick suitable ones (US-8.8).
+ * Feature 18: retired, out-of-service, and booked vehicles are listed with `blocking` problems (FR-005), and service or
+ * plate problems as warnings (FR-006). `nextService` is the soonest due date and fewest miles left across service types.
+ */
 exports.vehicleOptions = async (req, res) => {
   try {
     const requestId = parseId(req.params.requestId);
@@ -459,43 +483,35 @@ exports.vehicleOptions = async (req, res) => {
       return notFound(res, requestId);
     }
 
-    const assignedIds = request.requestVehicles.map(({ vehicleId }) => vehicleId);
     const vehicles = await db.vehicle.findAll({
-      where: { areaId: request.areaId, [Op.or]: [{ status: "active" }, { id: assignedIds }] },
+      where: { areaId: request.areaId },
       include: [{ model: db.vehicleType, as: "vehicleType" }],
       order: [["universityId", "ASC"]],
     });
 
-    const start = new Date(request.startAt);
-    const end = tripEnd(request);
-    const overlapping = (
-      await db.vehicleRequest.findAll({
-        where: {
-          id: { [Op.ne]: request.id },
-          status: { [Op.notIn]: RELEASED_STATUSES },
-          startAt: { [Op.lt]: end },
-          endAt: { [Op.gte]: new Date(start.getTime() - DAY_MS) },
-        },
-        include: [
-          {
-            model: db.vehicleRequestVehicle,
-            as: "requestVehicles",
-            where: { vehicleId: vehicles.map(({ id }) => id) },
-          },
-        ],
-      })
-    ).filter((other) => tripEnd(other) > start);
+    const trip = { ...request.toJSON(), vehicleIds: vehicles.map(({ id }) => id) };
+    const [conditions, bookings] = await Promise.all([loadConditions(vehicles), findBookings([trip])]);
+    const booked = bookings.get(request.id);
 
-    const service = await getServiceStatuses(vehicles);
+    const soonest = (values) => (values.length ? values.reduce((a, b) => (b < a ? b : a)) : null);
 
     return res.send(
-      vehicles.map((vehicle) => ({
-        vehicle,
-        conflictingRequestIds: overlapping
-          .filter((other) => other.requestVehicles.some(({ vehicleId }) => vehicleId === vehicle.id))
-          .map(({ id }) => id),
-        ...service.get(vehicle.id),
-      })),
+      vehicles.map((vehicle) => {
+        const condition = conditions.get(vehicle.id);
+        const conflictingRequestIds = booked.get(vehicle.id) ?? [];
+        const services = condition.services;
+
+        return {
+          vehicle,
+          conflictingRequestIds,
+          status: condition.status,
+          problems: tripProblems(vehicle, condition, request, conflictingRequestIds),
+          nextService: {
+            milesLeft: soonest(services.map(({ milesLeft }) => milesLeft).filter((miles) => miles !== null)),
+            dueDate: soonest(services.map(({ dueDate }) => dueDate).filter(Boolean)),
+          },
+        };
+      }),
     );
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle options.");

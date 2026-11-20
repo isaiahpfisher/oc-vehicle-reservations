@@ -3,8 +3,10 @@
  * The project team (TEAM_ADMINS) is always seeded as admins, so signing in with Google after a seed needs no make-admin.
  * Feature 8 adds vehicle types, vehicles, service types, drivers, destinations, and vehicle requests, so every table has
  * enough rows to try searching, filtering, paging, and the calendar.
- * Feature 9, 10, and 11 add mileage logs, issue reports, and maintenance needs; Feature 13 adds service logs (each with
- * its own mileage log, like the API); Feature 14 adds note threads on requests, issue reports, and maintenance needs.
+ * Feature 9, 10, and 11 add mileage logs, issue reports, and maintenance needs; Feature 14 adds note threads on
+ * requests, issue reports, and maintenance needs.
+ * Feature 13 and 18 add service history for every vehicle and pin a few vehicles and requests to each vehicle status and
+ * warning (see SCENARIO_VEHICLES and the README).
  * Usage (from backend/): npm run seed [-- --keep you@eagles.oc.edu ...] [-- --google]
  *
  * The data is generated from a fixed random seed, so every run produces the same rows (dates move with the day you seed).
@@ -256,6 +258,16 @@ const FLEETS = {
 };
 
 const COLORS = ["White", "Silver", "Black", "Blue", "Maroon", "Gray", "Red"];
+
+/**
+ * Feature 18: fixed values for scenario vehicles. Applied after the random ones are drawn, so nothing else shifts.
+ * STU-V01's plate runs out the day before its reserved airport run (US-18.8); HON-S01 was bought this month and has
+ * never been serviced (FR-004).
+ */
+const VEHICLE_OVERRIDES = {
+  "STU-V01": { licensePlateExpirationDate: isoDay(6) },
+  "HON-S01": { purchasedAt: isoDay(-20), year: new Date().getFullYear(), licensePlateExpirationDate: isoDay(365) },
+};
 const VIN_CHARACTERS = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789";
 
 const generatedVehicles = () => {
@@ -289,6 +301,7 @@ const generatedVehicles = () => {
           licensePlate: isGolfCart ? null : `OC${plate}`,
           // A few plates are already expired, so that shows up too.
           licensePlateExpirationDate: isGolfCart ? null : isoDay(chance(0.08) ? -between(5, 90) : between(30, 720)),
+          ...VEHICLE_OVERRIDES[universityId],
         });
       }
     }
@@ -612,6 +625,32 @@ const NAMED_REQUESTS = [
     start: 5, end: 5, time: [18, 22], people: 9, drivers: ["Riley Requester"], destinations: ["Grace Community Church"],
     status: "pending",
   },
+
+  // Feature 18: requests whose vehicles or drivers have problems (US-18.9, US-18.10). See SCENARIO_VEHICLES too.
+  {
+    // Retired after it was reserved.
+    area: "Athletics", requester: "kendra.wallace@oc.edu", purpose: "Cross country meet at UCO",
+    start: 25, end: 25, time: [7, 15], people: 12, drivers: ["Marcus Bell"], destinations: ["University of Central Oklahoma"],
+    status: "reserved", approver: "marcus.bell@oc.edu", vehicles: ["ATH-V06"],
+  },
+  {
+    // Booked twice: this one and the next overlap with the same car.
+    area: "Athletics", requester: "marcus.bell@oc.edu", purpose: "Recruiting dinner in Norman",
+    start: 15, end: 15, time: [16, 22], people: 4, drivers: ["Taylor Athletics"], destinations: ["University of Oklahoma"],
+    status: "reserved", approver: "areaadmin@oc.edu", vehicles: ["ATH-C01"],
+  },
+  {
+    // Its dates were moved after the car was assigned, so it went back to pending and now overlaps the dinner.
+    area: "Athletics", requester: "tom.garrison@oc.edu", purpose: "Coaching clinic at Oklahoma State",
+    start: 15, end: 15, time: [13, 20], people: 3, drivers: ["Tom Garrison"], destinations: ["Oklahoma State University"],
+    status: "pending", vehicles: ["ATH-C01"],
+  },
+  {
+    // Laura Simmons's license expires before the trip ends (FR-007).
+    area: "Music", requester: "elena.ruiz@oc.edu", purpose: "Honor choir clinic in Tulsa",
+    start: 14, end: 15, people: 10, drivers: ["Laura Simmons"], destinations: ["Tulsa Performing Arts Center"],
+    status: "reserved", approver: "elena.ruiz@oc.edu", vehicles: ["MUS-V01"],
+  },
 ];
 
 const PASSENGER_TYPES = ["Car", "SUV", "Van", "Minibus", "Bus"];
@@ -876,6 +915,12 @@ const generatedRequests = () => {
 
 export const SEED_REQUESTS = [...NAMED_REQUESTS, ...generatedRequests()];
 
+/**
+ * Feature 18 (US-18.9): requests that break Feature 8's rules on purpose, the way real ones do after approval — a
+ * double-booked car, a pending request that kept its vehicle after its dates moved, and a driver whose license lapses.
+ */
+export const SEED_PROBLEM_REQUESTS = ["Recruiting dinner in Norman", "Coaching clinic at Oklahoma State", "Honor choir clinic in Tulsa"];
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Issue reports, maintenance needs, and mileage logs (Features 9, 10, and 11)                                         */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -971,55 +1016,142 @@ const generatedMaintenanceNeeds = () => {
 
 export const SEED_MAINTENANCE_NEEDS = generatedMaintenanceNeeds();
 
-const generatedMileageLogs = () => {
-  const vehicles = activeVehicles().slice(0, 20);
-  return vehicles.flatMap((vehicle, vehicleIndex) => {
-    let reading = 8000 + vehicleIndex * 500;
-    return [0, 1, 2].map((step) => {
-      reading += 120 + vehicleIndex * 10 + step * 40;
-      return {
-        vehicle: vehicle.universityId,
-        user: MAINTENANCE_EMAILS[(vehicleIndex + step) % MAINTENANCE_EMAILS.length],
-        odometerReading: reading,
-        recordedAt: isoDay(-((3 - step) * 30 + vehicleIndex)),
-      };
-    });
-  });
-};
-
-export const SEED_MILEAGE_LOGS = generatedMileageLogs();
-
 /* ------------------------------------------------------------------------------------------------------------------ */
-/* Service logs (Feature 13)                                                                                           */
+/* Mileage and service history, and vehicle status scenarios (Features 9, 13, and 18)                                  */
 /* ------------------------------------------------------------------------------------------------------------------ */
+
+/** Typical miles a year by type, for a believable odometer. */
+const ANNUAL_MILES = { Car: 12000, SUV: 12000, Truck: 10000, Van: 14000, Minibus: 12000, Bus: 18000, "Golf Cart": 400 };
+
+/** Oil change is the most frequent mile-based service, so it drives the mile scenarios below. */
+const OIL_CHANGE_MILES = 5000;
+const CHOIR_TOUR_MILES = seedTripMiles(["Abilene Christian University", "Lubbock Christian University"]);
 
 /**
- * Two services per vehicle: one between its first two mileage readings and one after its last, so odometers only climb.
- * The later service closes out the vehicle's completed maintenance need, when it has one.
- * Like the API, each service log gets its own mileage log.
+ * Feature 18: vehicles pinned to a status or warning, so every screen has an example. The rest get SCENARIO_WEIGHTS.
+ * - ATH-V01 is out of service (open maintenance needs below) and reserved for the track meet in 3 days.
+ * - ATH-M01: its 90-day services come due in 8 days, before its reserved soccer match in 10 (US-18.7, by date).
+ * - MUS-B01 is available, but the choir tour's miles pass its next oil change (US-18.7, by miles).
+ * - HON-S01 was bought this month and never serviced.
+ * - MUS-V01 is healthy, so its request shows only its driver's license warning (FR-007).
+ * Retired ATH-V06, double-booked ATH-C01, and MUS-V01's driver are set up by NAMED_REQUESTS; STU-V01's plate by
+ * VEHICLE_OVERRIDES.
  */
-const generatedServiceLogs = () =>
-  activeVehicles()
-    .slice(0, 12)
-    .flatMap((vehicle, vehicleIndex) => {
-      const readings = SEED_MILEAGE_LOGS.filter((log) => log.vehicle === vehicle.universityId);
-      const completedNeed = SEED_MAINTENANCE_NEEDS.findIndex(
-        (need) => need.vehicle === vehicle.universityId && need.status === "Completed",
-      );
-      return [
-        { daysAgo: 75 + vehicleIndex, miles: readings[0].odometerReading + 50 },
-        { daysAgo: 15 + vehicleIndex, miles: readings[2].odometerReading + 100 },
-      ].map(({ daysAgo, miles }, step) => ({
-        vehicle: vehicle.universityId,
-        user: MAINTENANCE_EMAILS[(vehicleIndex + step) % MAINTENANCE_EMAILS.length],
-        serviceType: SEED_SERVICE_TYPES[(vehicleIndex * 2 + step) % SEED_SERVICE_TYPES.length].name,
-        miles,
-        servicedAt: isoDay(-daysAgo),
-        maintenanceNeedIndex: step === 1 && completedNeed !== -1 ? completedNeed : null,
-      }));
-    });
+const SCENARIO_VEHICLES = {
+  "ATH-M01": { scenario: "dueSoonDays", visitAgo: 82 },
+  "MUS-B01": { scenario: "tripMiles" },
+  "HON-S01": { scenario: "new" },
+  "MUS-V01": { scenario: "ok" },
+};
 
-export const SEED_SERVICE_LOGS = generatedServiceLogs();
+/** Most vehicles are fine; the rest are due soon or overdue by miles or by date (FR-002). */
+const SCENARIO_WEIGHTS = [["ok", 70], ["dueSoonMiles", 8], ["dueSoonDays", 7], ["overdueMiles", 6], ["overdueDays", 5]];
+/** Golf carts barely move, so only their date-based services come due. */
+const GOLF_CART_SCENARIOS = [["ok", 75], ["dueSoonDays", 15], ["overdueDays", 10]];
+
+/**
+ * When the vehicle was last serviced (`visitAgo` days), when its newest odometer reading was taken (`readingAgo`), and
+ * the miles driven between them (`since`). A visit logs every service type, so what comes due follows from these.
+ * Ok vehicles sometimes have an older reading, so the trips since then add to their estimated mileage (FR-003).
+ */
+const scenarioTimeline = ({ scenario, visitAgo }, golfCart) => {
+  const small = (min, max) => (golfCart ? between(10, 120) : between(min, max));
+  const recent = between(1, 5);
+
+  switch (scenario) {
+    case "dueSoonMiles":
+      return { readingAgo: recent, visitAgo: recent + between(15, 45), since: between(OIL_CHANGE_MILES - 450, OIL_CHANGE_MILES - 150) };
+    case "overdueMiles":
+      return { readingAgo: recent, visitAgo: recent + between(15, 45), since: between(OIL_CHANGE_MILES + 200, OIL_CHANGE_MILES + 900) };
+    case "dueSoonDays":
+      // 90-day services (DOT inspection, golf cart battery) come due in 6–12 days.
+      return { readingAgo: recent, visitAgo: visitAgo ?? between(78, 84), since: small(300, 2000) };
+    case "overdueDays":
+      return { readingAgo: recent, visitAgo: between(95, 130), since: small(800, 3000) };
+    case "tripMiles": {
+      // More than 500 miles left (so it shows Available) but fewer than the choir tour's round trip.
+      const milesLeft = Math.max(550, CHOIR_TOUR_MILES - 150);
+      return { readingAgo: 1, visitAgo: 40, since: OIL_CHANGE_MILES - milesLeft };
+    }
+    default: {
+      const readingAgo = chance(0.35) ? between(15, 30) : between(1, 7);
+      return { readingAgo, visitAgo: readingAgo + between(10, 35), since: small(300, 2500) };
+    }
+  }
+};
+
+const yearsSince = (day) => (Date.now() - new Date(`${day}T00:00:00`).getTime()) / (365 * DAY_MS);
+
+/**
+ * Mileage logs and service logs for every vehicle. Each service visit is one odometer reading shared by the service
+ * logs written that day (`mileageKey`). Every fourth healthy vehicle also has an older oil change and tire rotation, so
+ * the next due date comes from the most recent one.
+ */
+const generatedHistory = () => {
+  const mileageLogs = [];
+  const serviceLogs = [];
+  let tech = 0;
+  const nextTech = () => MAINTENANCE_EMAILS[tech++ % MAINTENANCE_EMAILS.length];
+  const reading = (vehicle, odometerReading, daysAgo, key) =>
+    mileageLogs.push({ ...(key && { key }), vehicle: vehicle.universityId, user: nextTech(), odometerReading, recordedAt: isoDay(-daysAgo) });
+  const visit = (vehicle, odometerReading, daysAgo, names) => {
+    const key = `${vehicle.universityId}@${daysAgo}`;
+    const user = nextTech();
+    reading(vehicle, odometerReading, daysAgo, key);
+    names.forEach((serviceType) =>
+      serviceLogs.push({ vehicle: vehicle.universityId, serviceType, mileageKey: key, user, servicedAt: isoDay(-daysAgo), maintenanceNeedIndex: null }),
+    );
+  };
+  const everyService = SEED_SERVICE_TYPES.map(({ name }) => name);
+
+  SEED_VEHICLES.forEach((vehicle, index) => {
+    const odometer = (minimum) =>
+      Math.max(minimum, Math.round(yearsSince(vehicle.purchasedAt) * ANNUAL_MILES[vehicle.type] * (0.8 + random() * 0.4)));
+
+    if (vehicle.status === "retired") {
+      // Serviced shortly before it was retired; its last reading is from the day it was retired.
+      const retiredAgo = between(60, 400);
+      const atRetirement = odometer(5000);
+      visit(vehicle, atRetirement - between(200, 1500), retiredAgo + between(5, 30), everyService);
+      reading(vehicle, atRetirement, retiredAgo);
+      return;
+    }
+
+    const golfCart = vehicle.type === "Golf Cart";
+    const pinned = SCENARIO_VEHICLES[vehicle.universityId];
+    const scenario = pinned ?? { scenario: weighted(golfCart ? GOLF_CART_SCENARIOS : SCENARIO_WEIGHTS) };
+
+    if (scenario.scenario === "new") {
+      reading(vehicle, 350, 2);
+      return;
+    }
+
+    const { readingAgo, visitAgo, since } = scenarioTimeline(scenario, golfCart);
+    const current = odometer(since + 500);
+    const atVisit = current - since;
+
+    if (scenario.scenario === "ok" && index % 4 === 0 && atVisit > 5000) {
+      visit(vehicle, atVisit - between(4000, 4800), visitAgo + between(150, 175), ["Oil change", "Tire rotation"]);
+    }
+    visit(vehicle, atVisit, visitAgo, everyService);
+    reading(vehicle, current, readingAgo);
+  });
+
+  // Feature 13: each completed maintenance need is closed out by the first service at its vehicle's latest visit.
+  SEED_MAINTENANCE_NEEDS.forEach((need, needIndex) => {
+    if (need.status !== "Completed") return;
+    const latest = serviceLogs.findLast((log) => log.vehicle === need.vehicle);
+    const closing = latest && serviceLogs.find((log) => log.mileageKey === latest.mileageKey && log.maintenanceNeedIndex == null);
+    if (closing) closing.maintenanceNeedIndex = needIndex;
+  });
+
+  return { mileageLogs, serviceLogs };
+};
+
+const HISTORY = generatedHistory();
+
+export const SEED_MILEAGE_LOGS = HISTORY.mileageLogs;
+export const SEED_SERVICE_LOGS = HISTORY.serviceLogs;
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Notes (Feature 14)                                                                                                  */
@@ -1206,7 +1338,7 @@ const seedRequests = async ({ areaIds, google, transaction }) => {
 };
 
 /**
- * Features 9–11 and 13: mileage logs, issue reports, maintenance needs, and service logs for the seeded fleet.
+ * Features 9–13: mileage logs, issue reports, maintenance needs, and service logs for the seeded fleet.
  * Returns the created report and need ids in SEED_ISSUE_REPORTS / SEED_MAINTENANCE_NEEDS order.
  */
 const seedOperations = async ({ transaction }) => {
@@ -1258,7 +1390,7 @@ const seedOperations = async ({ transaction }) => {
     );
   }
 
-  await db.mileageLog.bulkCreate(
+  const mileageLogs = await db.mileageLog.bulkCreate(
     SEED_MILEAGE_LOGS.map((log) => ({
       vehicleId: vehicles[log.vehicle],
       userId: users[log.user],
@@ -1267,25 +1399,23 @@ const seedOperations = async ({ transaction }) => {
     })),
     { transaction },
   );
+  const visitLogIds = Object.fromEntries(
+    SEED_MILEAGE_LOGS.flatMap(({ key }, i) => (key ? [[key, mileageLogs[i].id]] : [])),
+  );
 
+  // Feature 13: each service log points at its visit's odometer reading.
   const serviceTypes = Object.fromEntries((await db.serviceType.findAll({ transaction })).map((type) => [type.name, type.id]));
-  for (const log of SEED_SERVICE_LOGS) {
-    const mileageLog = await db.mileageLog.create(
-      { vehicleId: vehicles[log.vehicle], userId: users[log.user], odometerReading: log.miles, recordedAt: log.servicedAt },
-      { transaction },
-    );
-    await db.serviceLog.create(
-      {
-        userId: users[log.user],
-        vehicleId: vehicles[log.vehicle],
-        serviceTypeId: serviceTypes[log.serviceType],
-        mileageLogId: mileageLog.id,
-        maintenanceNeedId: log.maintenanceNeedIndex == null ? null : needs[log.maintenanceNeedIndex].id,
-        servicedAt: log.servicedAt,
-      },
-      { transaction },
-    );
-  }
+  await db.serviceLog.bulkCreate(
+    SEED_SERVICE_LOGS.map((log) => ({
+      vehicleId: vehicles[log.vehicle],
+      userId: users[log.user],
+      serviceTypeId: serviceTypes[log.serviceType],
+      mileageLogId: visitLogIds[log.mileageKey],
+      maintenanceNeedId: log.maintenanceNeedIndex == null ? null : needs[log.maintenanceNeedIndex].id,
+      servicedAt: log.servicedAt,
+    })),
+    { transaction },
+  );
 
   return { reportIds: reports.map(({ id }) => id), needIds: needs.map(({ id }) => id) };
 };

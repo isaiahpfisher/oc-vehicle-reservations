@@ -24,11 +24,11 @@ const rail = ref(useDisplay().smAndDown.value);
     <v-divider />
 
     <!-- Pages grouped into sections (`meta.navGroup`). Collapsed, a divider stands in for each section title. -->
-    <v-list nav aria-label="Main navigation" :prepend-gap="20">
+    <v-list nav density="compact" aria-label="Main navigation" :prepend-gap="20" class="app-sidebar__list">
       <template v-for="(group, index) in navGroups" :key="group.title ?? 'pages'">
         <template v-if="group.title">
-          <v-divider v-if="rail && index > 0" class="my-2" />
-          <v-list-subheader v-else-if="!rail" class="app-sidebar__section" :class="{ 'mt-2': index > 0 }">
+          <v-divider v-if="rail && index > 0" class="my-1" />
+          <v-list-subheader v-else-if="!rail" class="app-sidebar__section" :class="{ 'mt-1': index > 0 }">
             {{ group.title }}
           </v-list-subheader>
         </template>
@@ -50,7 +50,14 @@ const rail = ref(useDisplay().smAndDown.value);
     <template #append>
       <v-divider />
 
-      <v-list v-if="pinnedLinks.length" nav aria-label="Pinned navigation" :prepend-gap="20" class="pb-0">
+      <v-list
+        v-if="pinnedLinks.length"
+        nav
+        density="compact"
+        aria-label="Pinned navigation"
+        :prepend-gap="20"
+        class="app-sidebar__list pb-0"
+      >
         <v-list-item
           v-for="link in pinnedLinks"
           :key="link.name"
@@ -64,7 +71,7 @@ const rail = ref(useDisplay().smAndDown.value);
         </v-list-item>
       </v-list>
 
-      <v-list nav :prepend-gap="20">
+      <v-list nav density="compact" :prepend-gap="20" class="app-sidebar__list py-1">
         <ProfileMenu location="end">
           <template #activator="{ props, displayName, email }">
             <v-list-item
@@ -99,7 +106,14 @@ const rail = ref(useDisplay().smAndDown.value);
   overflow: visible;
 }
 
+/* Tight rows so every page fits without scrolling on a typical laptop screen. */
+.app-sidebar__list :deep(.v-list-item) {
+  min-height: 36px;
+  margin-bottom: 2px;
+}
+
 .app-sidebar__section {
+  min-height: 28px;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.06em;

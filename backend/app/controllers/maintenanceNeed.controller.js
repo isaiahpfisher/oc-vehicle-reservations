@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { MAINTENANCE_PRIORITIES, MAINTENANCE_STATUSES } from "../models/maintenanceNeed.model.js";
+import { loadConditions } from "../helpers/vehicleStatus.js";
 
 const exports = {};
 
@@ -286,13 +287,16 @@ exports.options = async (req, res) => {
       areaIds && areaIds.length === 0
         ? []
         : await db.vehicle.findAll({
-            attributes: ["id", "color", "make", "model", "licensePlate", "areaId"],
+            // Feature 18: status needs the purchase date, plate expiration, and retired flag.
+            attributes: ["id", "color", "make", "model", "licensePlate", "areaId", "status", "purchasedAt", "licensePlateExpirationDate"],
             where: areaIds ? { areaId: { [Op.in]: areaIds } } : undefined,
             order: [
               ["make", "ASC"],
               ["model", "ASC"],
             ],
           });
+    // US-18.11: the vehicle select shows each vehicle's status.
+    const conditions = await loadConditions(vehicles);
 
     const assignees = await db.user.findAll({
       attributes: ["id", "firstName", "lastName"],
@@ -303,7 +307,10 @@ exports.options = async (req, res) => {
       ],
     });
 
-    return res.status(200).send({ vehicles, assignees });
+    return res.status(200).send({
+      vehicles: vehicles.map((vehicle) => ({ ...vehicle.toJSON(), condition: conditions.get(vehicle.id) })),
+      assignees,
+    });
   } catch (err) {
     logger.error(`maintenance need options failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch maintenance need options." });

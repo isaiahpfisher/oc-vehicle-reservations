@@ -111,7 +111,20 @@ Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Dev
 
 The seed also adds about 150 staff and students across ten areas, with at least one area admin per area; see `backend/scripts/seed.mjs`.
 
-It also replaces vehicle types, vehicles, service types, drivers, destinations, and vehicle requests with enough sample data to try searching, filtering, paging, and the calendar: about 80 vehicles, 75 drivers (every status, plus expired and soon-to-expire licenses), 60 destinations (a few unofficial), 14 service types, and 300 requests across every area and status, dated from four months before to four months after the day you seed (`requester@oc.edu` owns about 15). It adds the fleet's day-to-day records too: 60 mileage logs, 32 issue reports, 15 maintenance needs, and 24 service logs (each with its own mileage log). It also adds about 65 notes in short threads on requests (including `requester@oc.edu`'s), issue reports, and maintenance needs, some marked staff only. The data comes from a fixed random seed, so every run gives the same rows.
+It also replaces vehicle types, vehicles, service types, drivers, destinations, and vehicle requests with enough sample data to try searching, filtering, paging, and the calendar: about 80 vehicles, 75 drivers (every status, plus expired and soon-to-expire licenses), 60 destinations (a few unofficial), 14 service types, and 300 requests across every area and status, dated from four months before to four months after the day you seed (`requester@oc.edu` owns about 15). It adds the fleet's day-to-day records too: 32 issue reports and 15 maintenance needs (mileage and service history is described below). It also adds about 65 notes in short threads on requests (including `requester@oc.edu`'s), issue reports, and maintenance needs, some marked staff only. The data comes from a fixed random seed, so every run gives the same rows.
+
+Every vehicle also gets an odometer history and a recent service visit that logs every service type (about 170 mileage logs and 1,100 service logs; each completed maintenance need is closed out by a service log), so about two thirds of the fleet is **Available** and the rest is due soon, overdue, out of service, plate expired, or retired. These rows are pinned so each vehicle status warning has an example (Feature 18):
+
+| Where to look | What it shows |
+| ------------- | ------------- |
+| `ATH-V01`, request **Track meet at Oklahoma State** | Out of service, and reserved for a trip in 3 days |
+| `ATH-M01`, request **Soccer match at Southern Nazarene** | Service due soon by date, coming due before the trip |
+| `MUS-B01`, request **Choir tour: Abilene and Lubbock** | Available, but the trip's miles pass its next oil change |
+| `STU-V01`, request **International student airport run** (7 days out) | License plate expires before the trip |
+| `ATH-V06`, request **Cross country meet at UCO** | Retired, still assigned to an upcoming trip |
+| `ATH-C01`, requests **Recruiting dinner in Norman** and **Coaching clinic at Oklahoma State** | Booked for two overlapping trips |
+| Request **Honor choir clinic in Tulsa** | Driver's license expires before the trip ends |
+| `HON-S01` | Bought this month and never serviced |
 
 Request mileage is estimated from the seed destinations' coordinates, so seeding makes no Google calls. Add `-- --google` to estimate it with Google Routes instead; that makes one billed call per request (about 300).
 
