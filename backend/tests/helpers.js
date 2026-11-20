@@ -4,6 +4,34 @@ import authConfig from "../app/config/auth.config.js";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
+let liveTableStats;
+
+/**
+ * The models whose table has been written to since its last truncate. Truncating is DDL and costs a few
+ * milliseconds a table, so truncating all of them before every test was most of the backend suite's run time.
+ *
+ * A truncated table's AUTO_INCREMENT is 1, and any insert moves it on (even if the row is deleted again), so a table
+ * whose AUTO_INCREMENT isn't 1 needs resetting. Tables without one are always treated as dirty. MySQL 8 caches
+ * information_schema stats, so there the cache is turned off for this connection; MariaDB's are always live.
+ */
+const dirtyTables = async (transaction) => {
+  if (liveTableStats === undefined) {
+    const [[{ version }]] = await db.sequelize.query("SELECT VERSION() AS version", { transaction });
+    liveTableStats = /mariadb/i.test(version);
+  }
+  if (!liveTableStats) {
+    await db.sequelize.query("SET SESSION information_schema_stats_expiry = 0", { transaction });
+  }
+
+  const [rows] = await db.sequelize.query(
+    "SELECT TABLE_NAME AS name, AUTO_INCREMENT AS next FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()",
+    { transaction },
+  );
+  const nextId = new Map(rows.map(({ name, next }) => [name, next]));
+
+  return Object.values(db.sequelize.models).filter((model) => Number(nextId.get(model.getTableName())) !== 1);
+};
+
 /**
  * Start each test from an empty database.
  * Jest's global setup drops and recreates the schema once per run. Each test only truncates,
@@ -18,9 +46,14 @@ export const syncTestDatabase = async () => {
 
   // FOREIGN_KEY_CHECKS is per connection, so the transaction keeps every statement on one pooled connection.
   await db.sequelize.transaction(async (transaction) => {
+    const dirty = await dirtyTables(transaction);
+    if (!dirty.length) {
+      return;
+    }
+
     await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 0", { transaction });
     try {
-      for (const model of Object.values(db.sequelize.models)) {
+      for (const model of dirty) {
         await model.truncate({ transaction });
       }
     } finally {

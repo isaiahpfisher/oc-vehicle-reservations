@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
+import { Test } from "supertest";
 import path from "path";
 import { fileURLToPath } from "url";
+import { workerDatabase } from "./workerDatabase.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.join(__dirname, "..", ".env.test");
@@ -11,6 +13,9 @@ dotenv.config({ path: examplePath, override: true });
 dotenv.config({ path: envPath, override: true });
 
 process.env.NODE_ENV = "test";
+
+// This worker's own database (see workerDatabase.js). Scripts the tests spawn inherit it through process.env.
+process.env.DB_NAME = workerDatabase(process.env.DB_NAME, process.env.JEST_WORKER_ID);
 
 // Google Routes calls are billed: tests never use a real key, even one exported in the shell,
 // and any request that still reaches Google fails loudly. Tests that need Routes stub `fetch` themselves.
@@ -26,4 +31,16 @@ globalThis.fetch = (url, ...args) => {
     throw new Error(`Tests must not call Supabase (${url}). Stub storage instead.`);
   }
   return realFetch(url, ...args);
+};
+
+// supertest starts the app with `app.listen(0)`, which binds a random port on IPv6 `::`, then sends the request to
+// `127.0.0.1:<port>`. On macOS another program can already hold that port on 127.0.0.1 (Ollama does, at 49168), and
+// the request goes to it instead: a test once got Ollama's `200` for `POST /api/drivers`. So when the server is on
+// IPv6, send the request to `[::1]`, which the server itself holds.
+// (Binding to 127.0.0.1 instead does not work: `listen(0, host)` binds asynchronously, and supertest reads
+// `address().port` right after calling `listen`, getting `null`.)
+const serverAddress = Test.prototype.serverAddress;
+Test.prototype.serverAddress = function serverAddressOnOwnLoopback(app, urlPath) {
+  const url = serverAddress.call(this, app, urlPath);
+  return app.address().family === "IPv6" ? url.replace("://127.0.0.1:", "://[::1]:") : url;
 };

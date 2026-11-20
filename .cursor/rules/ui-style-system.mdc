@@ -32,6 +32,8 @@ Hex values live **only** in `plugins/vuetify.js`. Views and components use Vueti
 | `surface-variant`     | `#E7E0E1` | Subtle fills, dividers adjacent                         |
 | `background`          | `#FFFFFF` | App page background                                     |
 | `outline`             | `#857373` | Borders, hairlines, inactive strokes                    |
+| `staff`               | `#8A5300` | Staff-only notes: accents, icons, their post button     |
+| `staff-container`     | `#FFF4DE` | Staff-only notes: the channel's background              |
 
 Map these into Vuetify’s `theme.themes.light.colors` (and Material-style aliases such as `on-primary` where supported).
 

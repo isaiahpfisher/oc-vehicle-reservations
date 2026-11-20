@@ -78,7 +78,8 @@ describe("Feature 10 — Issue Report", () => {
       expect(response.body.vehicleRequestId).toBeNull();
       expect(response.body.assigneeId).toBeNull();
       expect(response.body.resolvedAt).toBeNull();
-      expect(response.body.vehicle).toEqual({ id: 3, universityId: "V-100" });
+      // Feature 14 (US-14.6): the vehicle carries its areaId for the issue report page.
+      expect(response.body.vehicle).toEqual({ id: 3, universityId: "V-100", areaId: 1 });
       expect(response.body.author).toEqual({ id: user.userId, firstName: "Jane", lastName: "Doe" });
     });
 
@@ -88,6 +89,8 @@ describe("Feature 10 — Issue Report", () => {
         await registerUser({ email: `pad${index}@example.com`, firstName: "Pad", lastName: String(index) });
       }
       const alex = await registerUser({ email: "alex@example.com", firstName: "Alex", lastName: "Kim" });
+      // Feature 14 (US-14.6): an assignee must be an admin, an area admin for the vehicle, or maintenance.
+      await db.role.create({ userId: alex.body.userId, role: "maintenance" });
       const requestDetails = {
         userId: alex.body.userId,
         areaId: athletics.id,
@@ -704,6 +707,114 @@ describe("Feature 10 — Issue Report", () => {
 
       expect(response.status).toBe(403);
       expect(response.body).toEqual(forbidden);
+    });
+  });
+});
+
+describe("Feature 14 — Notes (issue report page)", () => {
+  describe("US-14.6 — Issue report page", () => {
+    const addUser = async (email, firstName, lastName, roles = []) => {
+      const { body } = await registerUser({ email, firstName, lastName });
+      for (const role of roles) {
+        await db.role.create({ userId: body.userId, ...(typeof role === "string" ? { role } : role) });
+      }
+      return body.userId;
+    };
+
+    it("lists who a report on a vehicle can be assigned to", async () => {
+      const { athletics, music } = await seedFleet();
+      const { headers } = await signIn(["admin"], { email: "boss@example.com", firstName: "Ann", lastName: "Boss" });
+      const fixer = await addUser("fix@example.com", "Max", "Fix", ["maintenance"]);
+      const coach = await addUser("coach@example.com", "Art", "Coach", [{ role: "area_admin", areaId: athletics.id }]);
+      await addUser("band@example.com", "Mo", "Band", [{ role: "area_admin", areaId: music.id }]);
+      await addUser("student@example.com", "Sam", "Student");
+      const both = await addUser("both@example.com", "Bo", "Both", ["maintenance", { role: "area_admin", areaId: music.id }]);
+
+      const response = await request(app).get("/api/issue-reports/assignees?vehicleId=3").set(headers);
+
+      expect(response.status).toBe(200);
+      // Admins, maintenance, and Athletics' area admin; not Music's area admin or a requester. Sorted by last name.
+      expect(response.body).toEqual([
+        { id: 1, firstName: "Ann", lastName: "Boss", roles: ["admin"] },
+        { id: both, firstName: "Bo", lastName: "Both", roles: ["maintenance"] },
+        { id: coach, firstName: "Art", lastName: "Coach", roles: ["area_admin"] },
+        { id: fixer, firstName: "Max", lastName: "Fix", roles: ["maintenance"] },
+      ]);
+    });
+
+    it("limits the assignee list to admins and area admins", async () => {
+      const { athletics, music } = await seedFleet();
+      const { headers: areaAdmin } = await signIn([{ role: "area_admin", areaId: music.id }], { email: "mo@example.com" });
+      const { headers: requester } = await signIn([], { email: "req@example.com" });
+      const { headers: maintenance } = await signIn(["maintenance"], { email: "fix@example.com" });
+
+      // Any area admin may ask (they can file reports on any vehicle); others can't.
+      expect((await request(app).get("/api/issue-reports/assignees?vehicleId=3").set(areaAdmin)).status).toBe(200);
+      expect((await request(app).get("/api/issue-reports/assignees?vehicleId=3").set(requester)).status).toBe(403);
+      expect((await request(app).get("/api/issue-reports/assignees?vehicleId=3").set(maintenance)).status).toBe(403);
+      expect((await request(app).get("/api/issue-reports/assignees?vehicleId=3")).status).toBe(401);
+
+      const bad = await request(app).get("/api/issue-reports/assignees?vehicleId=abc").set(areaAdmin);
+      expect(bad.status).toBe(400);
+      expect(bad.body).toEqual({ message: "Invalid vehicle id." });
+      const missing = await request(app).get("/api/issue-reports/assignees?vehicleId=999").set(areaAdmin);
+      expect(missing.status).toBe(404);
+      expect(missing.body).toEqual({ message: "Vehicle not found." });
+      expect(athletics.id).toBe(1);
+    });
+
+    it("rejects an assignee who can't take reports on that vehicle", async () => {
+      const { athletics, music } = await seedFleet();
+      const { headers, user } = await signIn(["admin"], { email: "boss@example.com" });
+      const student = await addUser("student@example.com", "Sam", "Student");
+      const bandAdmin = await addUser("band@example.com", "Mo", "Band", [{ role: "area_admin", areaId: music.id }]);
+      const coach = await addUser("coach@example.com", "Art", "Coach", [{ role: "area_admin", areaId: athletics.id }]);
+      const message = { message: "Assignee must be an admin, an area admin for this vehicle, or a maintenance user." };
+
+      for (const assigneeId of [student, bandAdmin]) {
+        const created = await request(app).post("/api/issue-reports").set(headers).send(validBody({ assigneeId }));
+        expect(created.status).toBe(400);
+        expect(created.body).toEqual(message);
+      }
+      expect(await db.issueReport.count()).toBe(0);
+
+      // Athletics' area admin can take a report on an Athletics vehicle, not on a Music one.
+      expect((await request(app).post("/api/issue-reports").set(headers).send(validBody({ assigneeId: coach }))).status).toBe(201);
+      await createReport({ authorId: user.userId });
+      const moved = await request(app).put("/api/issue-reports/2").set(headers).send(validBody({ vehicleId: 4, assigneeId: coach }));
+      expect(moved.status).toBe(400);
+      expect(moved.body).toEqual(message);
+      expect((await request(app).put("/api/issue-reports/2").set(headers).send(validBody({ assigneeId: user.userId }))).status).toBe(200);
+    });
+  });
+
+  describe("Moved to maintenance status", () => {
+    it("closes a report like Resolved, with its own name", async () => {
+      await seedFleet();
+      const { headers } = await signIn(["admin"], { email: "boss@example.com" });
+
+      const missingDate = await request(app).post("/api/issue-reports").set(headers).send(validBody({ status: "moved_to_maintenance" }));
+      expect(missingDate.status).toBe(400);
+      expect(missingDate.body).toEqual({ message: "Missing resolved date." });
+
+      const badDate = await request(app)
+        .post("/api/issue-reports")
+        .set(headers)
+        .send(validBody({ status: "moved_to_maintenance", resolvedAt: "2026-02-30" }));
+      expect(badDate.status).toBe(400);
+      expect(badDate.body).toEqual({ message: "Invalid resolved date." });
+
+      const created = await request(app)
+        .post("/api/issue-reports")
+        .set(headers)
+        .send(validBody({ status: "moved_to_maintenance", resolvedAt: "2026-11-05" }));
+      expect(created.status).toBe(201);
+      expect(created.body).toMatchObject({ status: "moved_to_maintenance", resolvedAt: "2026-11-05" });
+
+      // Reopening clears the date requirement, like Resolved.
+      const reopened = await request(app).put(`/api/issue-reports/${created.body.id}`).set(headers).send(validBody());
+      expect(reopened.status).toBe(200);
+      expect(reopened.body).toMatchObject({ status: "pending", resolvedAt: null });
     });
   });
 });

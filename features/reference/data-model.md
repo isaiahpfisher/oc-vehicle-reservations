@@ -157,8 +157,8 @@ JSON keys are `vehicleId`, `userId`, `odometerReading`, and `recordedAt`.
 | `assignee_id` | INTEGER | Null when omitted. Existing user when present. |
 | `type` | ENUM | `low_gas`, `dirty`, `maintenance`, or `other` |
 | `description` | TEXT | Required, trimmed. Whitespace-only is rejected. |
-| `status` | ENUM | `pending`, `resolved`, or `cancelled` |
-| `resolved_at` | DATEONLY | Required when `status` is `resolved`. Null otherwise. |
+| `status` | ENUM | `pending`, `resolved`, `cancelled`, or `moved_to_maintenance` (Feature 14) |
+| `resolved_at` | DATEONLY | Required when `status` is `resolved` or `moved_to_maintenance`. Null otherwise. |
 | `created_at` | DATE | Sequelize timestamp |
 | `updated_at` | DATE | Sequelize timestamp |
 
@@ -226,6 +226,23 @@ Requests restrict deleting the user who made them and the area, destinations, dr
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
+## `notes` (Feature 14)
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `vehicle_request_id` | INTEGER | Optional. References `vehicle_requests.id`. Deleting the request deletes its notes. |
+| `issue_report_id` | INTEGER | Optional. References `issue_reports.id`. Deleting the report deletes its notes. |
+| `maintenance_need_id` | INTEGER | Optional. References `maintenance_needs.id`. Deleting the need deletes its notes. |
+| `author_id` | INTEGER | Required. References `users.id`. Set from the signed-in user. |
+| `content` | TEXT | Required. Markup and control characters stripped, then trimmed. Never empty. |
+| `is_visible` | BOOLEAN | Required, default `true`. `false` hides the note from users without admin, area admin, or maintenance. |
+| `include_in_email` | BOOLEAN | Required, default `false`. Unused until the emails feature. |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+Exactly one of the three parent ids is set (enforced by the API).
+
 ## Associations
 
 - A user has many sessions. A session belongs to one user. Deleting the user deletes their sessions.
@@ -251,3 +268,5 @@ Requests restrict deleting the user who made them and the area, destinations, dr
 - A user has many maintenance needs as author. A maintenance need belongs to one author. The author cannot be deleted while they still have maintenance needs.
 - A user has many maintenance needs as assignee. A maintenance need optionally belongs to one assignee. Deleting the assignee keeps the maintenance need with no assignee.
 - A vehicle has many maintenance needs. A maintenance need belongs to one vehicle. The vehicle cannot be deleted while it still has maintenance needs.
+- A vehicle request, issue report, or maintenance need has many notes. A note belongs to exactly one of them. Deleting the parent deletes its notes.
+- A user has many notes as author. A note belongs to one author. The author cannot be deleted while they still have notes.
