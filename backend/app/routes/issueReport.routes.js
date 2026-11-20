@@ -1,6 +1,6 @@
 import { Router } from "express";
 import issueReportController from "../controllers/issueReport.controller.js";
-import { authenticate } from "../authorization/authorization.js";
+import { authenticate, authorizeRoles } from "../authorization/authorization.js";
 
 const router = Router();
 
@@ -20,6 +20,8 @@ const requireSession = (req, res, next) => {
 };
 
 router.get("/", [requireSession], issueReportController.findAll);
+// Feature 14 (US-14.6): assignee choices for the issue report form (managers set the assignee).
+router.get("/assignees", [authorizeRoles("admin", "area_admin")], issueReportController.assignees);
 router.get("/:issueReportId", [requireSession], issueReportController.findOne);
 router.post("/", [requireSession], issueReportController.create);
 router.put("/:issueReportId", [requireSession], issueReportController.update);

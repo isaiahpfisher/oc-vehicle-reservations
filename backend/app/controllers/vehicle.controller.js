@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
+import { loadConditions, upcomingTrips } from "../helpers/vehicleStatus.js";
 
 const exports = {};
 
@@ -350,6 +351,14 @@ const resolveVehicle = async (body, { creating, current, exceptId, user }) => {
 
 const sendFailure = (res, result) => res.status(result.status || 400).send({ message: result.message });
 
+const withType = { model: db.vehicleType, as: "vehicleType", attributes: ["id", "name"] };
+
+/** Feature 18: each vehicle with its type and `condition` (status and the facts behind it). */
+const withConditions = async (vehicles) => {
+  const conditions = await loadConditions(vehicles);
+  return vehicles.map((vehicle) => ({ ...vehicle.toJSON(), condition: conditions.get(vehicle.id) }));
+};
+
 exports.findAll = async (req, res) => {
   try {
     const allowed = readableAreaIds(req.user);
@@ -359,13 +368,14 @@ exports.findAll = async (req, res) => {
 
     const vehicles = await db.vehicle.findAll({
       where: allowed ? { areaId: { [Op.in]: allowed } } : undefined,
+      include: [withType],
       order: [
         ["make", "ASC"],
         ["model", "ASC"],
       ],
     });
 
-    return res.status(200).send(vehicles);
+    return res.status(200).send(await withConditions(vehicles));
   } catch (err) {
     logger.error(`vehicle list failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch vehicles." });
@@ -379,7 +389,7 @@ exports.findOne = async (req, res) => {
       return res.status(400).send({ message: "Invalid vehicle id." });
     }
 
-    const vehicle = await db.vehicle.findByPk(vehicleId);
+    const vehicle = await db.vehicle.findByPk(vehicleId, { include: [withType] });
     if (!vehicle) {
       return res.status(404).send({ message: `Vehicle with id=${vehicleId} not found.` });
     }
@@ -388,7 +398,8 @@ exports.findOne = async (req, res) => {
       return res.status(403).send({ message: WRONG_AREA });
     }
 
-    return res.status(200).send(vehicle);
+    const [shaped] = await withConditions([vehicle]);
+    return res.status(200).send({ ...shaped, upcomingTrips: await upcomingTrips(vehicleId) });
   } catch (err) {
     logger.error(`vehicle fetch failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch vehicle." });

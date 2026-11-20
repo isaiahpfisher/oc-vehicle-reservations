@@ -2,14 +2,29 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
+import vehicleServices from "../services/vehicleServices.js";
+import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
 import PageShell from "../components/layout/PageShell.vue";
+import AffectedTripsNotice from "../components/vehicles/AffectedTripsNotice.vue";
+import VehicleStatusChip from "../components/vehicles/VehicleStatusChip.vue";
+import issueReportServices from "../services/issueReportServices.js";
+import { needTitleFrom, typeLabel } from "../models/issueReports.js";
+import SectionCard from "../components/layout/SectionCard.vue";
+import NotesThread from "../components/notes/NotesThread.vue";
 
 const route = useRoute();
 const router = useRouter();
 const { hasRole, areaAdminAreaIds, user } = useRoles();
 
 const isCreate = computed(() => route.name === "maintenanceNeedCreate");
+/** Feature 14 (US-14.7): `?issueReportId=` pre-fills a new need from that issue report and returns to it afterwards. */
+const fromReportId = computed(() =>
+  isCreate.value && /^\d+$/.test(String(route.query.issueReportId ?? "")) ? Number(route.query.issueReportId) : null,
+);
+const sourceReport = ref(null);
+const doneRoute = () =>
+  fromReportId.value ? { name: "issueReport", params: { issueReportId: fromReportId.value } } : { name: "maintenance-needs" };
 const needId = computed(() => route.params.id);
 
 const loading = ref(true);
@@ -56,8 +71,34 @@ const vehicleItems = computed(() => {
       ? vehicles.value
       : vehicles.value.filter((vehicle) => areaAdminAreaIds.value.map(Number).includes(Number(vehicle.areaId)));
 
-  return rows.map((vehicle) => ({ title: vehicleLabel(vehicle), value: vehicle.id }));
+  return rows.map((vehicle) => ({ title: vehicleLabel(vehicle), value: vehicle.id, status: vehicle.condition?.status }));
 });
+
+/** Admins and the trip's area admins can open its request; maintenance users can't (Feature 8). */
+const canOpenTrip = (trip) => hasRole("admin") || areaAdminAreaIds.value.map(Number).includes(Number(trip.area?.id));
+
+const vehicleStatus = (id) => vehicles.value.find((vehicle) => vehicle.id === id)?.condition?.status;
+
+/**
+ * Feature 18, US-18.11: taking a vehicle out of service warns about the trips it's booked for,
+ * so whoever manages them can be told.
+ */
+const { data: upcomingTrips, run: getUpcomingTrips } = useRequest(vehicleServices.getVehicle, {
+  initial: [],
+  select: (res) => res?.data?.upcomingTrips ?? [],
+});
+
+const takesOutOfService = computed(
+  () => !!form.value.vehicleId && form.value.outOfService === true && ["Open", "In Progress"].includes(form.value.status),
+);
+
+watch(
+  () => form.value.vehicleId,
+  (vehicleId) => {
+    upcomingTrips.value = [];
+    if (vehicleId) getUpcomingTrips(vehicleId);
+  },
+);
 
 const assigneeItems = computed(() =>
   assignees.value.map((person) => ({ title: `${person.firstName} ${person.lastName}`, value: person.id })),
@@ -79,7 +120,7 @@ const limitTitle = (value) => {
 };
 
 const cancel = () => {
-  router.push({ name: "maintenance-needs" });
+  router.push(doneRoute());
 };
 
 const viewReport = () => {
@@ -135,7 +176,11 @@ const submit = async () => {
         formError.value = "Failed to save maintenance need.";
         return;
       }
-      await router.push({ name: "maintenance-needs" });
+      await router.push(
+        fromReportId.value
+          ? { ...doneRoute(), state: { notice: "Maintenance need created. This report is now Moved to maintenance." } }
+          : doneRoute(),
+      );
       return;
     }
 
@@ -170,6 +215,25 @@ const load = async () => {
         ];
       }
       form.value.assigneeId = current?.userId ?? null;
+    }
+
+    if (fromReportId.value) {
+      const { data: report } = await issueReportServices.getIssueReport(fromReportId.value);
+      sourceReport.value = report;
+      // A need's assignee must be maintenance staff; keep the report's assignee only if they are.
+      const assigneeId = assignees.value.some((person) => person.id === report.assigneeId) ? report.assigneeId : form.value.assigneeId;
+      form.value = {
+        ...form.value,
+        title: needTitleFrom(report.description),
+        vehicleId: report.vehicleId,
+        description: report.description ?? "",
+        assigneeId,
+        outOfService: true,
+        priority: "None",
+        status: "Open",
+        resolvedAt: null,
+        issueReportId: report.id,
+      };
     }
 
     if (!isCreate.value) {
@@ -211,6 +275,19 @@ load();
         {{ statusActionLabel }}
       </v-btn>
     </template>
+    <v-alert
+      v-if="sourceReport"
+      type="info"
+      variant="tonal"
+      density="compact"
+      icon="mdi-link-variant"
+      class="mb-6"
+      data-test="from-issue-report"
+    >
+      Filled in from the issue report <strong>{{ typeLabel(sourceReport.type) }} · {{ sourceReport.vehicle?.universityId }}</strong>.
+      Check the details, then create it. The new need stays linked to that report, and the report is closed as
+      <strong>Moved to maintenance</strong>.
+    </v-alert>
     <v-form @submit.prevent="submit">
       <v-text-field :model-value="form.title" label="Title" maxlength="50" @update:model-value="limitTitle" />
       <v-select v-model="form.assigneeId" :items="assigneeItems" item-title="title" item-value="value" label="Assignee" clearable />
@@ -224,7 +301,18 @@ load();
       <v-select v-model="form.priority" :items="priorities" label="Priority" />
       <v-select v-model="form.status" :items="statuses" label="Status" />
       <v-text-field v-if="resolveDateVisible" v-model="form.resolvedAt" label="Resolve Date" type="date" />
-      <v-select v-model="form.vehicleId" :items="vehicleItems" item-title="title" item-value="value" label="Vehicle" />
+      <v-select v-model="form.vehicleId" :items="vehicleItems" item-title="title" item-value="value" label="Vehicle">
+        <template #item="{ props: itemProps, item }">
+          <v-list-item v-bind="itemProps" data-test="vehicle-choice">
+            <template v-if="vehicleStatus(item.value)" #append><VehicleStatusChip :status="vehicleStatus(item.value)" /></template>
+          </v-list-item>
+        </template>
+      </v-select>
+      <AffectedTripsNotice
+        v-if="takesOutOfService && upcomingTrips.length"
+        :trips="upcomingTrips"
+        :can-open-trip="canOpenTrip"
+      />
       <v-textarea v-model="form.description" label="Description" rows="4" no-resize />
 
       <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
@@ -236,10 +324,15 @@ load();
         <v-btn variant="text" :disabled="saving" @click="cancel">Cancel</v-btn>
       </div>
     </v-form>
+
+    <SectionCard v-if="!isCreate" title="Notes" class="mt-6" data-test="maintenance-need-notes">
+      <NotesThread parent-key="maintenanceNeedId" :parent-id="needId" />
+    </SectionCard>
   </PageShell>
 </template>
 
 <style scoped>
+
 .v-btn.oc-cta:disabled {
   opacity: 1;
   background-color: rgba(var(--v-theme-on-surface), 0.12) !important;

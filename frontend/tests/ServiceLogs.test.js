@@ -260,10 +260,12 @@ describe("Feature 13 — Maintenance Log Management", () => {
       signIn();
       await mountAppAt("/vehicles/3");
 
-      const header = wrapper.get("h2").element.parentElement.parentElement;
-      expect(header.textContent).toContain("Mileage log");
-      expect(header.textContent).toContain("Service log");
-      expect(header.textContent).toContain("+ New Service Log");
+      // Feature 18 (US-18.3): the logs moved from the page header into their own sections on the vehicle page.
+      const mileageSection = await waitFor(() => wrapper.get('[data-test="recent-mileage-logs"]'));
+      const serviceSection = wrapper.get('[data-test="recent-service-logs"]');
+      expect(mileageSection.text()).toContain("Mileage log");
+      expect(serviceSection.text()).toContain("Service log");
+      expect(serviceSection.text()).toContain("+ New Service Log");
       expect(wrapper.get("form").text()).not.toContain("Mileage log");
       expect(wrapper.get("form").text()).not.toContain("+ New Service Log");
 

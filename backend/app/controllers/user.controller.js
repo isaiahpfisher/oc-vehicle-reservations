@@ -143,6 +143,11 @@ exports.remove = async (req, res) => {
       return res.status(400).send({ message: "User has service logs and can't be deleted." });
     }
 
+    // Feature 14: notes keep their author so threads stay readable.
+    if ((await db.note.count({ where: { authorId: userId } })) > 0) {
+      return res.status(400).send({ message: "User has notes and can't be deleted." });
+    }
+
     await user.destroy();
     return res.status(204).send();
   } catch (err) {

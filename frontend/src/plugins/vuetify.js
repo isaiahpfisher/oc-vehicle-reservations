@@ -35,6 +35,10 @@ const ocAcademic = {
     success: "#2E7D32",
     warning: "#E65100",
     info: "#775656",
+    // Staff-only notes (Feature 14): a dark amber that passes AA on white and on its container.
+    staff: "#8A5300",
+    "staff-container": "#FFF4DE",
+    "on-staff": "#FFFFFF",
   },
 };
 

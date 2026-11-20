@@ -1,6 +1,8 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import ListState from "../common/ListState.vue";
+import ProblemList from "../vehicles/ProblemList.vue";
+import { groupProblems } from "../../models/vehicles.js";
 import RequestStatusChip from "./RequestStatusChip.vue";
 import {
   NEEDS_ACTION_STATUSES,
@@ -38,6 +40,16 @@ const blankFilters = () => ({ area: null, destination: null, driver: null, vehic
 const search = ref("");
 const statuses = ref([]);
 const needsAction = ref(false);
+const problemsOnly = ref(false);
+
+/** Feature 18, US-18.10: vehicles on the request with problems (the admin list sends `vehicleProblems`). */
+const problemVehicles = (request) =>
+  request.vehicles.filter((vehicle) => (request.vehicleProblems?.[vehicle.id] ?? []).length);
+const hasVehicleProblems = (request) => problemVehicles(request).length > 0;
+const problemSummary = (request) =>
+  problemVehicles(request)
+    .map((vehicle) => `${vehicle.universityId}: ${groupProblems(request.vehicleProblems[vehicle.id]).map(({ text }) => text).join(" ")}`)
+    .join(" ");
 const showFilters = ref(false);
 const filters = ref(blankFilters());
 
@@ -56,6 +68,7 @@ const vehicleOptions = computed(() =>
 );
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
+const problemsCount = computed(() => props.requests.filter(hasVehicleProblems).length);
 const needsActionCount = computed(() => props.requests.filter(({ status }) => NEEDS_ACTION_STATUSES.includes(status)).length);
 
 const clearFilters = () => {
@@ -66,6 +79,7 @@ const clearAll = () => {
   search.value = "";
   statuses.value = [];
   needsAction.value = false;
+  problemsOnly.value = false;
   clearFilters();
 };
 
@@ -78,6 +92,7 @@ const visible = computed(() => {
       (!term || searchText(request).includes(term)) &&
       (!statuses.value.length || statuses.value.includes(request.status)) &&
       (!needsAction.value || NEEDS_ACTION_STATUSES.includes(request.status)) &&
+      (!problemsOnly.value || hasVehicleProblems(request)) &&
       (!area || request.areaId === area) &&
       (!destination || request.destinations.some(({ id }) => id === destination)) &&
       (!driver || request.drivers.some(({ id }) => id === driver)) &&
@@ -101,7 +116,7 @@ const sortBy = ref([{ key: "dates", order: "desc" }]);
 const page = ref(1);
 
 // ui-style-system.mdc: changing search or filters returns to page 1.
-watch([search, statuses, needsAction, filters], () => (page.value = 1), { deep: true });
+watch([search, statuses, needsAction, problemsOnly, filters], () => (page.value = 1), { deep: true });
 
 const focus = ref(toDateInput(new Date()));
 const events = computed(() => visible.value.map(calendarEvent));
@@ -148,38 +163,55 @@ const moveCalendar = (direction) => {
           <span v-else-if="index === 1" class="text-medium-emphasis ml-1">+{{ statuses.length - 1 }}</span>
         </template>
       </v-select>
-      <v-btn
-        :variant="showFilters || activeFilterCount ? 'tonal' : 'outlined'"
-        :color="activeFilterCount ? 'primary' : 'secondary'"
-        prepend-icon="mdi-tune-variant"
-        height="40"
-        class="oc-cta"
-        :aria-expanded="showFilters"
-        data-test="toggle-filters"
-        @click="showFilters = !showFilters"
-      >
-        Filters
-        <v-badge v-if="activeFilterCount" :content="activeFilterCount" color="primary" inline />
-      </v-btn>
-      <v-btn
-        v-if="admin"
-        :variant="needsAction ? 'flat' : 'outlined'"
-        color="primary"
-        :prepend-icon="needsAction ? 'mdi-check' : 'mdi-bell-outline'"
-        height="40"
-        class="oc-cta"
-        :aria-pressed="needsAction"
-        data-test="needs-action"
-        @click="needsAction = !needsAction"
-      >
-        Needs my action
-        <v-badge
-          v-if="needsActionCount"
-          :content="needsActionCount"
-          :color="needsAction ? 'surface' : 'primary'"
-          inline
-        />
-      </v-btn>
+      <!-- The buttons wrap as one group, so none is left alone on a line (search takes the slack). -->
+      <div class="browser-actions d-flex align-center ga-2">
+        <v-btn
+          :variant="showFilters || activeFilterCount ? 'tonal' : 'outlined'"
+          :color="activeFilterCount ? 'primary' : 'secondary'"
+          prepend-icon="mdi-tune-variant"
+          height="40"
+          class="oc-cta"
+          :aria-expanded="showFilters"
+          data-test="toggle-filters"
+          @click="showFilters = !showFilters"
+        >
+          Filters
+          <v-badge v-if="activeFilterCount" :content="activeFilterCount" color="primary" inline />
+        </v-btn>
+        <v-btn
+          v-if="admin"
+          :variant="needsAction ? 'flat' : 'outlined'"
+          color="primary"
+          :prepend-icon="needsAction ? 'mdi-check' : 'mdi-bell-outline'"
+          height="40"
+          class="oc-cta"
+          :aria-pressed="needsAction"
+          data-test="needs-action"
+          @click="needsAction = !needsAction"
+        >
+          Needs my action
+          <v-badge
+            v-if="needsActionCount"
+            :content="needsActionCount"
+            :color="needsAction ? 'surface' : 'primary'"
+            inline
+          />
+        </v-btn>
+        <v-btn
+          v-if="admin"
+          :variant="problemsOnly ? 'flat' : 'outlined'"
+          color="warning"
+          :prepend-icon="problemsOnly ? 'mdi-check' : 'mdi-car-wrench'"
+          height="40"
+          class="oc-cta"
+          :aria-pressed="problemsOnly"
+          data-test="vehicle-problems-filter"
+          @click="problemsOnly = !problemsOnly"
+        >
+          Vehicle problems
+          <v-badge v-if="problemsCount" :content="problemsCount" :color="problemsOnly ? 'surface' : 'warning'" inline />
+        </v-btn>
+      </div>
     </div>
 
     <v-expand-transition>
@@ -305,8 +337,25 @@ const moveCalendar = (direction) => {
             </template>
             <template #item.numberOfPeople="{ item }">
               <div class="text-no-wrap">{{ item.numberOfPeople }}</div>
-              <div class="text-no-wrap text-body-medium" :class="item.vehicles.length ? 'text-medium-emphasis' : 'text-disabled'">
+              <div class="d-flex align-center ga-1 text-no-wrap text-body-medium" :class="item.vehicles.length ? 'text-medium-emphasis' : 'text-disabled'">
                 {{ item.vehicles.length ? item.vehicles.map((vehicle) => vehicle.universityId).join(", ") : "No vehicle" }}
+                <v-tooltip v-if="hasVehicleProblems(item)" location="top" max-width="360">
+                  <template #activator="{ props: tip }">
+                    <v-icon
+                      v-bind="tip"
+                      icon="mdi-alert"
+                      color="warning"
+                      size="18"
+                      role="img"
+                      :aria-label="`Vehicle problems. ${problemSummary(item)}`"
+                      data-test="vehicle-problem-flag"
+                    />
+                  </template>
+                  <div v-for="vehicle in problemVehicles(item)" :key="vehicle.id" class="problem-tip">
+                    <div class="font-weight-bold">{{ vehicle.universityId }}</div>
+                    <ProblemList :problems="item.vehicleProblems[vehicle.id]" plain />
+                  </div>
+                </v-tooltip>
               </div>
             </template>
             <template #item.status="{ item }">
@@ -364,8 +413,23 @@ const moveCalendar = (direction) => {
 
 <style scoped>
 .browser-search {
-  flex: 1 1 280px;
-  max-width: 420px;
+  flex: 1 1 240px;
+}
+
+.browser-actions {
+  flex: 0 0 auto;
+}
+
+/* On phones the buttons take their own full line and share it evenly. */
+@media (max-width: 599px) {
+  .browser-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .browser-actions > .v-btn {
+    flex: 1 1 auto;
+  }
 }
 
 .browser-status {
@@ -413,6 +477,10 @@ const moveCalendar = (direction) => {
   width: 12px;
   height: 12px;
   border-radius: 4px;
+}
+
+.problem-tip + .problem-tip {
+  margin-top: 8px;
 }
 
 .browser-calendar :deep(.v-event) {

@@ -691,12 +691,12 @@ describe("Feature 11 — Maintenance Needs", () => {
       await mountAppAt("/maintenance-needs/1");
       await clickNamed("View issue report");
 
+      // Feature 14 (US-14.6): the placeholder redirect is gone; the issue report page opens.
       await waitFor(() => {
-        expect(router.currentRoute.value.path).toBe("/issue-reports");
-        expect(rowText()).toContain(
-          "There is no page for /issue-reports/4. This is a placeholder for when such a page comes into existence.",
-        );
+        expect(router.currentRoute.value.path).toBe("/issue-reports/4");
+        expect(router.currentRoute.value.name).toBe("issueReport");
       });
+      await waitFor(() => expect(issueReportServices.getIssueReport).toHaveBeenCalledWith("4"));
     });
 
     it("Mark in progress shows when status is Open", async () => {
@@ -1019,6 +1019,44 @@ describe("Feature 11 — Maintenance Needs", () => {
       await mountAppAt("/");
       await settle();
       expect(rowText()).not.toContain("Maintenance Needs");
+    });
+  });
+});
+
+describe("Feature 14 — Notes", () => {
+  describe("US-14.2 — View notes on entities", () => {
+    it("Users can view notes on requests, issue reports, maintenance needs", async () => {
+      signIn();
+      const note = {
+        id: 1,
+        maintenanceNeedId: 1,
+        authorId: 7,
+        author: { id: 7, firstName: "Max", lastName: "Fix" },
+        content: "Parts arrive Tuesday.",
+        isVisible: false,
+        createdAt: "2026-11-04T12:00:00.000Z",
+      };
+      apiClient.get.mockImplementation((url) => {
+        if (url === "maintenance-needs/1/notes") return Promise.resolve({ data: [note] });
+        if (String(url).includes("users")) return Promise.resolve({ data: { roles: adminRoles } });
+        return Promise.resolve({ data: [] });
+      });
+      await mountAppAt("/maintenance-needs/1");
+
+      await waitFor(() => expect(document.body.querySelector('[data-test="maintenance-need-notes"]')?.textContent).toContain("Parts arrive Tuesday."));
+      const section = document.body.querySelector('[data-test="maintenance-need-notes"]');
+      expect(section.textContent).toContain("Max Fix");
+      // Feature 14 (US-14.3): every reader of a maintenance need is staff, so its notes form one thread with no
+      // Staff only channel or label.
+      expect(section.textContent).not.toContain("Staff only");
+      expect(apiClient.get).toHaveBeenCalledWith("maintenance-needs/1/notes");
+    });
+
+    it("has no notes section while creating a maintenance need", async () => {
+      signIn();
+      await mountAppAt("/maintenance-needs/new");
+      await waitFor(() => expect(document.body.textContent).toContain("New maintenance need"));
+      expect(document.body.querySelector('[data-test="maintenance-need-notes"]')).toBeNull();
     });
   });
 });

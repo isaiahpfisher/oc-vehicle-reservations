@@ -11,6 +11,7 @@ import destinationServices from "../src/services/destinationServices.js";
 import driverServices from "../src/services/driverServices.js";
 import requestServices from "../src/services/requestServices.js";
 import placeServices from "../src/services/placeServices.js";
+import noteServices from "../src/services/noteServices.js";
 import { STATUSES, calendarTitle, toDateInput } from "../src/models/requests.js";
 import { signInAs, vuetify } from "./testUtils.js";
 
@@ -43,6 +44,11 @@ vi.mock("../src/services/destinationServices.js", () => ({
 
 vi.mock("../src/services/placeServices.js", () => ({
   default: { searchAddresses: vi.fn(), getAddress: vi.fn() },
+}));
+
+// Feature 14 (US-14.2): the request page shows its notes thread.
+vi.mock("../src/services/noteServices.js", () => ({
+  default: { getNotes: vi.fn(), getNote: vi.fn(), createNote: vi.fn(), removeNote: vi.fn() },
 }));
 
 const requester = { userId: 2, email: "jane@oc.edu", firstName: "Jane", lastName: "Doe", roles: [], token: "t" };
@@ -185,6 +191,7 @@ beforeEach(async () => {
   destinationServices.getSelectableDestinations.mockResolvedValue({ data: [okc, tulsa] });
   requestServices.getMyRequests.mockResolvedValue({ data: [] });
   requestServices.getRequests.mockResolvedValue({ data: [] });
+  noteServices.getNotes.mockResolvedValue({ data: [] });
   await router.push("/login");
   await router.isReady();
 });
@@ -505,6 +512,9 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(document.body.textContent).toContain("Submitted by");
       expect(byTest("drivers").textContent).toContain("Dana Reyes");
       expect(byTest("review")).toBeNull();
+      // Feature 14 (US-14.2): the request's notes appear on the page.
+      expect(byTest("request-notes").textContent).toContain("No notes yet.");
+      expect(noteServices.getNotes).toHaveBeenCalledWith("vehicleRequestId", 1);
     });
 
     it("locks the form once the request is no longer pending", async () => {
@@ -654,7 +664,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("Admin assigns vehicles to a request", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest({ status: "awaiting_vehicle" }) });
       requestServices.getVehicleOptions.mockResolvedValue({
-        data: [{ vehicle: van, conflictingRequestIds: [], outOfService: false, milesUntilService: null }],
+        // Feature 18 (US-18.6): options carry status, problems, and the next service.
+        data: [{ vehicle: van, conflictingRequestIds: [], status: "available", problems: [], nextService: {} }],
       });
       requestServices.updateRequest.mockResolvedValue({ data: tripRequest({ status: "reserved", vehicles: [van] }) });
       await mountAppAt("/requests/1", admin);
@@ -679,18 +690,28 @@ describe("Feature 8 — Vehicle Request Management", () => {
       await waitFor(() => expect(byTest("vehicles").textContent).toContain("2022 Ford Transit"));
       expect(document.body.textContent).toContain("Reserved");
       expect(byTest("vehicles").querySelector('[data-test="capacity-warning"]')).not.toBeNull();
+      // Feature 14 (US-14.6): once a vehicle is assigned, the trip links to a new issue report for it.
+      expect(byTest("report-issue").getAttribute("href")).toBe("/issue-reports/new?vehicleRequestId=1");
     });
 
     it("hides reserved vehicles until the admin clears that filter", async () => {
       requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
       requestServices.getVehicleOptions.mockResolvedValue({
         data: [
-          { vehicle: van, conflictingRequestIds: [4], outOfService: false, milesUntilService: null },
+          // Feature 18 (US-18.6): a booked vehicle comes back with a blocking `booked` problem.
+          {
+            vehicle: van,
+            conflictingRequestIds: [4],
+            status: "available",
+            problems: [{ type: "booked", blocking: true, message: "Booked for another trip at the same time." }],
+            nextService: {},
+          },
           {
             vehicle: { ...van, id: 6, universityId: "BUS-1", vehicleType: { name: "Bus" } },
             conflictingRequestIds: [],
-            outOfService: false,
-            milesUntilService: null,
+            status: "available",
+            problems: [],
+            nextService: {},
           },
         ],
       });
@@ -705,7 +726,8 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       await click("Available on these dates");
       await waitFor(() => expect(document.body.querySelectorAll('[data-test="vehicle-option"]')).toHaveLength(2));
-      expect(document.body.textContent).toContain("Reserved");
+      // Feature 18 (US-18.6): the chip reads "Booked" and the row is disabled with the reason.
+      expect(document.body.textContent).toContain("Booked for another trip at the same time.");
       expect(document.body.textContent).not.toContain("#4");
       expect(document.body.textContent).not.toContain("CDL");
     });

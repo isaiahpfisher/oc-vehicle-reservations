@@ -143,13 +143,17 @@ const router = createRouter({
       meta: { nav: "Issue Reports", navGroup: "Fleet", icon: "mdi-alert-circle-outline" },
     },
     {
-      path: "/issue-reports/:id",
-      redirect: (to) => ({
-        path: "/issue-reports",
-        query: {
-          notice: `There is no page for /issue-reports/${to.params.id}. This is a placeholder for when such a page comes into existence.`,
-        },
-      }),
+      // Feature 14 (US-14.6): the issue report form page replaces Feature 10's create dialog. Any signed-in user.
+      path: "/issue-reports/new",
+      name: "issueReportCreate",
+      component: () => import("./views/IssueReport.vue"),
+    },
+    {
+      // Feature 14 (US-14.6): replaces Feature 11's placeholder redirect. Access is checked by the API (Feature 10, FR-014).
+      path: "/issue-reports/:issueReportId",
+      name: "issueReport",
+      component: () => import("./views/IssueReport.vue"),
+      props: true,
     },
     {
       path: "/service-types",

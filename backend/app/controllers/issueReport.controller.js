@@ -2,7 +2,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { canAccessArea } from "../authorization/authorization.js";
-import { ISSUE_STATUSES, ISSUE_TYPES } from "../models/issueReport.model.js";
+import { CLOSED_ON_STATUSES, ISSUE_STATUSES, ISSUE_TYPES } from "../models/issueReport.model.js";
 
 const exports = {};
 
@@ -49,7 +49,10 @@ const present = (report) => ({
   resolvedAt: asDate(report.resolvedAt),
   author: person(report.author),
   assignee: person(report.assignee),
-  vehicle: report.vehicle ? { id: report.vehicle.id, universityId: report.vehicle.universityId } : null,
+  // Feature 14 (US-14.6): areaId lets the issue report page tell whether an area admin manages the report.
+  vehicle: report.vehicle
+    ? { id: report.vehicle.id, universityId: report.vehicle.universityId, areaId: report.vehicle.areaId }
+    : null,
   vehicleRequest: report.vehicleRequest
     ? { id: report.vehicleRequest.id, purpose: report.vehicleRequest.purpose }
     : null,
@@ -126,7 +129,7 @@ const readBody = (body) => {
   }
 
   let resolvedAt = null;
-  if (body.status === "resolved") {
+  if (CLOSED_ON_STATUSES.includes(body.status)) {
     if (body.resolvedAt === undefined || body.resolvedAt === null || String(body.resolvedAt).trim() === "") {
       return { message: "Missing resolved date." };
     }
@@ -163,6 +166,23 @@ const readBody = (body) => {
 };
 
 const reload = (id) => db.issueReport.findByPk(id, { include: withRelations });
+
+/**
+ * Feature 14 (US-14.6): who may be assigned a report on `vehicle`: admins, maintenance users,
+ * and area admins of the vehicle's area.
+ */
+const ASSIGNEE_MESSAGE = "Assignee must be an admin, an area admin for this vehicle, or a maintenance user.";
+const assigneeRoles = [{ model: db.role, as: "roles", attributes: ["role", "areaId"] }];
+
+const assigneeRoleNames = (user, vehicle) => [
+  ...new Set(
+    user.roles
+      .filter(({ role, areaId }) => role === "admin" || role === "maintenance" || (role === "area_admin" && areaId === vehicle.areaId))
+      .map(({ role }) => role),
+  ),
+];
+
+const canBeAssigned = (user, vehicle) => assigneeRoleNames(user, vehicle).length > 0;
 
 const loadManaged = async (req, res) => {
   const issueReportId = issueReportIdFrom(req, res);
@@ -250,6 +270,49 @@ exports.findAll = async (req, res) => {
   }
 };
 
+/** `GET /issue-reports/assignees?vehicleId=`: the people a report on that vehicle can be assigned to. */
+exports.assignees = async (req, res) => {
+  try {
+    const parsed = wholeId(req.query.vehicleId);
+    if (parsed.empty || parsed.invalid) {
+      return res.status(400).send({ message: "Invalid vehicle id." });
+    }
+
+    const vehicle = await db.vehicle.findByPk(parsed.value);
+    if (!vehicle) {
+      return res.status(404).send({ message: "Vehicle not found." });
+    }
+
+    const users = await db.user.findAll({
+      attributes: ["id", "firstName", "lastName"],
+      include: [
+        {
+          ...assigneeRoles[0],
+          where: {
+            [Op.or]: [{ role: ["admin", "maintenance"] }, { role: "area_admin", areaId: vehicle.areaId }],
+          },
+        },
+      ],
+      order: [
+        ["lastName", "ASC"],
+        ["firstName", "ASC"],
+      ],
+    });
+
+    return res.send(
+      users.map((user) => ({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        roles: assigneeRoleNames(user, vehicle),
+      })),
+    );
+  } catch (err) {
+    logger.error(`issue report assignees failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to fetch assignees." });
+  }
+};
+
 exports.findOne = async (req, res) => {
   try {
     const issueReportId = issueReportIdFrom(req, res);
@@ -299,9 +362,13 @@ exports.create = async (req, res) => {
     }
 
     if (result.value.assigneeId !== null) {
-      const assignee = await db.user.findByPk(result.value.assigneeId);
+      const assignee = await db.user.findByPk(result.value.assigneeId, { include: assigneeRoles });
       if (!assignee) {
         return res.status(404).send({ message: "Assignee not found." });
+      }
+
+      if (!canBeAssigned(assignee, vehicle)) {
+        return res.status(400).send({ message: ASSIGNEE_MESSAGE });
       }
     }
 
@@ -348,9 +415,13 @@ exports.update = async (req, res) => {
     }
 
     if (result.value.assigneeId !== null) {
-      const assignee = await db.user.findByPk(result.value.assigneeId);
+      const assignee = await db.user.findByPk(result.value.assigneeId, { include: assigneeRoles });
       if (!assignee) {
         return res.status(404).send({ message: "Assignee not found." });
+      }
+
+      if (!canBeAssigned(assignee, vehicle)) {
+        return res.status(400).send({ message: ASSIGNEE_MESSAGE });
       }
     }
 

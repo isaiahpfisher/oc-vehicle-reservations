@@ -308,10 +308,8 @@ describe("Feature 11 — Maintenance Needs", () => {
         status: "pending",
       });
 
-      const response = await request(app)
-        .post("/api/maintenance-needs")
-        .set(headers)
-        .send(validBody({ issueReportId: report.id, title: "Something else", outOfService: false, priority: "High" }));
+      // Feature 14 (US-14.7): fields left out of the body are copied from the report; fields sent are kept.
+      const response = await request(app).post("/api/maintenance-needs").set(headers).send({ issueReportId: report.id });
 
       expect(response.status).toBe(201);
       expect(response.body).toMatchObject({
@@ -328,6 +326,52 @@ describe("Feature 11 — Maintenance Needs", () => {
 
       const listed = await request(app).get("/api/maintenance-needs").set(headers);
       expect(listed.body.map((need) => need.id)).toContain(response.body.id);
+
+      // Feature 14 (US-14.7): the report is closed as moved to maintenance, dated today.
+      await report.reload();
+      expect(report.status).toBe("moved_to_maintenance");
+      expect(report.resolvedAt).toBe(todayString());
+
+      // Feature 14 (US-14.7): a pre-filled form the user edited keeps their values.
+      const second = await db.issueReport.create({
+        vehicleId: 1,
+        authorId: user.userId,
+        assigneeId: user.userId,
+        type: "maintenance",
+        description: "Brakes squeak.",
+        status: "pending",
+      });
+      const edited = await request(app)
+        .post("/api/maintenance-needs")
+        .set(headers)
+        .send({ issueReportId: second.id, title: "Brake pads", outOfService: false, priority: "High" });
+      expect(edited.status).toBe(201);
+      expect(edited.body).toMatchObject({
+        title: "Brake pads",
+        outOfService: false,
+        priority: "High",
+        description: "Brakes squeak.",
+        vehicleId: 1,
+        status: "Open",
+        // The report's admin assignee isn't a maintenance user, so it isn't copied.
+        assigneeId: null,
+        issueReportId: second.id,
+      });
+
+      // A need made without a report leaves every report alone; a rejected one changes nothing.
+      const third = await db.issueReport.create({
+        vehicleId: 1,
+        authorId: user.userId,
+        type: "maintenance",
+        description: "Wipers streak.",
+        status: "pending",
+      });
+      expect((await request(app).post("/api/maintenance-needs").set(headers).send(validBody())).status).toBe(201);
+      const rejected = await request(app).post("/api/maintenance-needs").set(headers).send({ issueReportId: third.id, title: "" });
+      expect(rejected.status).toBe(400);
+      await third.reload();
+      expect(third.status).toBe("pending");
+      expect(third.resolvedAt).toBeNull();
     });
   });
 

@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { MAINTENANCE_PRIORITIES, MAINTENANCE_STATUSES } from "../models/maintenanceNeed.model.js";
+import { loadConditions } from "../helpers/vehicleStatus.js";
 
 const exports = {};
 
@@ -151,18 +152,26 @@ const readBody = async (body, user, currentId, preservedIssueReportId = null) =>
       return fail(400, "Issue report already belongs to a maintenance need.");
     }
 
-    // Creating from an issue report copies the report and uses the form defaults.
+    // Creating from an issue report copies the report and uses the form defaults for any field the body leaves out.
+    // Feature 14 (US-14.7): fields the body sends win, so a pre-filled form the user edited saves what they see.
     if (!currentId) {
-      values = {
+      // Only a maintenance user can be a need's assignee; an issue report's admin or area admin assignee isn't copied.
+      const reportAssignee = issueReport.assigneeId
+        ? await db.role.count({ where: { userId: issueReport.assigneeId, role: "maintenance" } })
+        : 0;
+      const fromReport = {
         title: "Maintenance Needed",
         vehicleId: issueReport.vehicleId,
-        assigneeId: issueReport.assigneeId,
+        assigneeId: reportAssignee ? issueReport.assigneeId : null,
         description: issueReport.description,
         outOfService: true,
         priority: "None",
         status: "Open",
         resolvedAt: null,
       };
+      values = Object.fromEntries(
+        Object.entries(fromReport).map(([key, fallback]) => [key, source[key] === undefined ? fallback : source[key]]),
+      );
     }
   }
 
@@ -278,13 +287,16 @@ exports.options = async (req, res) => {
       areaIds && areaIds.length === 0
         ? []
         : await db.vehicle.findAll({
-            attributes: ["id", "color", "make", "model", "licensePlate", "areaId"],
+            // Feature 18: status needs the purchase date, plate expiration, and retired flag.
+            attributes: ["id", "color", "make", "model", "licensePlate", "areaId", "status", "purchasedAt", "licensePlateExpirationDate"],
             where: areaIds ? { areaId: { [Op.in]: areaIds } } : undefined,
             order: [
               ["make", "ASC"],
               ["model", "ASC"],
             ],
           });
+    // US-18.11: the vehicle select shows each vehicle's status.
+    const conditions = await loadConditions(vehicles);
 
     const assignees = await db.user.findAll({
       attributes: ["id", "firstName", "lastName"],
@@ -295,7 +307,10 @@ exports.options = async (req, res) => {
       ],
     });
 
-    return res.status(200).send({ vehicles, assignees });
+    return res.status(200).send({
+      vehicles: vehicles.map((vehicle) => ({ ...vehicle.toJSON(), condition: conditions.get(vehicle.id) })),
+      assignees,
+    });
   } catch (err) {
     logger.error(`maintenance need options failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch maintenance need options." });
@@ -332,7 +347,17 @@ exports.create = async (req, res) => {
       return sendFailure(res, result);
     }
 
-    const created = await db.maintenanceNeed.create(result.values);
+    // Feature 14 (US-14.7): a need made from an issue report closes that report as moved to maintenance, together.
+    const created = await db.sequelize.transaction(async (transaction) => {
+      const need = await db.maintenanceNeed.create(result.values, { transaction });
+      if (result.values.issueReportId) {
+        await db.issueReport.update(
+          { status: "moved_to_maintenance", resolvedAt: todayString() },
+          { where: { id: result.values.issueReportId }, transaction },
+        );
+      }
+      return need;
+    });
     return res.status(201).send(await loadNeed(created.id));
   } catch (err) {
     logger.error(`maintenance need create failed: ${err.message}`);
