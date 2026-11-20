@@ -4,7 +4,7 @@
 **Branch pattern:** `feature/22-cdls`
 **Status:** Draft
 **Created:** 2026-11-16
-**Input:** Drivers have CDLs and vehicle types can require a CDL. Vehicle requests recommend drivers with CDL for large trips and only allow vehicles that don't require a CDL if no drivers have a CDL.
+**Input:** Drivers have CDLs and vehicle types can require a CDL. Vehicle requests recommend drivers with CDL for large trips and show warnings on vehicles that require a CDL if no drivers have a CDL.
 **Depends on:** Feature 4 [Vehicle Types], Feature 7 [Drivers], Feature 8 [Vehicle Requests]
 
 ---
@@ -54,11 +54,11 @@
 ### US-22.5: List vehicles that the selected drivers are permitted to drive on vehicle request
 
 **As a** signed-in admin or area admin user
-**I want to** only list available vehicles that the selected drivers are allowed to drive
-**So that** I don't assign a vehicle that the driver cannot drive
+**I want to** see a warning on vehicles that selected drivers are not permitted to drive on vehicle requests
+**So that** I don't accidentally assign a vehicle that the driver cannot drive
 
 **Priority:** P1
-**Independent test:** On vehicle request, if no driver has a CDL, only list vehicles which type does not require a CDL
+**Independent test:** On vehicle request, if no driver has a CDL, put warnings on vehicles that require a CDL
 **Acceptance scenarios:** see ### US-22.5 under Acceptance Criteria
 
 ---
@@ -69,7 +69,6 @@
 
 - **FR-001**: `requiresCDL` for vehicle type MUST be true or false.
 - **FR-002**: `hasCDL` for drivers MUST be true or false.
-- **FR-003**: Assigning a vehicle that requires a CDL to a request with no driver that has a CDL is not allowed.
 
 ---
 
@@ -82,7 +81,6 @@
 
 - Empty or invalid `requiresCDL` for vehicle types → save as `false`
 - Empty or invalid `hasCDL` for drivers → save as `false`
-- Assigning a vehicle with a CDL to a request with no drivers with a CDL → `400`.
 
 ## Success Criteria
 
@@ -90,8 +88,7 @@
 - **SC-002**: Signed-in admin or area admin user can select and modify if a driver has a CDL.
 - **SC-003**: Signed-in admin user can select and modify if a vehicle type requires a CDL.
 - **SC-004**: Signed-in requester can view if a driver has a CDL.
-- **SC-005**: Signed-in admin or area admin user can only assign vehicles that require a CDL if a driver has a CDL.
-- **SC-006**: `npm test` passes for CDLs API and CDLs view behavior.
+- **SC-005**: `npm test` passes for CDLs API and CDLs view behavior.
 
 ---
 
@@ -193,7 +190,8 @@ Vehicle types and drivers API the same as specified in other specs.
 ### [View: Vehicle Requests ] - vehicle assignment view
 
 - The same as existing.
-- The vehicles dropdown shows no vehicles that require a CDL if no selected driver has a CDL.
+- The vehicles dropdown shows warnings on vehicles that require a CDL if no selected driver has a CDL.
+- There is a new filter `Does not require CDL`
 
 ---
 
@@ -393,6 +391,13 @@ Vehicle types and drivers API the same as specified in other specs.
 - **When** I create a new request and view the drivers dropdown
 - **Then** The options for drivers with a CDL have `(CDL)` after the person's name
 
+#### Scenario: API request for selectable
+
+- **Given** I am signed in as a requester 
+- **And** Drivers exist
+- **When** I request `GET /api/drivers/selectable`
+- **Then** `hasCDL` is a field in the response for each returned driver
+
 ---
 
 ### US-22.4: Show a warning for many passengers and no driver has a CDL
@@ -409,21 +414,21 @@ Vehicle types and drivers API the same as specified in other specs.
 
 ### US-22.5: List vehicles that the selected drivers are permitted to drive on vehicle request
 
-#### Scenario: List vehicles without CDLs for drivers without CDLs
+#### Scenario: Warnings on vehicles that require a CDL for drivers without a CDL
 
 - **Given** I am signed in as an admin or area admin
 - **And** I am assigning vehicles to a request that has no drivers with CDLs
-- **And** Both vehicles that require a CDL and vehicles that don't require a CDL are available
+- **And** Both vehicles that require a CDL and vehicles that don't require a CDL exist
 - **When** I click the vehicles dropdown
-- **Then** Only vehicles with vehicle type that have requiresCDL `false` are shown
+- **Then** The vehicles that require CDLs show a warning
 
-#### Scenario: List vehicles with CDLs for drivers with CDLs
+#### Scenario: No warnings on vehicles that require a CDL for drivers with a CDL
 
 - **Given** I am signed in as an admin or area admin
 - **And** I am assigning vehicles to a request that has at least one driver with a CDL
 - **And** Both vehicles that require a CDL and vehicles that don't require a CDL are available
 - **When** I click the vehicles dropdown
-- **Then** I see both vehicles that require a CDL and vehicles that don't require a CDL
+- **Then** The vehicles that require CDLs do not show a warning
 
 #### Scenario: Admin or area admin user requests to update a request to have a vehicle with type that requires a CDL when no driver has a CDL
 
@@ -432,8 +437,15 @@ Vehicle types and drivers API the same as specified in other specs.
 - **And** A vehicle with id `1` and vehicle type `1` exists
 - **And** A driver with id `1` and hasCDL `false` exists
 - **And** A vehicle request with id `1` exists
-- **When** I request `PUT /api/requests/1` with only a driver with id `1` and vehicle with id `1`
-- **Then** I receive `400` with `{ message: "Only vehicles that don't require a CDL can be assigned to a request with no drivers with CDLs." }`
+- **When** I request `PUT /api/requests/1` with `{ drivers: [1] }` and `{ vehicles: [1] }` and a valid rest of the body
+- **Then** The request is saved with the specified driver and vehicle
+
+#### Scenario: Filter on assign vehicle for has CDL
+
+- **Given** I am signed in as admin or area admin
+- **When** I open the dialog to assign vehicles to a vehicle request
+- **Then** I see a filter `Does not require CDL`
+- **And** Applying this filter only shows vehicles that do not require a CDL
 
 ---
 
@@ -441,6 +453,35 @@ Vehicle types and drivers API the same as specified in other specs.
 
 | Story | Scenario | Test file | Test name |
 |-------|----------|-----------|-----------|
+| US-22.1 | Admin or area admin user sees CDL field on driver create | `frontend/tests/DriverForm.test.js` | `Admin or area admin user sees CDL field on driver create` |
+| US-22.1 | Admin or area admin user creates driver with CDL | `frontend/tests/DriverForm.test.js` | `Admin or area admin user creates driver with CDL` |
+| US-22.1 | Admin or area admin user requests to create a driver with a CDL | `backend/tests/drivers.test.js` | `Admin or area admin user requests to create a driver with a CDL` |
+| US-22.1 | Admin or area admin user requests to create a driver with no CDL | `backend/tests/drivers.test.js` | `Admin or area admin user requests to create a driver with no CDL` |
+| US-22.1 | Admin or area admin user requests to create a driver with non-boolean CDL | `backend/tests/drivers.test.js` | `Admin or area admin user requests to create a driver with non-boolean CDL` |
+| US-22.1 | Admin or area admin user sees CDL field on driver edit | `frontend/tests/DriverForm.test.js` | `Admin or area admin user sees CDL field on driver edit` |
+| US-22.1 | Admin or area admin user edits driver to have CDL | `frontend/tests/DriverForm.test.js` | `Admin or area admin user edits driver to have CDL` |
+| US-22.1 | Admin or area admin user requests to edit a driver with a CDL | `backend/tests/drivers.test.js` | `Admin or area admin user requests to edit a driver with a CDL` |
+| US-22.1 | Admin or area admin user requests to edit a driver to have no CDL | `backend/tests/drivers.test.js` | `Admin or area admin user requests to edit a driver to have no CDL` |
+| US-22.1 | Admin or area admin user requests to edit a driver to have a non-boolean CDL | `backend/tests/drivers.test.js` | `Admin or area admin user requests to edit a driver to have a non-boolean CDL` |
+| US-22.1 | Admin or area admin user sees CDL column for drivers | `frontend/tests/Drivers.test.js` | `Admin or area admin user sees CDL column for drivers` |
+| US-22.2 | Admin user sees CDL field on vehicle types create | `frontend/tests/VehicleTypes.test.js` | `Admin user sees CDL field on vehicle types create` |
+| US-22.2 | Admin user creates vehicle type with CDL | `frontend/tests/VehicleTypes.test.js` | `Admin user creates vehicle type with CDL` |
+| US-22.2 | Admin user requests to create a vehicle type with a CDL | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with a CDL` |
+| US-22.2 | Admin user requests to create a vehicle type with no CDL | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with no CDL` |
+| US-22.2 | Admin user requests to create a vehicle type with non-boolean CDL | `backend/tests/vehicleTypes.test.js` | `Admin user requests to create a vehicle type with non-boolean CDL` |
+| US-22.2 | Admin user sees CDL field on vehicle types edit | `frontend/tests/VehicleTypes.test.js` | `Admin user sees CDL field on vehicle types edit` |
+| US-22.2 | Admin user edits vehicle type to have CDL | `frontend/tests/VehicleTypes.test.js` | `Admin user edits vehicle type to have CDL` |
+| US-22.2 | Admin user requests to edit a vehicle type with a CDL | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type with a CDL` |
+| US-22.2 | Admin user requests to edit a vehicle type to have no CDL | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have no CDL` |
+| US-22.2 | Admin user requests to edit a vehicle type to have a non-boolean CDL | `backend/tests/vehicleTypes.test.js` | `Admin user requests to edit a vehicle type to have a non-boolean CDL` |
+| US-22.2 | Admin user sees CDL column for vehicle types | `frontend/tests/VehicleTypes.test.js` | `Admin user sees CDL column for vehicle types` |
+| US-22.3 | Vehicle requests show what drivers have a CDL | `frontend/tests/VehicleRequests.test.js` | `Vehicle requests show what drivers have a CDL` |
+| US-22.3 | API request for selectable | `backend/tests/drivers.test.js` | `API request for selectable` |
+| US-22.4 | Show a warning for many passengers and no driver has a CDL | `frontend/tests/VehicleRequests.test.js` | `Show a warning for many passengers and no driver has a CDL` |
+| US-22.5 | Warnings on vehicles that require a CDL for drivers without a CDL | `frontend/tests/VehicleRequests.test.js` | `Warnings on vehicles that require a CDL for drivers without a CDL` |
+| US-22.5 | No warnings on vehicles that require a CDL for drivers with a CDL | `frontend/tests/VehicleRequests.test.js` | `No warnings on vehicles that require a CDL for drivers with a CDL` |
+| US-22.5 | Admin or area admin user requests to update a request to have a vehicle with type that requires a CDL when no driver has a CDL | `backend/tests/vehicleRequests.test.js` | `Admin or area admin user requests to update a request to have a vehicle with type that requires a CDL when no driver has a CDL` |
+| US-22.5 | Filter on assign vehicle for has CDL | `frontend/tests/VehicleRequests.test.js` | `Filter on assign vehicle for has CDL` |
 
 
 ## Agent implementation request
@@ -463,8 +504,8 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-003** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-006)** met
+- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-002** satisfied)
+- [ ] **Success Criteria (SC-001**–**SC-005)** met
 - [ ] All mapped tests pass (`npm test`)
 - [ ] Test Coverage Map complete
 - [ ] `features/reference/data-model.md` updated (if schema changed)
@@ -483,5 +524,4 @@ Do not implement behavior not in this spec.
 
 - Vehicle types have `requiresCDL`
 - Drivers have `hasCDL`
-- These columns are enforced to match on vehicle requests
  
