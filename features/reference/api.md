@@ -110,6 +110,38 @@ Success body: `{ "id", "name", "identifier", "createdAt", "updatedAt" }`.
 | Vehicle type id does not exist | `404` | `{ "message": "Vehicle type with id=… not found." }` |
 | Vehicle type still has vehicles | `400` | `{ "message": "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first." }` |
 
+## Vehicle type instructions
+
+Every route requires a Bearer token and `admin` or `area_admin` (`authorizeRoles("admin", "area_admin")`). Admins pass that check. An admin reads and writes every row, including defaults (`areaId` null). An area admin reads and writes only rows whose `areaId` is an area they administer.
+
+| Method | Endpoint | Auth | Success |
+| ------ | -------- | ---- | ------- |
+| `GET` | `/api/vehicle-type-instructions` | Admin or area admin | `200` array. Admins receive every instruction. Area admins receive instructions for areas they administer. Ordered by vehicle type name, then area name. |
+| `GET` | `/api/vehicle-type-instructions/:vehicleTypeInstructionId` | Admin or area admin | `200` with one instruction. An area admin asking for a default or another area's instruction is `403`. |
+| `POST` | `/api/vehicle-type-instructions` | Admin or area admin | `201` with the created instruction. An admin may omit `areaId` to save the default. An area admin must send an `areaId` they administer. |
+| `PUT` | `/api/vehicle-type-instructions/:vehicleTypeInstructionId` | Admin or area admin | `200` with the updated instruction. Body is the same shape as create. |
+| `DELETE` | `/api/vehicle-type-instructions/:vehicleTypeInstructionId` | Admin or area admin | `200` `{ "message": "Vehicle type instruction deleted successfully." }`. |
+
+Create body: `{ "vehicleTypeId": 1, "areaId": null, "content": "Park in the designated lot. Keys are in the office." }`. `content` is trimmed before save.
+
+Success body: `{ "id", "vehicleTypeId", "areaId", "content", "vehicleType", "area", "createdAt", "updatedAt" }`. `vehicleType` is `{ "id", "name" }`. `area` is `{ "id", "name" }` or `null`.
+
+| Condition | Status | Body |
+| --------- | ------ | ---- |
+| No Bearer token | `401` | `{ "message": "Unauthorized! No token provided." }` |
+| Signed in without `admin` or `area_admin` | `403` | `{ "message": "Admin or area admin role required." }` |
+| Area admin acts outside their areas, or on a default | `403` | `{ "message": "Forbidden." }` |
+| Missing `vehicleTypeId` | `400` | `{ "message": "Missing vehicle type." }` |
+| `vehicleTypeId` is not an integer | `400` | `{ "message": "Invalid vehicle type id." }` |
+| Vehicle type id does not exist | `404` | `{ "message": "Vehicle type not found." }` |
+| Area admin omits `areaId` | `400` | `{ "message": "Missing area." }` |
+| `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
+| Area id does not exist | `404` | `{ "message": "Area not found." }` |
+| Missing or whitespace-only `content` | `400` | `{ "message": "Missing instruction message." }` |
+| Same vehicle type and area already has an instruction | `400` | `{ "message": "An instruction for this vehicle type and area already exists." }` |
+| `:vehicleTypeInstructionId` is not an integer | `400` | `{ "message": "Invalid vehicle type instruction id." }` |
+| Instruction id does not exist | `404` | `{ "message": "Vehicle type instruction with id=… not found." }` |
+
 ## Vehicles
 
 Every vehicle route requires a Bearer token. `GET` allows `admin`, `area_admin`, or `maintenance`. Writes require `admin` or `area_admin`. Admins pass. Area admins only see and change vehicles in areas they administer. Maintenance can read every vehicle and cannot change one. JSON keys are camelCase.

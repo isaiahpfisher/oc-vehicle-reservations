@@ -194,7 +194,15 @@ When `areaId` is set, `area` is `{ "id", "name" }`.
 - Primary action: **+ New Instruction** opens a `<v-dialog>` with **Vehicle type**, **Area**, and **Instruction message**, plus **Create** / **Cancel**.
   - **Vehicle type** is a `<v-select>` of existing vehicle types, labeled by name.
   - **Area** is an optional `<v-select>` for an admin. Empty saves the default. An area admin must choose an area they administer.
-  - **Instruction message** is a `<v-textarea>`.
+  - **Instruction message** is a `<v-textarea>`. On create it starts with this text, and the whole message can be changed or cleared:
+
+    ```text
+    Pickup the vehicle from the lot behind Garvey.
+    You will be driving ___.
+    Pickup the keys from Support Central during office hours.
+    On return, fill with gas, clean up, and put the keys in the drop box outside support.
+    Contact the area admin if there is an issue.
+    ```
 - Display instructions as rows. Each row shows the vehicle type name, **Default** when `areaId` is null or the area name when it is set, and the instruction message.
 - **Edit** icon opens a `<v-dialog>` pre-filled with the current vehicle type, area, and instruction message; **Save** / **Cancel**.
 - **Delete** icon opens a confirmation `<ConfirmModal>` from `components/common` folder.
@@ -244,6 +252,7 @@ JSON keys are `vehicleTypeId`, `areaId`, and `content`.
 - **Given** I am signed in as admin on the vehicle type instructions view
 - **When** I click **+ New Instruction**
 - **Then** a dialog opens with **Vehicle type**, **Area**, and **Instruction message**
+- **And** the instruction message starts with the template, and the text can be changed
 
 #### Scenario: Area admin user creates a vehicle type instruction
 
@@ -652,13 +661,13 @@ Do not implement behavior not in this spec.
 
 ## Definition of Done
 
-- [ ] Backend and frontend implemented per this spec (**FR-001**–**FR-007** satisfied)
-- [ ] **Success Criteria (SC-001**–**SC-004)** met
-- [ ] All mapped tests pass (`npm test`)
-- [ ] Test Coverage Map complete
-- [ ] `features/reference/data-model.md` updated (if schema changed)
-- [ ] `features/reference/api.md` updated (if API changed)
-- [ ] `features/reference/behavior.md` updated (if product rules changed)
+- [x] Backend and frontend implemented per this spec (**FR-001**–**FR-007** satisfied)
+- [x] **Success Criteria (SC-001**–**SC-004)** met
+- [x] All mapped tests pass (`npm test`)
+- [x] Test Coverage Map complete
+- [x] `features/reference/data-model.md` updated (if schema changed)
+- [x] `features/reference/api.md` updated (if API changed)
+- [x] `features/reference/behavior.md` updated (if product rules changed)
 
 ---
 

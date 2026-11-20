@@ -1,7 +1,7 @@
 # Behavior & Rules Reference
 
 
-**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, Feature 6 destination rules, Feature 7 driver rules, Feature 8 vehicle request rules, Feature 9 mileage log rules, Feature 10 issue report rules, Feature 11 maintenance need rules, Feature 12 service type rules, Feature 14 note rules, and Feature 18 vehicle status rules are recorded here.
+**Living snapshot** of product rules currently in force. Feature 2 area rules, Feature 3 role rules, Feature 4 vehicle type rules, Feature 5 vehicle rules, Feature 6 destination rules, Feature 7 driver rules, Feature 8 vehicle request rules, Feature 9 mileage log rules, Feature 10 issue report rules, Feature 11 maintenance need rules, Feature 12 service type rules, Feature 14 note rules, Feature 15 vehicle type instruction rules, and Feature 18 vehicle status rules are recorded here.
 
 These files answer: *"What rules does the app enforce right now?"*  
 They do **not** authorize new scope — implement only from `features/feature-*.md`.
@@ -47,6 +47,17 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | A field left out of an update keeps its stored value | `PUT` with only `name` does not clear `identifier`, and the reverse. | Feature 4, US-4.4 |
 | Delete removes the vehicle type when it has no vehicles | `DELETE` returns `200`. If the vehicle type still has vehicles, `DELETE` returns `400` `{ "message": "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first." }` and the type stays. | Feature 4, Assumptions; Feature 5, FR-027 |
 | Vehicle types are managed on one screen | `/vehicle-types` heading is **Vehicle Type Management**. The list is a table of 10 rows per page with **Name** and **Identifier**. Create uses a dialog with **Name** and an **Identifier** select (`VIN`, `Serial`). Edit replaces that row with the same fields and **Save** / **Cancel**; Cancel leaves the stored row unchanged. Row icon buttons use `size="small"` and `variant="text"`. Delete uses the shared confirmation dialog. Empty list copy is **No vehicle types yet. Create your first vehicle type.** | Feature 4, Screen Requirements |
+
+## Vehicle type instructions
+
+| Rule | Enforcement | Provenance |
+| ---- | ----------- | ---------- |
+| Only admins and area admins manage instructions | Every `/api/vehicle-type-instructions` route uses `authorizeRoles("admin", "area_admin")`. A missing token is `401` `{ "message": "Unauthorized! No token provided." }`. A signed-in user without one of those roles is `403` `{ "message": "Admin or area admin role required." }`. `/vehicle-type-instructions` has `meta.nav: "Vehicle Type Instructions"` and `meta.roles: ["admin", "area_admin"]`. An unsigned visit redirects to `/login`. Another signed-in role redirects home (`/`). | Feature 15, FR-001, US-15.5 |
+| An admin sees every instruction; an area admin sees their areas | The list and a single row follow that scope. A default (`areaId` null) is admin-only. An area admin reading or changing another area's row, or a default, is `403` `{ "message": "Forbidden." }`. | Feature 15, FR-007 |
+| A default has no area; an override names an area | An admin may omit `areaId`. An area admin who omits it gets `400` `{ "message": "Missing area." }`. An area admin may set `areaId` only to an area they administer. Another area is `403` `{ "message": "Forbidden." }`. | Feature 15, FR-004 |
+| One instruction per vehicle type and area | A second default for a vehicle type, or a second override for the same vehicle type and area, is `400` `{ "message": "An instruction for this vehicle type and area already exists." }`. | Feature 15, FR-006 |
+| The message and vehicle type are required | Missing `vehicleTypeId` is `400` `{ "message": "Missing vehicle type." }`. A non-integer is `{ "message": "Invalid vehicle type id." }`. An unknown type is `404` `{ "message": "Vehicle type not found." }`. An unknown area is `404` `{ "message": "Area not found." }`. Empty or whitespace-only `content` is `400` `{ "message": "Missing instruction message." }`. The saved message is trimmed. | Feature 15, FR-003, FR-005 |
+| Instructions are one screen and a dialog | `/vehicle-type-instructions` heading is **Vehicle Type Instructions**. Each row shows the vehicle type name, **Default** or the area name, and the message. **+ New Instruction** opens a dialog with **Vehicle type**, **Area**, and **Instruction message**. The message starts as the Garvey pickup, keys, return, and contact template, and every word can be changed. Edit opens the saved message. An admin may leave **Area** empty. An area admin must choose an area they administer. Empty fields show **Required field.** Edit uses the same dialog. Row icon buttons use `size="small"` and `variant="text"` with aria-labels **Edit vehicle type instruction** and **Delete vehicle type instruction**. Delete uses the shared confirmation dialog. Empty copy is **No vehicle type instructions yet. Create your first vehicle type instruction.** | Feature 15, Screen Requirements |
 
 ## Vehicles
 

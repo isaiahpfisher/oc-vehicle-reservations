@@ -60,6 +60,19 @@ Unique on (`user_id`, `role`, `area_id`). Every user also has requester permissi
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
+## `vehicle_type_instructions` (Feature 15)
+
+| Column | Type | Rules |
+| ------ | ---- | ----- |
+| `id` | INTEGER | Primary key, auto-increment |
+| `vehicleTypeId` (`vehicle_type_id`) | INTEGER | Required. References `vehicleTypes.id`. Unique together with `areaId` |
+| `areaId` (`area_id`) | INTEGER | Null is the default for that vehicle type. Set is that area's override. References `areas.id` |
+| `content` | TEXT | Required. Trimmed instruction message |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
+JSON keys are `vehicleTypeId`, `areaId`, and `content`. A response also includes `vehicleType` `{ id, name }` and `area` `{ id, name }` or `null`.
+
 ## `vehicles`
 
 | Column | Type | Rules |
@@ -250,6 +263,8 @@ Exactly one of the three parent ids is set (enforced by the API).
 - An area has many roles. A role optionally belongs to one area. Deleting the area deletes its roles.
 - An area has many vehicles. A vehicle belongs to one area. The area cannot be deleted while it still has vehicles.
 - A vehicle type has many vehicles. A vehicle belongs to one vehicle type. The vehicle type cannot be deleted while it still has vehicles.
+- A vehicle type has many vehicle type instructions. An instruction belongs to one vehicle type. The vehicle type cannot be deleted while it still has instructions.
+- An area has many vehicle type instructions. An instruction optionally belongs to one area. The area cannot be deleted while it still has instructions.
 - A user has zero or one driver. A driver optionally belongs to one user. Deleting the user keeps the driver with no linked user.
 - Service types have no associations.
 - A destination has many request stops (Feature 8). It can't be deleted while a request uses it.
