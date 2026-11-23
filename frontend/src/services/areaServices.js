@@ -17,8 +17,9 @@ const areaServices = {
     return apiClient.put(`areas/${areaId}`, payload);
   },
 
-  removeArea(areaId) {
-    return apiClient.delete(`areas/${areaId}`);
+  /** UI/UX backlog #33: `moveVehiclesTo` (an id) moves its vehicles there as part of the delete. */
+  removeArea(areaId, moveVehiclesTo) {
+    return apiClient.delete(`areas/${areaId}`, moveVehiclesTo ? { params: { moveVehiclesTo } } : undefined);
   },
 };
 

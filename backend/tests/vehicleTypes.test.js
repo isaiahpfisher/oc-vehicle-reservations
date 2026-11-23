@@ -437,4 +437,58 @@ describe("Feature 5 — vehicle types with vehicles", () => {
     });
     expect(await db.vehicleType.count({ where: { id: created.body.id } })).toBe(1);
   });
+
+  // UI/UX backlog #33: move every vehicle to another type as part of the delete.
+  it("Admin user deletes a vehicle type and moves its vehicles to another type", async () => {
+    const headers = await signIn();
+    const bus = await createType(headers);
+    const van = await db.vehicleType.create({ name: "Van", identifier: "VIN" });
+    const serial = await db.vehicleType.create({ name: "Cart", identifier: "Serial" });
+    const area = await db.area.create({ name: "Athletics", logo: "" });
+    const base = { areaId: area.id, make: "Ford", model: "Transit", year: 2015, purchasedAt: "2018-01-01", color: "gray", passengerCapacity: 8, status: "active" };
+    await db.vehicle.create({ ...base, vehicleTypeId: bus.body.id, universityId: "B-1", identifier: "1HGCM82633A004352" });
+    await db.vehicle.create({ ...base, vehicleTypeId: bus.body.id, universityId: "B-2", identifier: "1HGCM82633A004353" });
+
+    const toSelf = await request(app).delete(`/api/vehicle-types/${bus.body.id}?moveVehiclesTo=${bus.body.id}`).set(headers);
+    const toMissing = await request(app).delete(`/api/vehicle-types/${bus.body.id}?moveVehiclesTo=999`).set(headers);
+    expect(toSelf.status).toBe(400);
+    expect(toMissing.body).toEqual({ message: "Choose another existing vehicle type to move the vehicles to." });
+
+    const response = await request(app).delete(`/api/vehicle-types/${bus.body.id}?moveVehiclesTo=${van.id}`).set(headers);
+
+    expect(response.status).toBe(200);
+    expect(await db.vehicle.count({ where: { vehicleTypeId: van.id } })).toBe(2);
+    expect(await db.vehicleType.findByPk(bus.body.id)).toBeNull();
+    expect(serial.id).toBeDefined();
+  });
+
+  it("Admin user can't move serial-numbered vehicles to a VIN type", async () => {
+    const headers = await signIn();
+    const cart = await db.vehicleType.create({ name: "Cart", identifier: "Serial" });
+    const van = await db.vehicleType.create({ name: "Van", identifier: "VIN" });
+    const area = await db.area.create({ name: "Athletics", logo: "" });
+    await db.vehicle.create({
+      areaId: area.id, vehicleTypeId: cart.id, universityId: "GC-1", identifier: "SN-1", make: "Club", model: "Car",
+      year: 2015, purchasedAt: "2018-01-01", color: "white", passengerCapacity: 2, status: "active",
+    });
+
+    const response = await request(app).delete(`/api/vehicle-types/${cart.id}?moveVehiclesTo=${van.id}`).set(headers);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Van vehicles need a VIN, and GC-1 doesn't have one." });
+    expect(await db.vehicleType.findByPk(cart.id)).not.toBeNull();
+  });
+
+  // UI/UX backlog #4: instructions (Feature 15) go with their type instead of failing the delete.
+  it("Admin user deletes a vehicle type that has instructions", async () => {
+    const headers = await signIn();
+    const created = await createType(headers);
+    await db.vehicleTypeInstruction.create({ vehicleTypeId: created.body.id, areaId: null, content: "Keys are in the office." });
+
+    const response = await request(app).delete(`/api/vehicle-types/${created.body.id}`).set(headers);
+
+    expect(response.status).toBe(200);
+    expect(await db.vehicleType.count()).toBe(0);
+    expect(await db.vehicleTypeInstruction.count()).toBe(0);
+  });
 });

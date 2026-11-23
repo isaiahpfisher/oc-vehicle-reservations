@@ -62,6 +62,24 @@ export const waitFor = async (assertion, timeout = 1500) => {
   }
 };
 
+/** UI/UX backlog #36: open a detail page's ⋮ menu and choose the item with `data-test="<item>"`. */
+export const chooseMoreAction = async (item) => {
+  const toggle = await waitFor(() => {
+    const button = document.body.querySelector('[data-test="more-actions"]');
+    expect(button).not.toBeNull();
+    return button;
+  });
+  toggle.click();
+  await settle();
+  const choice = await waitFor(() => {
+    const match = document.body.querySelector(`[data-test="${item}"]`);
+    expect(match).not.toBeNull();
+    return match;
+  });
+  choice.click();
+  await settle();
+};
+
 /** Axios-shaped API error. */
 export const apiError = (status, message) => Object.assign(new Error(message), { response: { status, data: { message } } });
 

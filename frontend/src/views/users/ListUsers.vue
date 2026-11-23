@@ -1,10 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
+import { PAGE_SIZES } from "../../utils/lists.js";
 import { useRouter } from "vue-router";
 import userServices from "../../services/userServices.js";
-import { useDeleteUser } from "../../composables/useDeleteUser.js";
 import { useRequest } from "../../composables/useRequest.js";
-import { useRoles } from "../../composables/useRoles.js";
 import ListState from "../../components/common/ListState.vue";
 import PageShell from "../../components/layout/PageShell.vue";
 import {
@@ -17,12 +16,10 @@ import {
   userMatchesQuery,
 } from "../../models/users.js";
 
-const ITEMS_PER_PAGE = 10;
 // More roles than this collapse into a "+N" chip so the column can't squeeze name and email.
 const VISIBLE_ROLE_CHIPS = 2;
 
 const router = useRouter();
-const { user: currentUser } = useRoles();
 const query = ref("");
 const roleFilter = ref(null);
 const page = ref(1);
@@ -73,46 +70,47 @@ watch([query, roleFilter], () => {
   page.value = 1;
 });
 
-const isSelf = (user) => user.id === currentUser.value?.userId;
-
 const viewUser = (user) => router.push({ name: "userDetails", params: { id: user.id } });
-
-const confirmDeleteUser = useDeleteUser();
-
-const deleteUser = async (user) => {
-  if (await confirmDeleteUser(user)) {
-    await getUsers();
-  }
-};
 
 onMounted(getUsers);
 </script>
 
 <template>
-  <PageShell title="User Management">
-    <v-row>
-      <v-col cols="12" md="8">
-        <v-text-field
-          v-model="query"
-          prepend-inner-icon="mdi-magnify"
-          placeholder="Search users by name..."
-          aria-label="Search users"
-          clearable
-          @click:clear="query = ''"
-        />
-      </v-col>
-      <v-col cols="12" md="4">
-        <v-select v-model="roleFilter" :items="filterOptions" label="Filter by role" clearable />
-      </v-col>
-    </v-row>
+  <!-- UI/UX backlog #42: the page title matches its menu label. -->
+  <PageShell title="Users">
+    <div class="oc-list-toolbar">
+      <v-text-field
+        v-model="query"
+        prepend-inner-icon="mdi-magnify"
+        placeholder="Search by name or email"
+        aria-label="Search users"
+        variant="outlined"
+        density="compact"
+        hide-details
+        clearable
+        class="oc-list-search"
+        @click:clear="query = ''"
+      />
+      <v-select
+        v-model="roleFilter"
+        :items="filterOptions"
+        label="Role"
+        variant="outlined"
+        density="compact"
+        hide-details
+        clearable
+        class="oc-list-filter"
+      />
+    </div>
 
     <ListState
       :loading
       :error
       :empty="!users.length"
       :no-results="!filteredUsers.length"
-      empty-title="No users yet."
-      empty-icon="mdi-account-multiple-outline"
+      empty-title="No users yet"
+      empty-text="People show up here after they first sign in with Google."
+      empty-art="people"
       no-results-title="No users match your search."
       no-results-text=""
     >
@@ -120,12 +118,11 @@ onMounted(getUsers);
         v-model:page="page"
         :headers="headers"
         :items="filteredUsers"
-        :items-per-page="ITEMS_PER_PAGE"
-        :items-per-page-options="[ITEMS_PER_PAGE]"
+        :items-per-page-options="PAGE_SIZES"
         item-value="id"
       >
         <template #[`item.name`]="{ item }">
-          <router-link :to="{ name: 'userDetails', params: { id: item.id } }" class="text-primary font-weight-medium">
+          <router-link :to="{ name: 'userDetails', params: { id: item.id } }" class="oc-link font-weight-medium">
             {{ item.name }}
           </router-link>
         </template>
@@ -167,15 +164,11 @@ onMounted(getUsers);
 
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-1">
-            <v-btn icon="mdi-eye-outline" size="small" variant="text" aria-label="View user" @click="viewUser(item)" />
-            <v-btn
-              icon="mdi-delete"
-              size="small"
-              variant="text"
-              aria-label="Delete user"
-              :disabled="isSelf(item)"
-              @click="deleteUser(item)"
-            />
+            <v-tooltip text="View user" location="top">
+              <template #activator="{ props: tooltip }">
+                <v-btn v-bind="tooltip" icon="mdi-eye-outline" size="small" variant="text" aria-label="View user" @click="viewUser(item)" />
+              </template>
+            </v-tooltip>
           </div>
         </template>
       </v-data-table>

@@ -62,12 +62,12 @@ const rowFor = (name) => rows().find((row) => row.textContent.includes(name));
 const shownNames = () => rows().map((row) => row.querySelector("td")?.textContent.trim());
 
 const setSearch = async (value) => {
-  await wrapper.find('input[placeholder="Search users by name..."]').setValue(value);
+  await wrapper.find('input[placeholder="Search by name or email"]').setValue(value);
   await settle();
 };
 
 const setRoleFilter = async (value) => {
-  const select = wrapper.findAllComponents({ name: "VSelect" }).find((c) => c.props("label") === "Filter by role");
+  const select = wrapper.findAllComponents({ name: "VSelect" }).find((c) => c.props("label") === "Role");
   await select.setValue(value);
   await settle();
 };
@@ -102,7 +102,7 @@ describe("Feature 3 — User Role Management UI", () => {
     it("Admin views users list", async () => {
       await openUsers();
 
-      expect(wrapper.find("h2").text()).toBe("User Management");
+      expect(wrapper.find("h2").text()).toBe("Users");
       expect(shownNames()).toEqual(["Ada Admin", "Bob Jones", "Jane Smith", "Sam Smithers"]);
       const janeRow = rowFor("Jane Smith");
       expect(janeRow.textContent).toContain("jane@eagles.oc.edu");
@@ -182,7 +182,11 @@ describe("Feature 3 — User Role Management UI", () => {
       userServices.getUsers.mockResolvedValue({ data: [] });
       await openUsers();
 
-      expect(document.body.textContent).toContain("No users yet.");
+      // UI/UX backlog #46: a short title, a line explaining why, and the app's own drawing.
+      expect(document.body.textContent).toContain("No users yet");
+      expect(document.body.textContent).toContain("People show up here after they first sign in with Google.");
+      expect(document.body.querySelector('[data-test="list-empty"] svg.empty-illustration')).not.toBeNull();
+      expect(document.body.querySelector('[data-test="list-empty"] .v-icon')).toBeNull();
     });
   });
 
@@ -194,6 +198,16 @@ describe("Feature 3 — User Role Management UI", () => {
       await setSearch("smi");
 
       expect(shownNames()).toEqual(["Jane Smith"]);
+    });
+
+    // UI/UX backlog #51: the email shown in the list is searchable too.
+    it("Admin searches users by email", async () => {
+      userServices.getUsers.mockResolvedValue({ data: [jane, bob] });
+      await openUsers();
+
+      await setSearch(bob.email.split("@")[0]);
+
+      expect(shownNames()).toEqual([`${bob.firstName} ${bob.lastName}`]);
     });
 
     it("Search is case-insensitive", async () => {
@@ -266,16 +280,15 @@ describe("Feature 3 — User Role Management UI", () => {
   });
 
   describe("US-3.3 — User row actions", () => {
-    it("User rows have view and delete actions for admins", async () => {
+    // UI/UX backlog #36: rows keep view; delete lives on the user page (its "Delete user" card).
+    it("User rows have a view action for admins, and no delete", async () => {
       await openUsers();
 
       for (const row of rows()) {
         const view = row.querySelector('button[aria-label="View user"]');
-        const del = row.querySelector('button[aria-label="Delete user"]');
         expect(view).not.toBeNull();
-        expect(del).not.toBeNull();
         expect(view.classList).toContain("v-btn--size-small");
-        expect(del.classList).toContain("v-btn--size-small");
+        expect(row.querySelector('button[aria-label="Delete user"]')).toBeNull();
       }
     });
 
@@ -302,49 +315,50 @@ describe("Feature 3 — User Role Management UI", () => {
       await settle();
       await waitFor(() => expect(router.currentRoute.value.params.id).toBe(String(jane.id)));
     });
-
-    it("Delete action opens a confirmation dialog", async () => {
-      await openUsers();
-
-      rowFor("Bob Jones").querySelector('button[aria-label="Delete user"]').click();
-
-      await waitFor(() => expect(document.body.querySelector(".v-dialog")?.textContent).toContain("Bob Jones"));
-      expect(userServices.deleteUser).not.toHaveBeenCalled();
-    });
-
-    it("Admin cannot delete themselves from the list", async () => {
-      await openUsers();
-
-      expect(rowFor("Ada Admin").querySelector('button[aria-label="Delete user"]').disabled).toBe(true);
-      expect(rowFor("Bob Jones").querySelector('button[aria-label="Delete user"]').disabled).toBe(false);
-    });
   });
 
+  // UI/UX backlog #36: delete moved from the list rows to the user page; UserDetails.test.js covers deleting there
+  // (and that an admin can't delete themselves). This checks the trip from the list and that cancel keeps the user.
   describe("US-3.5 — Delete user", () => {
-    it("Admin deletes a user", async () => {
-      userServices.deleteUser.mockResolvedValue({ status: 204 });
+    const openBob = async () => {
+      userServices.getUser.mockImplementation(async (id) => ({
+        data: allUsers.find((user) => user.id === Number(id)) ?? { roles: JSON.parse(localStorage.getItem("user")).roles },
+      }));
       await openUsers();
+      rowFor("Bob Jones").querySelector('button[aria-label="View user"]').click();
+      await settle();
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("userDetails"));
+      const remove = await waitFor(() => {
+        const button = [...document.body.querySelectorAll("button")].find((el) => el.textContent.trim() === "Delete user");
+        expect(button).toBeDefined();
+        return button;
+      });
+      remove.click();
+      await settle();
+    };
+
+    it("Admin deletes a user from their page and returns to the list", async () => {
+      userServices.deleteUser.mockResolvedValue({ status: 204 });
+      await openBob();
       userServices.getUsers.mockResolvedValue({ data: allUsers.filter((user) => user.id !== bob.id) });
 
-      rowFor("Bob Jones").querySelector('button[aria-label="Delete user"]').click();
       (await dialogButton("Delete User")).click();
       await settle();
 
       expect(userServices.deleteUser).toHaveBeenCalledWith(bob.id);
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("users"));
       await waitFor(() => expect(rowFor("Bob Jones")).toBeUndefined());
       expect(rows()).toHaveLength(3);
     });
 
     it("Admin cancels delete", async () => {
-      await openUsers();
+      await openBob();
 
-      rowFor("Bob Jones").querySelector('button[aria-label="Delete user"]').click();
       (await dialogButton("Cancel")).click();
       await settle();
 
       expect(userServices.deleteUser).not.toHaveBeenCalled();
-      expect(rowFor("Bob Jones")).toBeDefined();
-      expect(router.currentRoute.value.name).toBe("users");
+      expect(router.currentRoute.value.name).toBe("userDetails");
       await waitFor(() => expect(document.body.querySelector(".v-dialog.v-overlay--active")).toBeNull());
     });
   });

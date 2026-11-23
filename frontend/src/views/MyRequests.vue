@@ -1,14 +1,16 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import requestServices from "../services/requestServices.js";
 import { useRequest } from "../composables/useRequest.js";
+import { useRememberedView } from "../composables/useRememberedView.js";
 import PageShell from "../components/layout/PageShell.vue";
 import RequestsBrowser from "../components/requests/RequestsBrowser.vue";
 import RequestViewToggle from "../components/requests/RequestViewToggle.vue";
 
 const router = useRouter();
-const view = ref("month");
+// UI/UX backlog #50: the table to start with (a list reads better than a calendar), remembered once changed.
+const view = useRememberedView("myRequests", "table", ["table", "week", "month"]);
 
 const {
   data: requests,

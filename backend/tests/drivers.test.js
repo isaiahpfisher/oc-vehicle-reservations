@@ -22,6 +22,7 @@ const nextPhoneNumber = () => `405-425-${1234 + phoneCount++}`;
 const validBody = (overrides = {}) => ({
   firstName: "John",
   lastName: "Doe",
+  email: "john.doe@example.com",
   phoneNumber: nextPhoneNumber(),
   licenseState: "OK",
   licenseExpirationDate: "2999-09-01",
@@ -69,6 +70,7 @@ describe("Feature 7 — Driver Management API", () => {
         userId: linked.userId,
         firstName: "John",
         lastName: "Doe",
+        email: "john.doe@example.com",
         phoneNumber: "405-425-1234",
         licenseState: "OK",
         licenseExpirationDate: "2999-09-01",
@@ -101,6 +103,7 @@ describe("Feature 7 — Driver Management API", () => {
         user_id: linked.userId,
         first_name: " John ",
         last_name: " Doe ",
+        email: "john.doe@example.com",
         phone_number: " 405-425-1234 ",
         license_state: "OK",
         license_expiration_date: "2999-09-01",
@@ -132,6 +135,12 @@ describe("Feature 7 — Driver Management API", () => {
         [withoutKey("lastName"), "Missing last name."],
         [validBody({ lastName: "   " }), "Missing last name."],
         [validBody({ lastName: "l".repeat(256) }), "Last name too long."],
+        [withoutKey("email"), "Missing email."],
+        [validBody({ email: "   " }), "Missing email."],
+        [validBody({ email: "not-an-email" }), "Email must be a valid email address."],
+        [validBody({ email: "john@oc" }), "Email must be a valid email address."],
+        [validBody({ email: "john doe@oc.edu" }), "Email must be a valid email address."],
+        [validBody({ email: `${"e".repeat(250)}@oc.edu` }), "Email too long."],
         [withoutKey("phoneNumber"), "Missing phone number."],
         [validBody({ phoneNumber: "   " }), "Missing phone number."],
         [withoutKey("licenseState"), "Missing license state."],
@@ -163,6 +172,22 @@ describe("Feature 7 — Driver Management API", () => {
         expect(pending.status).toBe(201);
         expect(pending.body.status).toBe("pending");
       }
+    });
+
+    it("Email is trimmed and lowercased, and can be changed", async () => {
+      const admin = await signInAdmin();
+
+      const created = await postDriver(admin, validBody({ email: "  John.Doe@OC.edu " }));
+      expect(created.status).toBe(201);
+      expect(created.body.email).toBe("john.doe@oc.edu");
+
+      const updated = await putDriver(admin, created.body.id, { email: "jdoe@gmail.com" });
+      expect(updated.status).toBe(200);
+      expect((await db.driver.findByPk(created.body.id)).email).toBe("jdoe@gmail.com");
+
+      const blank = await putDriver(admin, created.body.id, { email: "" });
+      expect(blank.status).toBe(400);
+      expect(blank.body).toEqual({ message: "Missing email." });
     });
 
     it("Approved timestamp on create", async () => {

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import { useNoticeStore } from "../stores/notice.js";
 import { useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
 import destinationServices from "../services/destinationServices.js";
@@ -7,7 +8,9 @@ import driverServices from "../services/driverServices.js";
 import requestServices from "../services/requestServices.js";
 import Utils from "../config/utils.js";
 import { useRoles } from "../composables/useRoles.js";
+import { canOpen } from "../router.js";
 import { useConfirm } from "../composables/useConfirm.js";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges.js";
 import PageShell from "../components/layout/PageShell.vue";
 import DetailLayout from "../components/layout/DetailLayout.vue";
 import DetailHeader from "../components/layout/DetailHeader.vue";
@@ -39,6 +42,8 @@ const props = defineProps({
 });
 
 const router = useRouter();
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const confirm = useConfirm();
 const { user, hasRole, areaAdminAreaIds } = useRoles();
 
@@ -118,9 +123,27 @@ const createError = ref("");
 const statusSaving = ref(false);
 const actionError = ref("");
 const assignOpen = ref(false);
-const notice = ref("");
 
 const isCreate = computed(() => props.requestId == null);
+
+/**
+ * UI/UX backlog #31: ask before leaving with unsaved changes — anything typed into a new request, or a card on an
+ * existing one that hasn't been saved.
+ */
+const blankCreate = JSON.stringify({ trip: blankTrip(), stops: [], drivers: [] });
+const unsaved = computed(() =>
+  isCreate.value
+    ? JSON.stringify({ trip: trip.value, stops: stops.value, drivers: driverIds.value }) !== blankCreate
+    : // Only sections that loaded count: a failed load leaves nothing to lose.
+      !!request.value && !loadError.value && ["trip", "stops", "drivers"].some((section) => saved[section] !== "" && dirty[section]),
+);
+const { allowLeave } = useUnsavedChanges(unsaved);
+const cancelCreate = () => {
+  allowLeave();
+  router.push({ name: "home" });
+};
+/** UI/UX backlog #28: maintenance-only users can't open issue reports, so they don't get "Report an issue". */
+const canReportIssues = computed(() => canOpen(router.resolve({ name: "issueReportCreate" })));
 const isOwner = computed(() => request.value?.userId === user.value?.userId);
 const canManage = computed(
   () => !!request.value && (hasRole("admin") || areaAdminAreaIds.value.includes(request.value.areaId)),
@@ -153,7 +176,8 @@ const breadcrumbs = computed(() => [
     ? { title: "Requests", to: { name: "adminRequests" } }
     : { title: "My Requests", to: { name: "home" } },
   // Request numbers stay out of the UI (the URL still has one); the header names the trip.
-  { title: isCreate.value ? "New Request" : "Request", disabled: true },
+  // UI/UX backlog #39: the trip's name, like the page header (the number stays in the URL only).
+  { title: isCreate.value ? "New Request" : request.value ? tripTitle(request.value) : "Request", disabled: true },
 ]);
 
 const formatDay = (value) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -220,10 +244,6 @@ const applyRequest = (data, sections = ["trip", "stops", "drivers"]) => {
 const load = async () => {
   loading.value = true;
   loadError.value = "";
-  notice.value = window.history.state?.notice ?? "";
-  if (notice.value) {
-    window.history.replaceState({ ...window.history.state, notice: null }, "");
-  }
 
   try {
     const [areaRes, driverRes, destinationRes, requestRes] = await Promise.all([
@@ -282,7 +302,9 @@ const create = async () => {
       destinations: stopsPayload(stops.value),
       drivers: driverIds.value,
     });
-    await router.replace({ name: "request", params: { requestId: data.id }, state: { notice: "Request submitted." } });
+    allowLeave();
+    notify("Request submitted.");
+    await router.replace({ name: "request", params: { requestId: data.id } });
   } catch (err) {
     createError.value = Utils.errorMessage(err, "Failed to submit request.");
   } finally {
@@ -313,7 +335,7 @@ const saveSection = async (section) => {
   try {
     const { data } = await requestServices.updateRequest(request.value.id, payloads[section]());
     applyRequest(data, [section]);
-    notice.value = "Changes saved.";
+    notify("Changes saved.");
   } catch (err) {
     sectionError[section] = Utils.errorMessage(err, "Failed to save changes.");
   } finally {
@@ -333,11 +355,31 @@ const setStatus = async (status) => {
   try {
     const { data } = await requestServices.updateRequest(request.value.id, { status });
     applyRequest(data, []);
-    notice.value = `Status set to ${statusMeta(status).label.toLowerCase()}.`;
+    // The API may land elsewhere (approving a request that has vehicles reserves it), so name the saved status.
+    notify(`Status set to ${statusMeta(data.status).label.toLowerCase()}.`);
   } catch (err) {
     actionError.value = Utils.errorMessage(err, "Failed to update status.");
   } finally {
     statusSaving.value = false;
+  }
+};
+
+/** UI/UX backlog #11: the "Override status" picker, which can jump to any status, asks first. */
+const overrideOpen = ref(false);
+
+const overrideStatus = async (status) => {
+  if (status === request.value.status) {
+    return;
+  }
+
+  const confirmed = await confirm({
+    title: "Override status",
+    message: `Change this request from ${statusMeta(request.value.status).label} to ${statusMeta(status).label}? This skips the usual review steps.`,
+    confirmText: "Change Status",
+  });
+  if (confirmed) {
+    await setStatus(status);
+    overrideOpen.value = false;
   }
 };
 
@@ -356,14 +398,14 @@ const cancelRequest = async () => {
 
   if (cancelled) {
     applyRequest(updated, []);
-    notice.value = "Request cancelled.";
+    notify("Request cancelled.");
   }
 };
 
 const saveVehicles = async (vehicleIds) => {
   const { data } = await requestServices.updateRequest(request.value.id, { vehicles: vehicleIds });
   applyRequest(data, []);
-  notice.value = "Vehicle assignment saved.";
+  notify("Vehicle assignment saved.");
 };
 </script>
 
@@ -377,6 +419,7 @@ const saveVehicles = async (vehicleIds) => {
     :loading
     :error="loadError"
     :max-width="880"
+    centered
   >
     <v-defaults-provider :defaults="fieldDefaults">
       <v-form ref="createFormRef" class="d-flex flex-column ga-6" @submit.prevent="create">
@@ -388,15 +431,16 @@ const saveVehicles = async (vehicleIds) => {
           <DestinationStops v-model="stops" :saved="savedDestinations" :error="destinationsError" />
         </SectionCard>
 
-        <SectionCard title="Drivers" subtitle="Only approved drivers with a current license are listed.">
+        <SectionCard title="Drivers">
           <DriversField v-model="driverIds" :options="driverOptions" />
         </SectionCard>
 
         <div class="create-actions">
           <v-alert v-if="createError" type="error" density="compact" class="mb-3">{{ createError }}</v-alert>
           <div class="d-flex justify-end ga-2">
-            <v-btn color="secondary" variant="text" class="oc-cta" :to="{ name: 'home' }">Cancel</v-btn>
-            <v-btn color="primary" variant="elevated" class="oc-cta" :loading="creating" data-test="save-request" @click="create">
+            <v-btn color="secondary" variant="text" class="oc-cta" @click="cancelCreate">Cancel</v-btn>
+            <!-- UI/UX backlog #30: a real submit button, so Enter in a field submits the request. -->
+            <v-btn type="submit" color="primary" variant="elevated" class="oc-cta" :loading="creating" data-test="save-request">
               Submit request
             </v-btn>
           </div>
@@ -428,6 +472,12 @@ const saveVehicles = async (vehicleIds) => {
             :meta="headerMeta"
             icon="mdi-van-passenger"
           >
+            <!-- UI/UX backlog #66: the area's logo says whose trip this is at a glance. -->
+            <template v-if="request.area?.logo" #avatar>
+              <v-avatar size="64" rounded="lg" color="surface" class="border" data-test="area-logo">
+                <v-img :src="request.area.logo" :alt="`${request.area.name} logo`" />
+              </v-avatar>
+            </template>
             <template #append>
               <RequestStatusChip :status="request.status" size="default" />
             </template>
@@ -452,8 +502,8 @@ const saveVehicles = async (vehicleIds) => {
                   class="oc-cta"
                   :disabled="!dirty.trip"
                   :loading="savingSection === 'trip'"
+                  type="submit"
                   data-test="save-trip"
-                  @click="saveSection('trip')"
                 >
                   Save
                 </v-btn>
@@ -501,16 +551,31 @@ const saveVehicles = async (vehicleIds) => {
             >
               Mark returned
             </v-btn>
-            <v-select
-              :model-value="request.status"
-              :items="STATUS_OPTIONS"
-              label="Status"
-              density="compact"
-              hide-details
-              :loading="statusSaving"
-              data-test="status"
-              @update:model-value="setStatus"
-            />
+            <!-- UI/UX backlog #11: jumping straight to any status skips the workflow, so it's tucked away and confirmed. -->
+            <v-btn
+              v-if="!overrideOpen"
+              variant="text"
+              color="secondary"
+              size="small"
+              class="oc-cta px-0"
+              data-test="override-status"
+              @click="overrideOpen = true"
+            >
+              Override status
+            </v-btn>
+            <template v-else>
+              <v-select
+                :model-value="request.status"
+                :items="STATUS_OPTIONS"
+                label="Status"
+                density="compact"
+                hide-details
+                :loading="statusSaving"
+                data-test="status"
+                @update:model-value="overrideStatus"
+              />
+              <div class="text-body-small text-medium-emphasis mt-2">Skips the usual steps. Use it to fix a mistake.</div>
+            </template>
           </SectionCard>
 
           <SectionCard v-if="canCancel" title="Cancel request" subtitle="An admin will stop working on it. This can't be undone.">
@@ -561,7 +626,7 @@ const saveVehicles = async (vehicleIds) => {
         </SectionCard>
 
         <v-form ref="driversFormRef" @submit.prevent="saveSection('drivers')">
-          <SectionCard title="Drivers" :subtitle="canEdit ? 'Only approved drivers with a current license are listed.' : ''">
+          <SectionCard title="Drivers">
             <DriversField v-model="driverIds" :options="driverOptions" :readonly="!canEdit" :drivers="request.drivers" />
             <v-alert
               v-for="{ driver, problem } in driverWarnings"
@@ -588,8 +653,8 @@ const saveVehicles = async (vehicleIds) => {
                 class="oc-cta"
                 :disabled="!dirty.drivers"
                 :loading="savingSection === 'drivers'"
+                type="submit"
                 data-test="save-drivers"
-                @click="saveSection('drivers')"
               >
                 Save
               </v-btn>
@@ -636,7 +701,7 @@ const saveVehicles = async (vehicleIds) => {
           </template>
           <div v-else class="text-body-medium text-medium-emphasis">No vehicles assigned yet.</div>
           <!-- Feature 14 (US-14.6): report a problem with this trip's vehicle; the form starts with the trip filled in. -->
-          <template v-if="request.vehicles.length" #actions>
+          <template v-if="request.vehicles.length && canReportIssues" #actions>
             <v-btn
               color="primary"
               variant="text"
@@ -658,10 +723,6 @@ const saveVehicles = async (vehicleIds) => {
 
     <AssignVehiclesDialog v-if="canManage" v-model="assignOpen" :request :save="saveVehicles" />
   </PageShell>
-
-  <v-snackbar :model-value="!!notice" color="success" timeout="3000" @update:model-value="notice = ''">
-    {{ notice }}
-  </v-snackbar>
 </template>
 
 <style scoped>

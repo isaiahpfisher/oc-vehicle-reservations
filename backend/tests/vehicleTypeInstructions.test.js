@@ -80,9 +80,32 @@ describe("Feature 15 — Vehicle Type Instructions", () => {
       await db.vehicleTypeInstruction.create({ vehicleTypeId: van.id, areaId: null, content: "Default keys." });
       await db.vehicleTypeInstruction.create({ vehicleTypeId: van.id, areaId: music.id, content: "Music lot." });
 
+      // UI/UX backlog #9: their areas' instructions plus the default they override (read-only), not other areas'.
       const list = await request(app).get("/api/vehicle-type-instructions").set(headers);
       expect(list.status).toBe(200);
-      expect(list.body.map((row) => row.area?.name ?? "Default")).toEqual(["Athletics"]);
+      expect(list.body.map((row) => row.area?.name ?? "Default")).toEqual(["Default", "Athletics"]);
+      const fallback = list.body.find((row) => row.areaId === null);
+      expect((await request(app).get(`/api/vehicle-type-instructions/${fallback.id}`).set(headers)).status).toBe(200);
+      const edit = await request(app)
+        .put(`/api/vehicle-type-instructions/${fallback.id}`)
+        .set(headers)
+        .send({ vehicleTypeId: van.id, areaId: null, content: "Mine now." });
+      expect(edit.status).toBe(403);
+    });
+
+    // UI/UX backlog #9: the vehicle type page asks for one type's instructions.
+    it("lists one vehicle type's instructions with ?vehicleTypeId", async () => {
+      const van = await createVan();
+      const bus = await db.vehicleType.create({ name: "Bus", identifier: "VIN" });
+      await db.vehicleTypeInstruction.create({ vehicleTypeId: van.id, areaId: null, content: "Van keys." });
+      await db.vehicleTypeInstruction.create({ vehicleTypeId: bus.id, areaId: null, content: "Bus keys." });
+      const headers = await signIn();
+
+      const list = await request(app).get("/api/vehicle-type-instructions").query({ vehicleTypeId: bus.id }).set(headers);
+      expect(list.body.map(({ content }) => content)).toEqual(["Bus keys."]);
+      const bad = await request(app).get("/api/vehicle-type-instructions").query({ vehicleTypeId: "bus" }).set(headers);
+      expect(bad.status).toBe(400);
+      expect(bad.body).toEqual({ message: "Invalid vehicle type id." });
     });
 
     it("Admin user requests to create a vehicle type instruction with a missing vehicle type", async () => {
@@ -115,6 +138,33 @@ describe("Feature 15 — Vehicle Type Instructions", () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({ message: "Missing instruction message." });
+    });
+
+    // Variables are filled in from each trip, so a misspelled one is refused instead of reaching drivers.
+    it("Instructions can use variables, but not unknown ones", async () => {
+      const headers = await signIn();
+      const van = await createVan();
+      const withVariables = "Pick up {{ vehicle }} by {{pickup_time}}. Questions? Ask {{area_admins}}.";
+
+      const created = await createInstruction(headers, { vehicleTypeId: van.id, content: withVariables });
+      expect(created.status).toBe(201);
+      expect(created.body.content).toBe(withVariables);
+
+      for (const [content, unknown] of [
+        ["Pick up {{vehical}}.", "vehical"],
+        ["Bring {{ }} with you.", ""],
+        ["{{vehicle}} leaves at {{pickup_time}} from {{Lot}}.", "Lot"],
+        // Variables there used to be: nobody needed them in pickup instructions.
+        ["Plate {{license_plate}}.", "license_plate"],
+        ["{{people}} people are going.", "people"],
+      ]) {
+        const rejected = await request(app).put(`/api/vehicle-type-instructions/${created.body.id}`).set(headers).send({ vehicleTypeId: van.id, content });
+        expect(rejected.status).toBe(400);
+        expect(rejected.body).toEqual({ message: `Unknown variable {{${unknown}}}.` });
+      }
+      // Single braces are just text.
+      const plain = await request(app).put(`/api/vehicle-type-instructions/${created.body.id}`).set(headers).send({ vehicleTypeId: van.id, content: "Use the {north} lot." });
+      expect(plain.status).toBe(200);
     });
 
     it("Admin user requests to create a vehicle type instruction for a vehicle type that does not exist", async () => {

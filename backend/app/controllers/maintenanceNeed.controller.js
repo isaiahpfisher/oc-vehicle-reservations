@@ -3,6 +3,7 @@ import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { MAINTENANCE_PRIORITIES, MAINTENANCE_STATUSES } from "../models/maintenanceNeed.model.js";
 import { loadConditions } from "../helpers/vehicleStatus.js";
+import { noteCountsFor } from "../helpers/noteCounts.js";
 
 const exports = {};
 
@@ -273,7 +274,9 @@ exports.findAll = async (req, res) => {
       ],
     });
 
-    return res.status(200).send(needs);
+    // UI/UX backlog #73: each row says how many notes it has.
+    const notes = await noteCountsFor(req.user, "maintenanceNeedId", needs.map(({ id }) => id));
+    return res.status(200).send(needs.map((need) => ({ ...need.toJSON(), ...notes(need.id) })));
   } catch (err) {
     logger.error(`maintenance need list failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch maintenance needs." });
@@ -288,7 +291,8 @@ exports.options = async (req, res) => {
         ? []
         : await db.vehicle.findAll({
             // Feature 18: status needs the purchase date, plate expiration, and retired flag.
-            attributes: ["id", "color", "make", "model", "licensePlate", "areaId", "status", "purchasedAt", "licensePlateExpirationDate"],
+            // UI/UX backlog #37: universityId and year, so the picker can name vehicles the same way as everywhere else.
+            attributes: ["id", "universityId", "year", "color", "make", "model", "licensePlate", "areaId", "status", "purchasedAt", "licensePlateExpirationDate"],
             where: areaIds ? { areaId: { [Op.in]: areaIds } } : undefined,
             order: [
               ["make", "ASC"],
@@ -386,7 +390,9 @@ exports.update = async (req, res) => {
       return sendFailure(res, result);
     }
 
-    await existing.update(result.values);
+    // FR-005: the author is whoever created the need. Editing (including "Mark in progress") never changes it.
+    const { authorId: _editor, ...changes } = result.values;
+    await existing.update(changes);
     return res.status(200).send(await loadNeed(id));
   } catch (err) {
     logger.error(`maintenance need update failed: ${err.message}`);

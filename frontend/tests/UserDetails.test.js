@@ -8,7 +8,16 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import userServices from "../src/services/userServices.js";
 import areaServices from "../src/services/areaServices.js";
+import requestServices from "../src/services/requestServices.js";
+import issueReportServices from "../src/services/issueReportServices.js";
+import maintenanceNeedServices from "../src/services/maintenanceNeedServices.js";
+import apiClient from "../src/services/services.js";
 import { apiError, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
+
+// The app shell's own requests (the sidebar's counts) go through the API client; keep them off the network.
+vi.mock("../src/services/services.js", () => ({
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}));
 
 vi.mock("../src/services/userServices.js", () => ({
   default: { getUsers: vi.fn(), getUser: vi.fn(), updateUserRoles: vi.fn(), deleteUser: vi.fn() },
@@ -16,6 +25,19 @@ vi.mock("../src/services/userServices.js", () => ({
 
 vi.mock("../src/services/areaServices.js", () => ({
   default: { getAreas: vi.fn() },
+}));
+
+// UI/UX backlog #13: the activity tabs load the user's trips, issue reports, and maintenance needs.
+vi.mock("../src/services/requestServices.js", () => ({
+  default: { getRequests: vi.fn(() => Promise.resolve({ data: [] })), getMyRequests: vi.fn(() => Promise.resolve({ data: [] })) },
+}));
+
+vi.mock("../src/services/issueReportServices.js", () => ({
+  default: { getIssueReports: vi.fn(() => Promise.resolve({ data: [] })) },
+}));
+
+vi.mock("../src/services/maintenanceNeedServices.js", () => ({
+  default: { getMaintenanceNeeds: vi.fn(() => Promise.resolve({ data: [] })) },
 }));
 
 const athletics = { id: 10, name: "Athletics" };
@@ -85,9 +107,14 @@ const headerChips = () => [...document.body.querySelectorAll(".detail-header .v-
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  apiClient.get.mockResolvedValue({ data: {} });
   signInAs({ userId: ada.id, email: ada.email, firstName: "Ada", lastName: "Admin", roles: ada.roles, token: "t" });
   userServices.getUser.mockImplementation(async (id) => ({ data: users.find((user) => user.id === Number(id)) }));
   userServices.getUsers.mockResolvedValue({ data: users });
+  requestServices.getRequests.mockResolvedValue({ data: [] });
+  requestServices.getMyRequests.mockResolvedValue({ data: [] });
+  issueReportServices.getIssueReports.mockResolvedValue({ data: [] });
+  maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValue({ data: [] });
   userServices.updateUserRoles.mockImplementation(async (id, roles) => ({
     data: {
       ...users.find((user) => user.id === id),
@@ -191,22 +218,56 @@ describe("Feature 3 — User Role Management UI", () => {
       expect(router.currentRoute.value.name).toBe("userDetails");
     });
 
-    it("Later sections show Coming soon", async () => {
+    // UI/UX backlog #13: the "Coming soon" tabs now list the user's trips, issue reports, and maintenance needs.
+    it("Activity tabs list the user's requests, issue reports, and maintenance needs", async () => {
+      requestServices.getRequests.mockResolvedValueOnce({
+        data: [
+          {
+            id: 7,
+            userId: jane.id,
+            status: "reserved",
+            allDay: true,
+            startAt: "2030-12-18",
+            endAt: "2030-12-19",
+            area: athletics,
+            destinations: [{ name: "BOK Center" }],
+          },
+          { id: 8, userId: bob.id, status: "pending", allDay: true, startAt: "2030-12-18", endAt: "2030-12-19", destinations: [] },
+        ],
+      });
+      issueReportServices.getIssueReports.mockResolvedValueOnce({
+        data: [
+          { id: 4, authorId: 99, assigneeId: jane.id, type: "dirty", status: "pending", description: "Mud on the seats", createdAt },
+          { id: 5, authorId: 99, assigneeId: null, type: "dirty", status: "pending", description: "Not Jane's", createdAt },
+        ],
+      });
+      maintenanceNeedServices.getMaintenanceNeeds.mockResolvedValueOnce({
+        data: [{ id: 3, title: "Brake noise", assigneeId: jane.id, authorId: 1, priority: "High", status: "Open", createdAt }],
+      });
       await openDetails(jane);
-      const tabTitles = () => [...document.body.querySelectorAll(".v-tab")].map((el) => el.textContent.trim());
+      const tabTitles = () => [...document.body.querySelectorAll(".v-tab")].map((el) => el.textContent.replace(/\s+/g, " ").trim());
 
-      expect(tabTitles()).toEqual(["Requests", "Issue reports", "Maintenance"]);
-      for (const [title, text] of [
-        ["Requests", "vehicle requests"],
-        ["Issue reports", "Issue reports this user filed"],
-        ["Maintenance", "Maintenance needs, service logs"],
+      await waitFor(() => expect(tabTitles()).toEqual(["Requests 1", "Issue reports 1", "Maintenance 1"]));
+      // Feature 21, US-21.2: each request links to its page.
+      await waitFor(() =>
+        expect(
+          [...document.body.querySelectorAll(".v-window-item--active a")].some(
+            (link) => link.getAttribute("href") === "/requests/7" && link.textContent.includes("Trip to BOK Center"),
+          ),
+        ).toBe(true),
+      );
+      for (const [title, text, other] of [
+        ["Requests 1", "Trip to BOK Center", "Trip with no destinations"],
+        ["Issue reports 1", "Mud on the seats", "Not Jane's"],
+        ["Maintenance 1", "Brake noise", null],
       ]) {
-        [...document.body.querySelectorAll(".v-tab")].find((el) => el.textContent.trim() === title).click();
+        [...document.body.querySelectorAll(".v-tab")].find((el) => el.textContent.replace(/\s+/g, " ").trim() === title).click();
         await settle();
         await waitFor(() => {
           const active = document.body.querySelector(".v-window-item--active");
-          expect(active.textContent).toContain("Coming soon");
           expect(active.textContent).toContain(text);
+          expect(active.textContent).not.toContain("Coming soon");
+          if (other) expect(active.textContent).not.toContain(other);
         });
       }
 

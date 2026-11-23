@@ -1,10 +1,13 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import { useNoticeStore } from "../../stores/notice.js";
 import userServices from "../../services/userServices.js";
 import { useRequest } from "../../composables/useRequest.js";
 import SectionCard from "../layout/SectionCard.vue";
 import { areaRoleOptions, roleKey, systemRoleOptions, toRolesPayload } from "../../models/users.js";
 
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const SELF_ADMIN_MESSAGE = "You cannot remove your own admin role.";
 
 const props = defineProps({
@@ -17,7 +20,6 @@ const emit = defineEmits(["saved"]);
 
 const savedKeys = computed(() => props.user.roles.map(roleKey).sort());
 const selected = ref([...savedKeys.value]);
-const saved = ref(false);
 
 const {
   data: savedUser,
@@ -34,9 +36,6 @@ watch(savedKeys, (keys) => {
   selected.value = [...keys];
 });
 
-watch(selected, () => {
-  if (dirty.value) saved.value = false;
-});
 
 const cancel = () => {
   selected.value = [...savedKeys.value];
@@ -45,10 +44,10 @@ const cancel = () => {
 
 // The Admin checkbox is disabled on your own page; the API also refuses self-demotion (400).
 const save = async () => {
-  saved.value = false;
   if (await updateRoles(props.user.id, toRolesPayload(selected.value))) {
     emit("saved", savedUser.value);
-    saved.value = true;
+    // UI/UX backlog #48: the app-wide toast, like every other save.
+    notify("Roles saved.");
   }
 };
 </script>
@@ -89,7 +88,6 @@ const save = async () => {
     </div>
 
     <v-alert v-if="saveError" type="error" density="compact" class="mt-4">{{ saveError }}</v-alert>
-    <v-alert v-else-if="saved" type="success" density="compact" class="mt-4">Roles saved.</v-alert>
 
     <template #actions>
       <v-btn color="secondary" variant="text" :disabled="!dirty || saving" @click="cancel">Cancel</v-btn>

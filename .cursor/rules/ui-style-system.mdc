@@ -77,7 +77,7 @@ For users with no roles besides requesters:
 </v-app>
 ```
 
-For users with additional roles, use a sidebar instead of a menu bar. The sidebar should have the OC Logo at the top and the profile glued to the bottom. It should be collapsible. Its pages are grouped into titled sections (**Trips**, **Fleet**, **Administration**) via route `meta.navGroup`; a section with no pages the user may open is left out, and when collapsed the titles become dividers and each link shows its page name in a tooltip. The link for the current page stays highlighted on its nested pages (`/drivers/3` highlights **Drivers**); pages under no link (a requester's `/requests/:id`) highlight **My Requests**. The MenuBar follows the same rule.
+For users with additional roles, use a sidebar instead of a menu bar. The sidebar should have the OC Logo at the top and the profile glued to the bottom. It should be collapsible. Its pages are grouped into titled sections (**Trips**, **Fleet** for day-to-day fleet work, **Setup** for the lists that configure it, **Administration**) via route `meta.navGroup`; a section with no pages the user may open is left out, and when collapsed the titles become dividers and each link shows its page name in a tooltip. The link for the current page stays highlighted on its nested pages (`/drivers/3` highlights **Drivers**); pages under no link (a requester's `/requests/:id`) highlight **My Requests**. The MenuBar follows the same rule.
 
 ```vue
 <v-app>
@@ -154,9 +154,15 @@ Reference implementations: `views/users/ListUsers.vue` (list) and `views/users/U
 
 ### List page conventions
 
-- Tabular records use `<v-data-table>` with 10 items per page. Search and filters sit above it, and changing either returns to page 1.
+- A short list of visual records that people recognize by picture and name, not compare across columns (areas), uses a card grid instead of a table: alphabetical, search above it, edit and delete as icon buttons on each card.
+- Tabular records use `<v-data-table>`: 10 rows per page to start, with `PAGE_SIZES` (`utils/lists.js`: 10, 25, 50, 100) as `:items-per-page-options` and no fixed `:items-per-page`, so the user can change it. Search and filters sit above it, and changing either returns to page 1.
 - The record's name links to its detail page (`router-link`).
-- Row actions are `size="small"` icon buttons (e.g. `mdi-eye-outline` view, delete), each with an `aria-label`. Actions the user can't take on that row are **disabled**, not hidden.
+- Row actions are `size="small"` icon buttons (e.g. `mdi-eye-outline` view, edit), each with an `aria-label` and a tooltip. Actions the user can't take on that row are **disabled**, not hidden.
+- Editing never happens inline in a table row. A record with a detail page is edited there; any other record (area, vehicle type, service type, instruction, service or mileage log) is edited in the same dialog that creates it, titled "Edit …" with a **Save** button and prefilled from the record.
+- A record with a detail page is deleted from that page's **⋮** menu (`components/common/MoreActionsMenu.vue`, item `base-color="error"`), not from a row trash icon. Only lists without a detail page keep a row delete.
+- On phones (below `sm`) tables stack each row as label / value pairs: `VDataTable` defaults to `mobileBreakpoint: "sm"` in `plugins/vuetify.js`. A table with a purpose-built phone row (issue reports) passes `:mobile` itself.
+- A table row is at most two lines tall: chip columns follow the 2-chips-then-`+N` rule below, and longer text clamps at two lines with the full value in `title`.
+- View and period switches (`v-btn-toggle`) use class **`oc-spaced-toggle`** (in `App.vue`): an 8px gap between buttons, each with its own border and corners, not one joined bar.
 - Long text cells don't wrap: truncate (`d-block text-truncate` with a `max-width`) and put the full value in `title`.
 - Chip columns show at most **2** chips, then a `+N` chip whose tooltip and `aria-label` list the rest — so one row can't squeeze the other columns.
 

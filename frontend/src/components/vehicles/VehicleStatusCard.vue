@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from "vue";
+import { needStatusLabel } from "../../models/maintenanceNeeds.js";
 import SectionCard from "../layout/SectionCard.vue";
 import RequestStatusChip from "../requests/RequestStatusChip.vue";
 import VehicleStatusChip from "./VehicleStatusChip.vue";
@@ -36,6 +37,8 @@ const retired = computed(() => condition.value.status === "retired");
 
 // FR-002: a plate is good through its expiration date.
 const plateExpired = computed(() => condition.value.reasons.some(({ status }) => status === "plate_expired"));
+// Within 30 days of running out: still good, but time to renew.
+const plateExpiring = computed(() => condition.value.reasons.some(({ status }) => status === "plate_expiring"));
 const plateDetail = computed(() => {
   const expires = props.vehicle.licensePlateExpirationDate;
   if (!expires) return "No expiration date";
@@ -95,7 +98,7 @@ const dueAt = (service) =>
         <div class="status-tile" data-test="license-plate">
           <div class="status-tile__label">License plate</div>
           <div class="status-tile__value text-truncate">{{ vehicle.licensePlate || "—" }}</div>
-          <div class="status-tile__detail" :class="{ 'text-error': plateExpired }">{{ plateDetail }}</div>
+          <div class="status-tile__detail" :class="{ 'text-error': plateExpired, 'text-warning font-weight-medium': plateExpiring }">{{ plateDetail }}</div>
         </div>
       </v-col>
     </v-row>
@@ -112,7 +115,7 @@ const dueAt = (service) =>
           class="px-0"
         >
           <v-list-item-title class="need-title">{{ need.title }}</v-list-item-title>
-          <v-list-item-subtitle>{{ need.status }} · {{ need.priority }} priority</v-list-item-subtitle>
+          <v-list-item-subtitle>{{ needStatusLabel(need.status) }} · {{ need.priority }} priority</v-list-item-subtitle>
         </v-list-item>
       </v-list>
     </section>

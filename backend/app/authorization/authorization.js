@@ -13,6 +13,9 @@ export const holdsAnyRole = (user, roles) =>
 
 export const isAdmin = (user) => holdsAnyRole(user, []);
 
+/** True if the user has at least one role and every role they hold is `role` (e.g. maintenance and nothing else). */
+export const holdsOnlyRole = (user, role) => user.roles.length > 0 && user.roles.every(({ role: held }) => held === role);
+
 /** True if the user may act on resources in `areaId`: admins, or area admins of that area. */
 export const canAccessArea = (user, areaId) =>
   user.roles.some(({ role, areaId: roleAreaId }) => role === "admin" || (role === "area_admin" && roleAreaId === areaId));

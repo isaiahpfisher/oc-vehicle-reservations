@@ -29,7 +29,8 @@ defineProps({
         <h2 v-if="title" class="text-headline-large font-weight-bold my-0">{{ title }}</h2>
         <p v-if="subtitle" class="text-body-large text-medium-emphasis mt-1 mb-0">{{ subtitle }}</p>
       </div>
-      <div v-if="$slots.actions" class="d-flex flex-wrap ga-2">
+      <!-- Centered, so a 36px labeled button lines up with the 48px ⋮ menu button beside it. -->
+      <div v-if="$slots.actions" class="d-flex flex-wrap align-center ga-2">
         <slot name="actions" />
       </div>
     </div>

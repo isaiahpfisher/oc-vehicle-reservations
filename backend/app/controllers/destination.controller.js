@@ -1,5 +1,7 @@
 import db from "../models/index.js";
 import logger from "../config/logger.js";
+import { managedRequestsWhere } from "../authorization/vehicleRequestScope.js";
+
 
 const exports = {};
 
@@ -78,10 +80,10 @@ const resolveFields = (body) => {
   if (zipError) return { message: zipError };
 
   if (!Object.hasOwn(body, "is_saved")) {
-    return { message: "Missing is_saved." };
+    return { message: "Choose whether the destination is official." };
   }
   if (body.is_saved !== true && body.is_saved !== false) {
-    return { message: "is_saved must be true or false." };
+    return { message: "Official must be yes or no." };
   }
 
   const miles = milesError(body.miles_from_campus);
@@ -156,6 +158,55 @@ exports.findOne = async (req, res) => {
   } catch (err) {
     logger.error(`destination findOne failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch destination." });
+  }
+};
+
+/**
+ * UI/UX backlog #69: the trips that stop at this destination, newest first — in the caller's areas only (admins see
+ * every area), the same scope as `GET /requests`. Dates use the request list's shape (all-day trips as YYYY-MM-DD).
+ */
+exports.findTrips = async (req, res) => {
+  try {
+    const id = destinationId(req.params.destinationId);
+    if (id === null) {
+      return res.status(400).send({ message: "Invalid destination id." });
+    }
+
+    if (!(await db.destination.findByPk(id, { attributes: ["id"] }))) {
+      return res.status(404).send({ message: `Destination with id=${id} not found.` });
+    }
+
+    const trips = await db.vehicleRequest.findAll({
+      attributes: ["id", "purpose", "startAt", "endAt", "allDay", "status", "numberOfPeople"],
+      where: managedRequestsWhere(req.user),
+      include: [
+        { model: db.vehicleRequestDestination, as: "stops", attributes: [], where: { destinationId: id } },
+        { model: db.area, as: "area", attributes: ["id", "name"] },
+        { model: db.user, as: "user", attributes: ["id", "firstName", "lastName"] },
+      ],
+      order: [
+        ["startAt", "DESC"],
+        ["id", "DESC"],
+      ],
+    });
+
+    const day = (value) => new Date(value).toISOString().slice(0, 10);
+    return res.send(
+      trips.map((trip) => ({
+        id: trip.id,
+        purpose: trip.purpose,
+        startAt: trip.allDay ? day(trip.startAt) : trip.startAt,
+        endAt: trip.allDay ? day(trip.endAt) : trip.endAt,
+        allDay: trip.allDay,
+        status: trip.status,
+        numberOfPeople: trip.numberOfPeople,
+        area: trip.area,
+        user: trip.user,
+      })),
+    );
+  } catch (err) {
+    logger.error(`destination findTrips failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to fetch trips." });
   }
 };
 

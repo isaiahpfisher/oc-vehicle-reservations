@@ -1,9 +1,11 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { useDisplay } from "vuetify";
 import AppLogo from "./AppLogo.vue";
 import ProfileMenu from "./ProfileMenu.vue";
 import { useAppNav } from "../composables/useAppNav.js";
+import { useNavCountsStore } from "../stores/navCounts.js";
 
 const { navLinks, navGroups, isCurrent } = useAppNav();
 // `meta.pinned` pages sit just above the profile instead of with the other pages.
@@ -11,6 +13,15 @@ const pinnedLinks = computed(() => navLinks.value.filter((link) => link.meta.pin
 
 // Collapsed (icons only) by default on small screens.
 const rail = ref(useDisplay().smAndDown.value);
+
+// UI/UX backlog #15: what's waiting on each link (`meta.badge`), refreshed on every navigation.
+const navCounts = useNavCountsStore();
+const route = useRoute();
+const badge = (link) => navCounts.countFor(link.meta.badge);
+const linkLabel = (link) =>
+  badge(link) ? `${link.meta.nav}, ${badge(link)} ${link.meta.badgeLabel ?? "waiting"}` : link.meta.nav;
+onMounted(navCounts.refresh);
+watch(() => route.fullPath, navCounts.refresh);
 </script>
 
 <template>
@@ -37,12 +48,27 @@ const rail = ref(useDisplay().smAndDown.value);
           :key="link.name"
           :to="{ name: link.name }"
           :active="isCurrent(link)"
-          :prepend-icon="link.meta.icon"
           :title="link.meta.nav"
-          :aria-label="rail ? link.meta.nav : undefined"
+          :aria-label="rail || badge(link) ? linkLabel(link) : undefined"
         >
+          <template #prepend>
+            <!-- Collapsed, a dot on the icon stands in for the number. -->
+            <v-badge v-if="rail && badge(link)" dot color="error" class="app-sidebar__badge" data-test="nav-badge-dot">
+              <v-icon :icon="link.meta.icon" />
+            </v-badge>
+            <v-icon v-else :icon="link.meta.icon" />
+          </template>
+          <template v-if="!rail && badge(link)" #append>
+            <v-badge
+              :content="badge(link)"
+              color="error"
+              inline
+              class="app-sidebar__badge"
+              :data-test="`nav-badge-${link.name}`"
+            />
+          </template>
           <!-- Collapsed, the icon is all that shows, so name the page on hover/focus. -->
-          <v-tooltip activator="parent" location="end" :disabled="!rail" :text="link.meta.nav" />
+          <v-tooltip activator="parent" location="end" :disabled="!rail" :text="linkLabel(link)" />
         </v-list-item>
       </template>
     </v-list>
@@ -110,6 +136,11 @@ const rail = ref(useDisplay().smAndDown.value);
 .app-sidebar__list :deep(.v-list-item) {
   min-height: 36px;
   margin-bottom: 2px;
+}
+
+/* A white ring keeps the red badge readable on the maroon sidebar. */
+.app-sidebar__badge :deep(.v-badge__badge) {
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-on-primary));
 }
 
 .app-sidebar__section {

@@ -596,4 +596,124 @@ describe("Feature 9 — Mileage Log", () => {
       expect(response.body).toEqual(forbidden);
     });
   });
+
+  // UI/UX backlog #56: a reading says which service visit recorded it.
+  describe("UI/UX backlog #56 — Readings from service visits", () => {
+    it("lists the services logged at a reading, and none for one entered by hand", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn();
+      const fromVisit = await createLog({ userId: user.userId, odometerReading: 12000, recordedAt: "2026-10-01" });
+      await createLog({ userId: user.userId, odometerReading: 12500, recordedAt: "2026-10-20" });
+      const oil = await db.serviceType.create({ name: "Oil Change" });
+      const tires = await db.serviceType.create({ name: "Tire Rotation" });
+      for (const serviceType of [oil, tires]) {
+        await db.serviceLog.create({ userId: user.userId, vehicleId: 3, serviceTypeId: serviceType.id, mileageLogId: fromVisit.id, servicedAt: "2026-10-01" });
+      }
+
+      const response = await request(app).get("/api/mileage-logs?vehicleId=3").set(headers);
+
+      expect(response.status).toBe(200);
+      const byId = Object.fromEntries(response.body.map((log) => [log.id, log]));
+      expect(byId[fromVisit.id].services.sort()).toEqual(["Oil Change", "Tire Rotation"]);
+      expect(byId[2].services).toEqual([]);
+    });
+  });
+
+  // UI/UX backlog #3: readings only go up, and none come from the future (Feature 18 estimates start from the latest).
+  describe("UI/UX backlog #3 — Odometer readings only go up", () => {
+    const futureDay = () => {
+      const date = new Date();
+      date.setDate(date.getDate() + 1);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    };
+
+    it("rejects a reading lower than an earlier one", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn();
+      await createLog({ userId: user.userId, odometerReading: 12050, recordedAt: "2026-10-01" });
+
+      const response = await request(app)
+        .post("/api/mileage-logs")
+        .set(headers)
+        .send(validBody({ odometerReading: 12000, recordedAt: "2026-10-23" }));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Odometer reading can't be lower than 12,050 mi, recorded Oct 1, 2026." });
+      expect(await db.mileageLog.count()).toBe(1);
+    });
+
+    it("rejects a back-dated reading higher than a later one", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn();
+      await createLog({ userId: user.userId, odometerReading: 12050, recordedAt: "2026-10-23" });
+
+      const response = await request(app)
+        .post("/api/mileage-logs")
+        .set(headers)
+        .send(validBody({ odometerReading: 12100, recordedAt: "2026-10-01" }));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Odometer reading can't be higher than 12,050 mi, recorded Oct 23, 2026." });
+    });
+
+    it("accepts a reading that fits between earlier and later readings, and an equal one the same day", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn();
+      await createLog({ userId: user.userId, odometerReading: 12000, recordedAt: "2026-10-01" });
+      await createLog({ userId: user.userId, odometerReading: 12500, recordedAt: "2026-10-30" });
+
+      const between = await request(app)
+        .post("/api/mileage-logs")
+        .set(headers)
+        .send(validBody({ odometerReading: 12200, recordedAt: "2026-10-15" }));
+      const sameDay = await request(app)
+        .post("/api/mileage-logs")
+        .set(headers)
+        .send(validBody({ odometerReading: 12200, recordedAt: "2026-10-15" }));
+
+      expect(between.status).toBe(201);
+      expect(sameDay.status).toBe(201);
+    });
+
+    it("only compares readings for the same vehicle", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn();
+      await createLog({ vehicleId: 4, userId: user.userId, odometerReading: 90000, recordedAt: "2026-10-01" });
+
+      const response = await request(app).post("/api/mileage-logs").set(headers).send(validBody({ odometerReading: 100 }));
+
+      expect(response.status).toBe(201);
+    });
+
+    it("rejects a recorded date in the future", async () => {
+      await seedFleet();
+      const { headers } = await signIn();
+
+      const response = await request(app).post("/api/mileage-logs").set(headers).send(validBody({ recordedAt: futureDay() }));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Recorded date can't be in the future." });
+    });
+
+    it("rejects an edit that drops a reading below an earlier one, but ignores the log being edited", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn();
+      await createLog({ userId: user.userId, odometerReading: 12000, recordedAt: "2026-10-01" });
+      await createLog({ userId: user.userId, odometerReading: 12500, recordedAt: "2026-10-23" });
+
+      const lower = await request(app)
+        .put("/api/mileage-logs/2")
+        .set(headers)
+        .send(validBody({ odometerReading: 11000, recordedAt: "2026-10-23" }));
+      const corrected = await request(app)
+        .put("/api/mileage-logs/2")
+        .set(headers)
+        .send(validBody({ odometerReading: 12400, recordedAt: "2026-10-23" }));
+
+      expect(lower.status).toBe(400);
+      expect(lower.body).toEqual({ message: "Odometer reading can't be lower than 12,000 mi, recorded Oct 1, 2026." });
+      expect(corrected.status).toBe(200);
+      expect(corrected.body.odometerReading).toBe(12400);
+    });
+  });
 });

@@ -60,12 +60,13 @@ export const memberSince = (createdAt) =>
 export const userMatchesQuery = (user, query) => {
   if (!query?.trim()) return true;
 
-  const name = fullName(user).toLowerCase();
+  // UI/UX backlog #51: the email is on screen, so it's searchable too.
+  const text = `${fullName(user)} ${user.email ?? ""}`.toLowerCase();
   return query
     .trim()
     .toLowerCase()
     .split(/\s+/)
-    .every((word) => name.includes(word));
+    .every((word) => text.includes(word));
 };
 
 export const userHasRoleKey = (user, key) => !key || user.roles.some((role) => roleKey(role) === key);

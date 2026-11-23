@@ -124,9 +124,25 @@ const fillFrequencies = async () => {
   await (await textField("Frequency Miles")).setValue("5000");
 };
 
-const editButton = (name) => {
-  const row = [...document.body.querySelectorAll("tbody tr")].find((el) => el.textContent.includes(name));
-  return row?.querySelector('[aria-label="Edit service type"]');
+// UI/UX backlog #74: one line per service type; edit and delete are in each line's ⋮ menu (#36).
+const serviceRows = () => [...document.body.querySelectorAll('[data-test="service-row"]')];
+const rowFor = (name) => serviceRows().find((row) => row.textContent.includes(name));
+const chooseRowAction = async (name, item) => {
+  const toggle = await waitFor(() => {
+    const match = rowFor(name)?.querySelector('[data-test="service-actions"]');
+    expect(match).toBeTruthy();
+    return match;
+  });
+  toggle.click();
+  await settle();
+  const choice = await waitFor(() => {
+    // The open menu's item: menus opened earlier stay in the page, closed.
+    const match = [...document.body.querySelectorAll(`.v-overlay--active [data-test="${item}"]`)].pop();
+    expect(match).toBeTruthy();
+    return match;
+  });
+  choice.click();
+  await settle();
 };
 
 beforeEach(async () => {
@@ -246,9 +262,8 @@ describe("Feature 12 — Service Type Management", () => {
       });
       expect(saved.status).toBe(201);
       await waitFor(() => {
-        const row = [...document.body.querySelectorAll("tbody tr")].find((item) => item.textContent.includes("Oil Change"));
-        expect(row?.textContent).toContain("500");
-        expect(row?.textContent).not.toContain("5000");
+        const row = rowFor("Oil Change");
+        expect(row?.querySelector('[data-test="service-schedule"]').textContent.trim()).toBe("Every 500 days");
       });
     });
 
@@ -313,17 +328,11 @@ describe("Feature 12 — Service Type Management", () => {
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange, tireRotation] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => {
-        expect(wrapper.text()).toContain("Frequency Days");
-        expect(wrapper.text()).toContain("Frequency Miles");
-        const rows = [...document.body.querySelectorAll("tbody tr")];
-        const oil = rows.find((row) => row.textContent.includes("Oil Change"));
-        const tires = rows.find((row) => row.textContent.includes("Tire Rotation"));
-        expect(oil?.textContent).toContain("500");
-        expect(oil?.textContent).toContain("5000");
-        expect(tires?.textContent).toContain("180");
-        expect(tires?.textContent).toContain("6000");
-      });
+      // UI/UX backlog #74: one schedule sentence per service instead of two "Frequency" columns.
+      const schedule = (name) => rowFor(name)?.querySelector('[data-test="service-schedule"]')?.textContent.trim();
+      await waitFor(() => expect(schedule("Oil Change")).toBe("Every 5,000 mi or 500 days, whichever comes first"));
+      expect(schedule("Tire Rotation")).toBe("Every 6,000 mi or 180 days, whichever comes first");
+      expect(document.body.querySelector("table")).toBeNull();
     });
 
     it("Service types empty state", async () => {
@@ -331,20 +340,29 @@ describe("Feature 12 — Service Type Management", () => {
       await mountAppAt("/service-types");
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No service types yet. Create your first service type.");
+        expect(document.body.textContent).toContain("No service types yet");
       });
     });
   });
 
   describe("US-12.3 — Manage service type rows", () => {
-    it("Service type rows have edit and delete actions", async () => {
+    // UI/UX backlog #36: one ⋮ menu per line holds edit and delete.
+    it("Service type rows have edit and delete actions in their menu", async () => {
       signIn();
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange] });
       await mountAppAt("/service-types");
 
+      const toggle = await waitFor(() => {
+        const match = rowFor("Oil Change")?.querySelector('[data-test="service-actions"]');
+        expect(match).toBeTruthy();
+        return match;
+      });
+      expect(toggle.getAttribute("aria-label")).toBe("Actions for Oil Change");
+      toggle.click();
+      await settle();
       await waitFor(() => {
-        expect(document.body.querySelector('[aria-label="Edit service type"]')).toBeTruthy();
-        expect(document.body.querySelector('[aria-label="Delete service type"]')).toBeTruthy();
+        expect(document.body.querySelector('[data-test="edit-service-type"]')?.textContent).toContain("Edit service type");
+        expect(document.body.querySelector('[data-test="delete-service-type"]')?.textContent).toContain("Delete service type");
       });
     });
   });
@@ -359,8 +377,7 @@ describe("Feature 12 — Service Type Management", () => {
         .mockResolvedValueOnce({ data: [updated.data] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => expect(editButton("Oil Change")).toBeTruthy());
-      editButton("Oil Change").click();
+      await chooseRowAction("Oil Change", "edit-service-type");
       await settle();
       await (await textField("Name")).setValue("Tire Rotation");
       await clickNamed("Save");
@@ -380,8 +397,7 @@ describe("Feature 12 — Service Type Management", () => {
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => expect(editButton("Oil Change")).toBeTruthy());
-      editButton("Oil Change").click();
+      await chooseRowAction("Oil Change", "edit-service-type");
       await settle();
       await (await textField("Name")).setValue("");
       await clickNamed("Save");
@@ -395,8 +411,7 @@ describe("Feature 12 — Service Type Management", () => {
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => expect(editButton("Oil Change")).toBeTruthy());
-      editButton("Oil Change").click();
+      await chooseRowAction("Oil Change", "edit-service-type");
       await settle();
       await (await textField("Name")).setValue(" ");
       await clickNamed("Save");
@@ -410,8 +425,7 @@ describe("Feature 12 — Service Type Management", () => {
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange, tireRotation] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => expect(editButton("Tire Rotation")).toBeTruthy());
-      editButton("Tire Rotation").click();
+      await chooseRowAction("Tire Rotation", "edit-service-type");
       await settle();
       await (await textField("Name")).setValue("Oil Change");
       await clickNamed("Save");
@@ -425,8 +439,7 @@ describe("Feature 12 — Service Type Management", () => {
       serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange, tireRotation] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => expect(editButton("Tire Rotation")).toBeTruthy());
-      editButton("Tire Rotation").click();
+      await chooseRowAction("Tire Rotation", "edit-service-type");
       await settle();
       await (await textField("Name")).setValue("oil change");
       await clickNamed("Save");
@@ -442,15 +455,45 @@ describe("Feature 12 — Service Type Management", () => {
         .mockResolvedValueOnce({ data: [] });
       await mountAppAt("/service-types");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete service type"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete service type"]').click();
-      await settle();
+      await chooseRowAction("Oil Change", "delete-service-type");
       await clickNamed("Delete");
 
       await waitFor(() => expect(serviceTypeServices.removeServiceType).toHaveBeenCalledWith(1));
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No service types yet. Create your first service type.");
+        expect(document.body.textContent).toContain("No service types yet");
       });
+    });
+  });
+
+  // UI/UX backlog #74: each service says how many vehicles are overdue or due soon, linking to them.
+  describe("Service types — vehicles due", () => {
+    it("counts overdue and due-soon vehicles per service (not retired ones), linking to them", async () => {
+      signIn();
+      const states = (oil, tires) => [
+        { serviceType: { id: 1, name: "Oil Change" }, state: oil },
+        { serviceType: { id: 2, name: "Tire Rotation" }, state: tires },
+      ];
+      apiClient.get.mockImplementation(async (url) => {
+        if (url === "vehicles") {
+          return {
+            data: [
+              { id: 1, status: "active", condition: { services: states("overdue", "ok") } },
+              { id: 2, status: "active", condition: { services: states("due_soon", "ok") } },
+              { id: 3, status: "active", condition: { services: states("overdue", "ok") } },
+              { id: 4, status: "retired", condition: { services: states("overdue", "overdue") } },
+            ],
+          };
+        }
+        return { data: { roles: signedInUser.roles } };
+      });
+      serviceTypeServices.getServiceTypes.mockResolvedValue({ data: [oilChange, tireRotation] });
+      await mountAppAt("/service-types");
+
+      const overdue = () => rowFor("Oil Change")?.querySelector('[data-test="service-overdue"]');
+      await waitFor(() => expect(overdue()?.textContent.trim()).toBe("2 overdue"));
+      expect(overdue().getAttribute("href")).toBe("/vehicles?service=Oil+Change&due=overdue");
+      expect(rowFor("Oil Change").querySelector('[data-test="service-due-soon"]').textContent.trim()).toBe("1 due soon");
+      expect(rowFor("Tire Rotation").querySelector('[data-test="service-due"]').textContent.trim()).toBe("Nothing due");
     });
   });
 

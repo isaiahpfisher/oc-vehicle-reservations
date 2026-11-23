@@ -8,7 +8,7 @@ import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import vehicleTypeServices from "../src/services/vehicleTypeServices.js";
-import { apiError, signInAs, vuetify } from "./testUtils.js";
+import { apiError, chooseMoreAction, signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -108,14 +108,27 @@ const clickNamed = async (text) => {
   await settle();
 };
 
-const rows = () => [...document.body.querySelectorAll(".v-data-table tbody tr")];
+// UI/UX backlog #74: vehicle types are cards; the whole card links to the type's page.
+const rows = () => [...document.body.querySelectorAll('[data-test="type-card"]')];
 const rowFor = (name) => rows().find((row) => row.textContent.includes(name));
 
-const editButton = (name) => rowFor(name)?.querySelector('[aria-label="Edit vehicle type"]');
+// UI/UX backlog #9 / #36: a vehicle type's card opens its page, which has Edit and the ⋮ menu (delete).
+const openType = async (name) => {
+  const link = await waitFor(() => {
+    const match = rowFor(name);
+    expect(match).toBeTruthy();
+    return match;
+  });
+  link.click();
+  await settle();
+  await waitFor(() => expect(router.currentRoute.value.name).toBe("vehicleTypeDetails"));
+  await waitFor(() => expect(document.body.querySelector('[data-test="instructions"]')).toBeTruthy());
+};
 
 const openEdit = async (name) => {
-  await waitFor(() => expect(editButton(name)).toBeTruthy());
-  editButton(name).click();
+  await openType(name);
+  await waitFor(() => expect(document.body.querySelector('[data-test="edit-vehicle-type"]')).toBeTruthy());
+  document.body.querySelector('[data-test="edit-vehicle-type"]').click();
   await settle();
   await waitFor(() => expect(namedButton("Save")).toBeTruthy());
 };
@@ -131,6 +144,9 @@ beforeEach(async () => {
     return { data: [] };
   });
   vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [] });
+  vehicleTypeServices.getVehicleTypeById.mockImplementation(async (id) => ({
+    data: [bus, golfCart].find((type) => String(type.id) === String(id)) ?? bus,
+  }));
   vehicleTypeServices.createVehicleType.mockResolvedValue({ status: 201, data: bus });
   vehicleTypeServices.updateVehicleType.mockResolvedValue({ status: 200, data: bus });
   vehicleTypeServices.removeVehicleType.mockResolvedValue({
@@ -273,19 +289,25 @@ describe("Feature 4 — Vehicle Type Management", () => {
       await mountAppAt("/vehicle-types");
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No vehicle types yet. Create your first vehicle type.");
+        expect(document.body.textContent).toContain("No vehicle types yet");
       });
     });
   });
 
+  // UI/UX backlog #9 / #36: rows link to the type's page; edit and delete moved there.
   describe("US-4.3 — Manage vehicle type rows", () => {
-    it("Vehicle type rows have edit and delete actions", async () => {
+    // UI/UX backlog #74: the whole card is the link (with a chevron), so any part of it opens the type.
+    it("Vehicle type cards open the type's page, which has edit and delete", async () => {
       signIn();
       vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [bus] });
       await mountAppAt("/vehicle-types");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit vehicle type"]')).toBeTruthy());
-      expect(document.body.querySelector('[aria-label="Delete vehicle type"]')).toBeTruthy();
+      await waitFor(() => expect(rowFor("Bus")).toBeTruthy());
+      expect(rowFor("Bus").getAttribute("href")).toBe("/vehicle-types/1");
+      expect(document.body.querySelector('[aria-label="Delete vehicle type"]')).toBeNull();
+      await openType("Bus");
+      expect(router.currentRoute.value.params.id).toBe("1");
+      expect(document.body.querySelector('[data-test="more-actions"]')).toBeTruthy();
     });
   });
 
@@ -296,7 +318,8 @@ describe("Feature 4 — Vehicle Type Management", () => {
       vehicleTypeServices.updateVehicleType.mockResolvedValue(updated);
       vehicleTypeServices.getVehicleTypes
         .mockResolvedValueOnce({ data: [bus] })
-        .mockResolvedValueOnce({ data: [updated.data] });
+        .mockResolvedValue({ data: [updated.data] });
+      vehicleTypeServices.getVehicleTypeById.mockResolvedValueOnce({ data: bus }).mockResolvedValue({ data: updated.data });
       await mountAppAt("/vehicle-types");
 
       await openEdit("Bus");
@@ -307,6 +330,25 @@ describe("Feature 4 — Vehicle Type Management", () => {
       expect(vehicleTypeServices.updateVehicleType).toHaveBeenCalledWith(1, { name: "Golf Cart", identifier: "VIN" });
       expect(updated.status).toBe(200);
       await waitFor(() => expect(wrapper.text()).toContain("Golf Cart"));
+    });
+
+    // UI/UX backlog #30: Enter saves an inline row edit.
+    // UI/UX backlog #34: edit opens the same dialog as create; it's a form, so Enter (a submit) saves.
+    it("Admin user saves a vehicle type name by pressing Enter", async () => {
+      signIn();
+      vehicleTypeServices.updateVehicleType.mockResolvedValue({ status: 200, data: { ...bus, name: "Golf Cart" } });
+      vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [bus] });
+      await mountAppAt("/vehicle-types");
+
+      await openEdit("Bus");
+      await waitFor(() => expect(document.body.querySelector(".v-dialog.v-overlay--active")?.textContent).toContain("Edit vehicle type"));
+      const name = await textField("Name");
+      expect(name.props("modelValue")).toBe("Bus");
+      await name.setValue("Golf Cart");
+      document.body.querySelector(".v-dialog.v-overlay--active form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await settle();
+
+      await waitFor(() => expect(vehicleTypeServices.updateVehicleType).toHaveBeenCalledWith(1, { name: "Golf Cart", identifier: "VIN" }));
     });
 
     it("Admin user edits a vehicle type identifier", async () => {
@@ -408,18 +450,18 @@ describe("Feature 4 — Vehicle Type Management", () => {
       signIn();
       const removed = { status: 200, data: { message: "Vehicle type deleted successfully." } };
       vehicleTypeServices.removeVehicleType.mockResolvedValue(removed);
-      vehicleTypeServices.getVehicleTypes.mockResolvedValueOnce({ data: [bus] }).mockResolvedValueOnce({ data: [] });
+      vehicleTypeServices.getVehicleTypes.mockResolvedValueOnce({ data: [bus] }).mockResolvedValueOnce({ data: [bus] }).mockResolvedValue({ data: [] });
       await mountAppAt("/vehicle-types");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete vehicle type"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete vehicle type"]').click();
-      await settle();
+      await openType("Bus");
+      await chooseMoreAction("delete-vehicle-type");
       await clickNamed("Delete");
 
       await waitFor(() => expect(vehicleTypeServices.removeVehicleType).toHaveBeenCalledWith(1));
       expect(removed.status).toBe(200);
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No vehicle types yet. Create your first vehicle type.");
+        expect(router.currentRoute.value.name).toBe("vehicle-types");
+        expect(document.body.textContent).toContain("No vehicle types yet");
       });
     });
 
@@ -430,13 +472,38 @@ describe("Feature 4 — Vehicle Type Management", () => {
       vehicleTypeServices.removeVehicleType.mockRejectedValue(apiError(400, message));
       await mountAppAt("/vehicle-types");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete vehicle type"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete vehicle type"]').click();
-      await settle();
+      await openType("Bus");
+      await chooseMoreAction("delete-vehicle-type");
       await clickNamed("Delete");
 
       await waitFor(() => expect(document.body.textContent).toContain(message));
       expect(document.body.textContent).toContain("Bus");
+    });
+  });
+
+  // UI/UX backlog #33: a type that still has vehicles can move them to another type as part of the delete.
+  describe("UI/UX backlog #33 — Move vehicles, then delete", () => {
+    it("Admin user moves a type's vehicles to another type and deletes it", async () => {
+      signIn();
+      apiClient.get.mockImplementation(async (url) => {
+        if (String(url).startsWith("users/")) return { data: { roles } };
+        if (url === "vehicles") return { data: [{ id: 7, vehicleTypeId: 1 }, { id: 8, vehicleTypeId: 1 }, { id: 9, vehicleTypeId: 2 }] };
+        return { data: [] };
+      });
+      vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [bus, golfCart] });
+      vehicleTypeServices.removeVehicleType.mockResolvedValue({ status: 200, data: {} });
+      await mountAppAt("/vehicle-types");
+
+      await openType("Bus");
+      await chooseMoreAction("delete-vehicle-type");
+
+      await waitFor(() => expect(document.body.textContent).toContain("Bus has 2 vehicles. Move them to another vehicle type, then delete Bus."));
+      const target = wrapper.findAllComponents({ name: "VSelect" }).find((field) => field.props("label") === "Move vehicles to");
+      expect(target.props("items")).toEqual([{ title: "Golf Cart", value: 2 }]);
+      await target.setValue(2);
+      await clickNamed("Move and Delete");
+
+      await waitFor(() => expect(vehicleTypeServices.removeVehicleType).toHaveBeenCalledWith(1, 2));
     });
   });
 
@@ -461,6 +528,21 @@ describe("Feature 4 — Vehicle Type Management", () => {
       });
       await item.trigger("click");
       await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicle-types"));
+    });
+
+    // UI/UX backlog #9: area admins open vehicle types (read-only) for their areas' instructions.
+    it("Signed-in area admin sees the nav link and a read-only list", async () => {
+      signIn([{ id: 3, role: "area_admin", areaId: 1, area: { id: 1, name: "Athletics" } }]);
+      vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [bus] });
+      await mountAppAt("/vehicle-types");
+
+      await waitFor(() => expect(navLabels()).toContain("Vehicle Types"));
+      await waitFor(() => expect(rowFor("Bus")).toBeTruthy());
+      expect(namedButton("+ New Vehicle Type")).toBeUndefined();
+      expect(rowFor("Bus").getAttribute("href")).toBe("/vehicle-types/1");
+      await openType("Bus");
+      expect(document.body.querySelector('[data-test="edit-vehicle-type"]')).toBeNull();
+      expect(document.body.querySelector('[data-test="more-actions"]')).toBeNull();
     });
 
     it("Signed-in user without admin role does not see nav link", async () => {

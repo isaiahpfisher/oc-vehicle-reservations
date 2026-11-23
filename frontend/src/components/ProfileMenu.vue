@@ -44,6 +44,14 @@ const handleLogout = async () => {
       <v-divider />
 
       <v-list density="compact">
+        <!-- UI/UX backlog #13 -->
+        <v-list-item
+          title="Your profile"
+          prepend-icon="mdi-account-outline"
+          :to="{ name: 'profile' }"
+          data-test="profile-link"
+          @click="open = false"
+        />
         <v-list-item title="Sign out" prepend-icon="mdi-logout" :disabled="loggingOut" @click="handleLogout" />
       </v-list>
     </v-card>

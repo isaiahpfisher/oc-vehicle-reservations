@@ -4,6 +4,8 @@ import db from "../models/index.js";
 /** Feature 18, FR-002: service is "due soon" this many miles or days ahead. */
 export const DUE_SOON_MILES = 500;
 export const DUE_SOON_DAYS = 14;
+/** A plate expiring within this many days needs renewing, like a driver's license expiring soon. */
+export const PLATE_DUE_SOON_DAYS = 30;
 /** Requests in these statuses don't hold their vehicles (Feature 8). */
 export const RELEASED_STATUSES = ["cancelled", "denied"];
 /** Requests still headed for a trip. Only these are flagged (US-18.9, US-18.10). */
@@ -126,6 +128,13 @@ const statusReasons = (vehicle, { needs, services, today }) => {
   services
     .filter(({ state }) => state === "due_soon")
     .forEach((service) => add("service_due_soon", `${service.serviceType.name} is due in ${dueDetail(service, false)}.`));
+  // Still good (through its expiration date), but time to renew.
+  const plate = vehicle.licensePlateExpirationDate;
+  if (plate && plate >= today && plate <= addDays(today, PLATE_DUE_SOON_DAYS)) {
+    const days = daysBetween(today, plate);
+    const when = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+    add("plate_expiring", `License plate expires ${when} (${formatDay(plate)}).`);
+  }
 
   return reasons;
 };
@@ -411,6 +420,40 @@ export const upcomingTrips = async (vehicleId, now = new Date()) => {
 
   return requests
     .filter((request) => tripEnd(request) > now)
+    .map(({ id, purpose, startAt, endAt, allDay, status, area }) => ({
+      id,
+      purpose,
+      startAt: shown(allDay, startAt),
+      endAt: shown(allDay, endAt),
+      allDay,
+      status,
+      area,
+    }));
+};
+
+/**
+ * UI/UX backlog #20: the vehicle's latest trips that have happened (returned, or reserved and over), newest first, in
+ * the same shape as `upcomingTrips`. Pending, awaiting, cancelled, and denied requests never used it, so they're left out.
+ */
+export const recentTrips = async (vehicleId, { limit = 5, now = new Date() } = {}) => {
+  const requests = await db.vehicleRequest.findAll({
+    attributes: ["id", "purpose", "startAt", "endAt", "allDay", "status"],
+    where: { status: ["reserved", "returned"], startAt: { [Op.lt]: now } },
+    include: [
+      { model: db.vehicleRequestVehicle, as: "requestVehicles", attributes: [], where: { vehicleId } },
+      { model: db.area, as: "area", attributes: ["id", "name"] },
+    ],
+    order: [
+      ["endAt", "DESC"],
+      ["id", "DESC"],
+    ],
+  });
+
+  const shown = (allDay, value) => (allDay ? tripDay(true, value) : value);
+
+  return requests
+    .filter((request) => request.status === "returned" || tripEnd(request) <= now)
+    .slice(0, limit)
     .map(({ id, purpose, startAt, endAt, allDay, status, area }) => ({
       id,
       purpose,

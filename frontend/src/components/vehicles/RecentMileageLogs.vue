@@ -1,12 +1,12 @@
 <script setup>
 import { computed } from "vue";
-import SectionCard from "../layout/SectionCard.vue";
 import { formatDay, formatMiles } from "../../models/vehicles.js";
 import { addedByName } from "../../models/mileageLogs.js";
 
 /**
- * Feature 18, US-18.3: the vehicle page's latest odometer readings. Each row shows the date on the left and the reading
- * on the right with how far the vehicle went since the reading before it, so usage reads at a glance.
+ * Feature 18, US-18.3: the vehicle page's latest odometer readings, as the Mileage tab of its "Work and history" card.
+ * Each row shows the date on the left and the reading on the right with how far the vehicle went since the reading
+ * before it, so usage reads at a glance.
  */
 const props = defineProps({
   /** Every mileage log for the vehicle, newest first. */
@@ -40,10 +40,11 @@ const changeText = (change) => {
 </script>
 
 <template>
-  <SectionCard title="Mileage log" :subtitle class="recent-log-card h-100" data-test="recent-mileage-logs">
-    <template #append>
-      <v-btn variant="text" color="primary" class="oc-cta" @click="$emit('add')">+ New Mileage Log</v-btn>
-    </template>
+  <div data-test="recent-mileage-logs">
+    <div class="recent-log-head">
+      <span class="text-body-small text-medium-emphasis">{{ subtitle }}</span>
+      <v-btn variant="text" color="primary" size="small" class="oc-cta" @click="$emit('add')">+ New Mileage Log</v-btn>
+    </div>
 
     <v-alert v-if="error" type="error" density="compact">{{ error }}</v-alert>
 
@@ -65,34 +66,41 @@ const changeText = (change) => {
     </v-list>
 
     <div v-else class="recent-log-empty">
-      <v-icon icon="mdi-counter" size="28" class="text-medium-emphasis" />
       <div class="text-body-medium font-weight-medium">No mileage logged yet</div>
       <div class="text-body-small text-medium-emphasis">Readings keep the mileage estimate and service schedule accurate.</div>
     </div>
 
-    <template #actions>
+    <div class="recent-log-foot">
       <v-btn
         variant="text"
         color="primary"
+        size="small"
         class="oc-cta"
         append-icon="mdi-arrow-right"
         :to="{ name: 'vehicle-mileage-logs', params: { vehicleId } }"
       >
         View all mileage logs
       </v-btn>
-    </template>
-  </SectionCard>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-/* Side-by-side cards end at the same height, with their footers lined up. */
-.recent-log-card {
+/* The count on the left, adding one on the right; "View all" closes the tab. */
+.recent-log-head,
+.recent-log-foot {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
 }
 
-.recent-log-card :deep(.v-card-text) {
-  flex-grow: 1;
+.recent-log-foot {
+  justify-content: flex-end;
+  margin-top: 4px;
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  padding-top: 4px;
 }
 
 .recent-log-row + .recent-log-row {

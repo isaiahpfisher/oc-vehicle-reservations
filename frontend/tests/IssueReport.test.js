@@ -2,6 +2,7 @@
  * Feature 14 — Notes (US-14.6: issue report page)
  * Spec: features/feature-14-notes.md
  */
+import { formatDay } from "../src/models/vehicles.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import App from "../src/App.vue";
@@ -274,7 +275,8 @@ describe("Feature 14 — Notes", () => {
 
       // Resolving defaults the date to today.
       await click("status-resolved");
-      expect((await field("VTextField", "Resolved on")).props("modelValue")).toBe(todayInput());
+      // UI/UX backlog #62: the date is set, not typed.
+      expect(byTest("resolved-at").textContent).toContain(`Resolved on ${formatDay(todayInput())}`);
       await (await field("VAutocomplete", "Assignee (optional)")).setValue(5);
       await click("submit");
 
@@ -287,6 +289,16 @@ describe("Feature 14 — Notes", () => {
         status: "resolved",
         resolvedAt: todayInput(),
       });
+    });
+
+    // UI/UX backlog #18: the vehicle page's "Report an issue" fills in that vehicle, and Cancel goes back to it.
+    it("starts with the vehicle filled in when opened from a vehicle page", async () => {
+      await mountAt("/issue-reports/new?vehicleId=4", athleticsAdmin);
+      await waitFor(() => expect(byTest("section-status")).not.toBeNull());
+
+      expect((await field("VAutocomplete", "Vehicle")).props("modelValue")).toBe(4);
+      await waitFor(() => expect(issueReportServices.getAssignees).toHaveBeenLastCalledWith(4));
+      expect(byTest("action-bar").querySelector("a").getAttribute("href")).toBe("/vehicles/4");
     });
 
     it("removes an assignee who can't take reports on a newly chosen vehicle", async () => {
@@ -330,7 +342,7 @@ describe("Feature 14 — Notes", () => {
         await input.trigger("focus");
         await input.setValue(text);
         await settle();
-        const menus = document.body.querySelectorAll(".v-overlay--active");
+        const menus = document.body.querySelectorAll(".v-overlay--active:not(.v-snackbar)");
         return [...(menus[menus.length - 1]?.querySelectorAll(".v-list-item-title") ?? [])].map((el) => el.textContent.trim());
       };
 
@@ -353,7 +365,7 @@ describe("Feature 14 — Notes", () => {
       await click("status-moved_to_maintenance");
       expect(byTest("status-meaning").textContent).toContain("tracked as a maintenance need");
       // The close date shows with its own label, starting at today.
-      expect((await field("VTextField", "Moved on")).props("modelValue")).toBe(todayInput());
+      expect(byTest("resolved-at").textContent).toContain(`Moved on ${formatDay(todayInput())}`);
       await click("submit");
 
       expect(issueReportServices.updateIssueReport).toHaveBeenCalledWith(1, expect.objectContaining({ status: "moved_to_maintenance", resolvedAt: todayInput() }));

@@ -122,7 +122,8 @@ export const calendarEvent = (request) => {
   const [start, end] = tripBounds(request);
 
   return {
-    name: request.purpose,
+    // UI/UX backlog #44: the same name as the trip's page and the table.
+    name: tripTitle(request),
     start: request.allDay ? request.startAt : start,
     end: request.allDay ? request.endAt : end,
     timed: !request.allDay,
@@ -135,4 +136,32 @@ export const calendarEvent = (request) => {
 export const capacityCheck = (vehicles, people) => {
   const seats = vehicles.reduce((sum, vehicle) => sum + vehicle.passengerCapacity, 0);
   return { seats, short: vehicles.length > 0 && seats < people };
+};
+
+/** Lowercase, no punctuation, single spaces, for comparing names and addresses. */
+const plain = (value) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/**
+ * UI/UX backlog #6: saved destinations that look like the custom stop being typed: the same street address (and city,
+ * once typed), or a name that contains, or is contained in, the typed name (3+ characters). At most 3, closest first.
+ */
+export const similarDestinations = (form, saved) => {
+  const name = plain(form.name);
+  const street = plain(form.addressLine1);
+  const city = plain(form.city);
+  const sameStreet = (destination) =>
+    street.length >= 3 && plain(destination.addressLine1) === street && (!city || plain(destination.city) === city);
+  const similarName = (destination) => {
+    const other = plain(destination.name);
+    return name.length >= 3 && (other.includes(name) || name.includes(other));
+  };
+
+  return saved
+    .filter((destination) => sameStreet(destination) || similarName(destination))
+    .sort((a, b) => Number(sameStreet(b)) - Number(sameStreet(a)))
+    .slice(0, 3);
 };

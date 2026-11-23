@@ -14,6 +14,11 @@ const destinationServices = {
     return apiClient.get(`destinations/${destinationId}`);
   },
 
+  /** UI/UX backlog #69: the trips that stop at this destination (in the caller's areas). */
+  getDestinationTrips(destinationId) {
+    return apiClient.get(`destinations/${destinationId}/trips`);
+  },
+
   createDestination(payload) {
     return apiClient.post("destinations", payload);
   },

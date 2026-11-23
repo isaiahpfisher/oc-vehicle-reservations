@@ -13,7 +13,11 @@ const props = defineProps({
 });
 
 const required = [(value) => (value !== null && value !== undefined && String(value).trim() !== "") || "Required field."];
-const peopleRules = [...required, (value) => /^\d+$/.test(String(value)) || "Enter a whole number, 0 or more."];
+// UI/UX backlog #64: it counts the drivers, so at least 1.
+const peopleRules = [
+  ...required,
+  (value) => (/^\d+$/.test(String(value)) && Number(value) >= 1) || "Enter a whole number, 1 or more.",
+];
 const endRules = computed(() => [
   ...required,
   () => {
@@ -54,14 +58,18 @@ const areaName = computed(() => props.request?.area?.name ?? props.areas.find(({
       item-title="name"
       item-value="id"
       label="Area"
+      hint="The department the trip is for. Its area admins approve the request."
+      persistent-hint
       :rules="required"
       data-test="area"
     />
     <v-text-field
       v-model="trip.numberOfPeople"
       type="number"
-      min="0"
+      min="1"
       label="Number of people"
+      hint="Everyone going, drivers included."
+      persistent-hint
       :rules="peopleRules"
       data-test="people"
     />

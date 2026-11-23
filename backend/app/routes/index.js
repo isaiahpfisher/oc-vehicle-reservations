@@ -15,6 +15,7 @@ import serviceLogRoutes from "./serviceLog.routes.js";
 import maintenanceNeedRoutes from "./maintenanceNeed.routes.js";
 import vehicleTypeInstructionRoutes from "./vehicleTypeInstruction.routes.js";
 import noteRoutes from "./note.routes.js";
+import navCountRoutes from "./navCount.routes.js";
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.use("/service-logs", serviceLogRoutes);
 router.use("/maintenance-needs", maintenanceNeedRoutes);
 router.use("/vehicle-type-instructions", vehicleTypeInstructionRoutes);
 router.use("/", noteRoutes);
+router.use("/nav-counts", navCountRoutes);
 
 export default router;

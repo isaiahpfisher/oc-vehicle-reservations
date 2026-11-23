@@ -4,13 +4,16 @@ import { useRoles } from "./useRoles.js";
 import { canOpen } from "../router.js";
 
 /** Sidebar sections, in order. A route joins one with `meta.navGroup`; routes without one come first, unlabeled. */
-export const NAV_GROUPS = ["Trips", "Fleet", "Administration"];
+// UI/UX backlog #38: Fleet is the day-to-day work (vehicles, issues, maintenance); Setup holds the lists that
+// configure it (vehicle types, their instructions, service types).
+export const NAV_GROUPS = ["Trips", "Fleet", "Setup", "Administration"];
 
 /**
  * Page links for the app shell (MenuBar or Sidebar): routes with `meta.nav` the user may open, in the order router.js
  * defines them. Same `canOpen` rule as router.beforeEach.
  * `navGroups` splits the unpinned links into Sidebar sections; empty sections are left out.
  * `isCurrent(link)` marks the link for the page the user is on, including its nested pages (`/drivers/3` → Drivers).
+ * A page whose path isn't under its link's names it with `meta.navUnder` (a route name, or null for no link).
  */
 export const useAppNav = () => {
   const router = useRouter();
@@ -40,6 +43,7 @@ export const useAppNav = () => {
 
   // The longest link path the current path sits under; home ("/") takes the rest, e.g. a requester's /requests/:id.
   const currentLinkName = computed(() => {
+    if (route.meta && "navUnder" in route.meta) return route.meta.navUnder;
     const contains = (link) =>
       link.path === "/" || route.path === link.path || route.path.startsWith(`${link.path}/`);
     const [current] = navLinks.value.filter(contains).sort((a, b) => b.path.length - a.path.length);

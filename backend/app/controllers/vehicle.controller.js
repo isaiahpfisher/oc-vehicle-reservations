@@ -1,11 +1,40 @@
 import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
-import { loadConditions, upcomingTrips } from "../helpers/vehicleStatus.js";
+import { loadConditions, recentTrips, upcomingTrips } from "../helpers/vehicleStatus.js";
+import { listText } from "../helpers/text.js";
 
 const exports = {};
 
 const WRONG_AREA = "Not authorized for the specified area.";
+const VIN_PATTERN = /^[A-HJ-NPR-Z0-9]{17}$/i;
+
+/** UI/UX backlog #19: the optional starting odometer on create — blank, or a whole number of 0 or more. */
+const startingOdometer = (value) => {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return { value: null };
+  }
+
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) {
+    return { message: "Starting odometer reading must be a whole number of 0 or more." };
+  }
+
+  return { value: Number(text) };
+};
+
+/** UI/UX backlog #4: records that keep a vehicle from being deleted, named for the message ("mileage logs"). */
+const historyOf = async (vehicleId) => {
+  const kinds = [
+    [db.mileageLog, "mileage logs"],
+    [db.serviceLog, "service logs"],
+    [db.issueReport, "issue reports"],
+    [db.maintenanceNeed, "maintenance needs"],
+  ];
+  const counts = await Promise.all(kinds.map(([model]) => model.count({ where: { vehicleId } })));
+  return kinds.filter((_, i) => counts[i] > 0).map(([, label]) => label);
+};
+const VIN_CHARACTERS_MESSAGE = "VIN can only use letters and numbers, and never I, O, or Q.";
 
 const todayString = () => {
   const now = new Date();
@@ -249,6 +278,11 @@ const resolveVehicle = async (body, { creating, current, exceptId, user }) => {
       return { message: "VIN must be 17 characters." };
     }
 
+    // UI/UX backlog: a real VIN is letters and digits only, never I, O, or Q (they look like 1 and 0).
+    if (typeRow?.identifier === "VIN" && !VIN_PATTERN.test(read.text)) {
+      return { message: VIN_CHARACTERS_MESSAGE };
+    }
+
     if (read.text.length > 255) {
       return { message: "Serial number too long." };
     }
@@ -273,6 +307,16 @@ const resolveVehicle = async (body, { creating, current, exceptId, user }) => {
     }
 
     values.purchasedAt = read.value;
+  }
+
+  // UI/UX backlog: a vehicle can't be bought before its model year went on sale (the year before the model year).
+  const nextYear = values.year ?? current?.year;
+  const nextPurchasedAt = values.purchasedAt ?? current?.purchasedAt;
+  if ((year.present || purchased.present) && nextYear && nextPurchasedAt) {
+    const earliestYear = Number(nextYear) - 1;
+    if (Number(String(nextPurchasedAt).slice(0, 4)) < earliestYear) {
+      return { message: `Purchase date must be in ${earliestYear} or later for a ${nextYear} vehicle.` };
+    }
   }
 
   const color = field(body, "color");
@@ -399,7 +443,9 @@ exports.findOne = async (req, res) => {
     }
 
     const [shaped] = await withConditions([vehicle]);
-    return res.status(200).send({ ...shaped, upcomingTrips: await upcomingTrips(vehicleId) });
+    const [upcoming, recent] = await Promise.all([upcomingTrips(vehicleId), recentTrips(vehicleId)]);
+    // UI/UX backlog #20: recent trips too, so the vehicle page shows where it's been.
+    return res.status(200).send({ ...shaped, upcomingTrips: upcoming, recentTrips: recent });
   } catch (err) {
     logger.error(`vehicle fetch failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch vehicle." });
@@ -413,7 +459,23 @@ exports.create = async (req, res) => {
       return sendFailure(res, resolved);
     }
 
-    const vehicle = await db.vehicle.create(resolved.values);
+    // UI/UX backlog #19: an optional starting odometer becomes the first mileage log, so the estimate (Feature 18)
+    // doesn't count from 0 miles.
+    const odometer = startingOdometer(req.body?.odometerReading);
+    if (odometer.message) {
+      return res.status(400).send({ message: odometer.message });
+    }
+
+    const vehicle = await db.sequelize.transaction(async (transaction) => {
+      const created = await db.vehicle.create(resolved.values, { transaction });
+      if (odometer.value !== null) {
+        await db.mileageLog.create(
+          { vehicleId: created.id, userId: req.user.id, odometerReading: odometer.value, recordedAt: todayString() },
+          { transaction },
+        );
+      }
+      return created;
+    });
     return res.status(201).send(vehicle);
   } catch (err) {
     logger.error(`vehicle create failed: ${err.message}`);
@@ -475,6 +537,14 @@ exports.remove = async (req, res) => {
     if ((await db.vehicleRequestVehicle.count({ where: { vehicleId } })) > 0) {
       return res.status(400).send({
         message: "Vehicle is assigned to vehicle requests and can't be deleted. Set its status to retired instead.",
+      });
+    }
+
+    // UI/UX backlog #4: its history keeps the vehicle, the same as requests do. Name what's there instead of a 500.
+    const history = await historyOf(vehicleId);
+    if (history.length) {
+      return res.status(400).send({
+        message: `Vehicle has ${listText(history)} and can't be deleted. Set its status to retired instead.`,
       });
     }
 

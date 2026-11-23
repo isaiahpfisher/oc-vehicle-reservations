@@ -233,8 +233,45 @@ describe("Feature 3 — User Role Management UI", () => {
 
       await button("Log in with Google").trigger("click");
 
-      await waitFor(() => expect(router.currentRoute.value.name).toBe("home"));
+      // UI/UX backlog #14: an area admin (here also maintenance) lands on Requests rather than home.
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("adminRequests"));
       expect(readStoredUser().roles).toEqual(roles);
+    });
+  });
+
+  // UI/UX backlog #17: an ended session says so, and signing back in returns to the page the user was on.
+  describe("UI/UX backlog #17 — Session expiry", () => {
+    it("explains an ended session and returns to the page after signing in", async () => {
+      startGoogleSignIn.mockResolvedValueOnce("google-id-token");
+      apiClient.post.mockResolvedValueOnce({ data: storedUser });
+      await mountAppAt("/login?expired=1&redirect=%2Fprofile");
+
+      expect(document.body.querySelector('[data-test="session-expired"]').textContent).toContain("Your session ended.");
+      await button("Log in with Google").trigger("click");
+
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("profile"));
+    });
+
+    it("ignores a redirect outside the app or to a page the user can't open", async () => {
+      for (const redirect of ["https://evil.example", "//evil.example", "/users", "/no-such-page"]) {
+        startGoogleSignIn.mockResolvedValueOnce("google-id-token");
+        apiClient.post.mockResolvedValueOnce({ data: storedUser });
+        signInAs(null);
+        await mountAppAt(`/login?redirect=${encodeURIComponent(redirect)}`);
+
+        await button("Log in with Google").trigger("click");
+
+        await waitFor(() => expect(router.currentRoute.value.name).toBe("home"));
+        wrapper.unmount();
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("remembers where a signed-out user was headed", async () => {
+      await mountAppAt("/profile");
+
+      expect(router.currentRoute.value.name).toBe("login");
+      expect(router.currentRoute.value.query).toEqual({ redirect: "/profile" });
     });
   });
 
@@ -258,9 +295,29 @@ describe("Feature 3 — User Role Management UI", () => {
       await wrapper.find('input[autocomplete="current-password"]').setValue("password");
       await button("Sign in").trigger("click");
 
-      await waitFor(() => expect(router.currentRoute.value.name).toBe("home"));
+      // UI/UX backlog #14: a maintenance user lands on the needs assigned to them.
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("maintenance-needs"));
+      expect(router.currentRoute.value.query).toEqual({});
       expect(apiClient.post).toHaveBeenCalledWith("dev-login", { email: "maintenance@oc.edu", password: "password" });
       expect(readStoredUser()).toEqual(maintenance);
+    });
+
+    // UI/UX backlog #14: an area admin lands on the requests waiting for them.
+    it("lands an area admin on the requests that need their action", async () => {
+      const areaAdmin = {
+        ...storedUser,
+        email: "coach@oc.edu",
+        roles: [{ id: 4, role: "area_admin", areaId: 10, area: { id: 10, name: "Athletics" } }],
+      };
+      apiClient.post.mockResolvedValueOnce({ data: areaAdmin });
+      await mountAppAt("/login");
+
+      await wrapper.find('input[autocomplete="username"]').setValue("coach@oc.edu");
+      await wrapper.find('input[autocomplete="current-password"]').setValue("password");
+      await button("Sign in").trigger("click");
+
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("adminRequests"));
+      await waitFor(() => expect(document.body.querySelector('[data-test="needs-action"]').getAttribute("aria-pressed")).toBe("true"));
     });
 
     it("shows the API error when developer sign-in fails", async () => {

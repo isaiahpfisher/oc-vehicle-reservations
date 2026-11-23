@@ -147,7 +147,7 @@ const remove = (index) => {
       Trips can have up to {{ MAX_STOPS }} stops. Remove one to add another.
     </div>
 
-    <CustomDestinationDialog v-model="customOpen" @add="add" />
+    <CustomDestinationDialog v-model="customOpen" :saved @add="add" />
   </div>
 </template>
 

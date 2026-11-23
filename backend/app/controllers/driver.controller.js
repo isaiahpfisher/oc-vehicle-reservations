@@ -9,6 +9,7 @@ const exports = {};
 const USER_TAKEN = "User is already linked to a driver.";
 const PHONE_TAKEN = "Phone number already taken.";
 const PHONE_NUMBER = /^\d{3}-\d{3}-\d{4}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_FORMAT = "License expiration date must be in format 'yyyy-mm-dd'.";
 
 const notFound = (res, driverId) => res.status(404).send({ message: `Driver with id=${driverId} not found.` });
@@ -51,6 +52,20 @@ const readPhoneNumber = (value) => {
   }
 
   return PHONE_NUMBER.test(text) ? { value: text } : { message: "Phone number must be in format 'xxx-xxx-xxxx'." };
+};
+
+/** Trimmed and lowercased, so the same address is always stored the same way. */
+const readEmail = (value) => {
+  const text = requiredText(value);
+  if (text === null) {
+    return { message: "Missing email." };
+  }
+
+  if (text.length > 255) {
+    return { message: "Email too long." };
+  }
+
+  return EMAIL.test(text) ? { value: text.toLowerCase() } : { message: "Email must be a valid email address." };
 };
 
 const readLicenseState = (value) => {
@@ -109,6 +124,7 @@ const readUserId = async (value, driverId) => {
 const REQUIRED_FIELDS = [
   ["firstName", ["firstName", "first_name"], (value) => readName(value, "First name")],
   ["lastName", ["lastName", "last_name"], (value) => readName(value, "Last name")],
+  ["email", ["email"], readEmail],
   ["phoneNumber", ["phoneNumber", "phone_number"], readPhoneNumber],
   ["licenseState", ["licenseState", "license_state"], readLicenseState],
   ["licenseExpirationDate", ["licenseExpirationDate", "license_expiration_date"], readExpirationDate],

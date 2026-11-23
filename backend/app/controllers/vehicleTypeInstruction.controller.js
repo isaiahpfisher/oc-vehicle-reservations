@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { parseId, requiredText } from "../helpers/fields.js";
+import { unknownVariables } from "../helpers/instructionVariables.js";
 import { canAccessArea, isAdmin } from "../authorization/authorization.js";
 
 const exports = {};
@@ -14,7 +15,11 @@ const instructionInclude = [
 const managedAreaIds = (user) =>
   user.roles.filter(({ role }) => role === "area_admin").map(({ areaId }) => areaId);
 
+// UI/UX backlog #9: area admins also read the default (`areaId: null`), so they see what their override replaces.
+// Writing a default stays admin-only.
 const canRead = (user, instruction) =>
+  isAdmin(user) || instruction.areaId == null || canAccessArea(user, instruction.areaId);
+const canWrite = (user, instruction) =>
   isAdmin(user) || (instruction.areaId != null && canAccessArea(user, instruction.areaId));
 
 const toResponse = (instruction) => ({
@@ -56,7 +61,7 @@ const instructionIdFrom = (req, res) => {
   return instructionId;
 };
 
-const loadInstruction = async (req, res) => {
+const loadInstruction = async (req, res, allowed = canWrite) => {
   const instructionId = instructionIdFrom(req, res);
   if (instructionId === null) {
     return null;
@@ -68,7 +73,7 @@ const loadInstruction = async (req, res) => {
     return null;
   }
 
-  if (!canRead(req.user, instruction)) {
+  if (!allowed(req.user, instruction)) {
     res.status(403).send({ message: "Forbidden." });
     return null;
   }
@@ -114,6 +119,12 @@ const validateBody = async (body, user, exceptId) => {
     return { status: 400, message: "Missing instruction message." };
   }
 
+  // A typo would reach drivers as "{{vehical}}", so only the known variables are allowed.
+  const [unknown] = unknownVariables(content);
+  if (unknown !== undefined) {
+    return { status: 400, message: `Unknown variable {{${unknown}}}.` };
+  }
+
   const duplicate = await db.vehicleTypeInstruction.findOne({
     where: {
       vehicleTypeId: type.id,
@@ -136,7 +147,17 @@ exports.findAll = async (req, res) => {
       if (areaIds.length === 0) {
         return res.send([]);
       }
-      where.areaId = { [Op.in]: areaIds };
+      // UI/UX backlog #9: their areas' instructions plus the defaults (read-only for them).
+      where[Op.or] = [{ areaId: { [Op.in]: areaIds } }, { areaId: { [Op.is]: null } }];
+    }
+
+    // UI/UX backlog #9: the vehicle type page loads only its own instructions.
+    if (req.query.vehicleTypeId !== undefined) {
+      const vehicleTypeId = parseId(req.query.vehicleTypeId);
+      if (vehicleTypeId === null) {
+        return res.status(400).send({ message: "Invalid vehicle type id." });
+      }
+      where.vehicleTypeId = vehicleTypeId;
     }
 
     const instructions = await db.vehicleTypeInstruction.findAll({
@@ -157,7 +178,7 @@ exports.findAll = async (req, res) => {
 
 exports.findOne = async (req, res) => {
   try {
-    const instruction = await loadInstruction(req, res);
+    const instruction = await loadInstruction(req, res, canRead);
     if (!instruction) {
       return;
     }

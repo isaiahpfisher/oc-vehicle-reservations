@@ -41,6 +41,7 @@ const seed = async () => {
     driver: await db.driver.create({
       firstName: "Dana",
       lastName: "Driver",
+      email: "dana.driver@example.com",
       phoneNumber: "405-555-0100",
       licenseState: "OK",
       licenseExpirationDate: "2099-01-01",
@@ -230,9 +231,32 @@ describe("Feature 18 — Vehicle Status", () => {
       const none = await makeVehicle({ licensePlateExpirationDate: null });
 
       expect(await statusOf(expired)).toBe("plate_expired");
-      // A plate is good through its expiration date, and a vehicle without one is never flagged.
-      expect(await statusOf(today)).toBe("available");
+      // A plate is good through its expiration date (but expiring), and a vehicle without one is never flagged.
+      expect(await statusOf(today)).toBe("plate_expiring");
       expect(await statusOf(none)).toBe("available");
+    });
+
+    // A plate that runs out within 30 days needs renewing, so it's flagged before it lapses.
+    it("Plate expiring within 30 days shows Plate Expiring", async () => {
+      const tomorrow = await makeVehicle({ licensePlateExpirationDate: day(1) });
+      const at30 = await makeVehicle({ licensePlateExpirationDate: day(30) });
+      const at31 = await makeVehicle({ licensePlateExpirationDate: day(31) });
+
+      const { status, reasons } = await condition(tomorrow);
+      expect(status).toBe("plate_expiring");
+      expect(reasons).toEqual([{ status: "plate_expiring", message: expect.stringMatching(/^License plate expires tomorrow \(.+\)\.$/) }]);
+      expect((await condition(at30)).reasons[0].message).toMatch(/^License plate expires in 30 days/);
+      expect(await statusOf(at31)).toBe("available");
+    });
+
+    it("Service Due Soon outranks Plate Expiring", async () => {
+      await serviceType("Oil Change", { miles: 5000 });
+      const vehicle = await makeVehicle({ licensePlateExpirationDate: day(3) });
+      await reading(vehicle, 4800, day(-1));
+
+      const { status, reasons } = await condition(vehicle);
+      expect(status).toBe("service_due_soon");
+      expect(reasons.map(({ status: reason }) => reason)).toEqual(["service_due_soon", "plate_expiring"]);
     });
 
     it("Service within 500 miles shows Service Due Soon", async () => {
@@ -346,6 +370,24 @@ describe("Feature 18 — Vehicle Status", () => {
         status: "reserved",
         area: { id: fx.athletics.id, name: "Athletics" },
       });
+    });
+
+    // UI/UX backlog #20: where the vehicle has been, newest first.
+    it("Vehicle page lists its recent trips", async () => {
+      const vehicle = await makeVehicle();
+      const other = await makeVehicle();
+      const older = await trip([vehicle], { start: day(-20), end: day(-18) });
+      const newer = await trip([vehicle], { start: day(-5), end: day(-3) });
+      const returnedEarly = await trip([vehicle], { start: day(-1), end: day(3), status: "returned" });
+      await trip([vehicle], { start: day(5), end: day(6) });
+      await trip([vehicle], { start: day(-9), end: day(-8), status: "cancelled" });
+      await trip([vehicle], { start: day(-9), end: day(-8), status: "pending" });
+      await trip([other], { start: day(-4), end: day(-3) });
+
+      const { recentTrips } = await getVehicle(vehicle);
+
+      expect(recentTrips.map(({ id }) => id)).toEqual([returnedEarly.id, newer.id, older.id]);
+      expect(recentTrips[1]).toMatchObject({ id: newer.id, status: "reserved", startAt: day(-5), endAt: day(-3) });
     });
 
     it("Maintenance user cannot create, edit, or delete vehicles", async () => {
@@ -963,6 +1005,7 @@ describe("Feature 18 — Vehicle Status", () => {
       const expiring = await db.driver.create({
         firstName: "Eli",
         lastName: "Expiring",
+        email: "eli@example.com",
         phoneNumber: "405-555-0101",
         licenseState: "OK",
         licenseExpirationDate: day(11),
@@ -971,6 +1014,7 @@ describe("Feature 18 — Vehicle Status", () => {
       const lastDay = await db.driver.create({
         firstName: "Lu",
         lastName: "Lastday",
+        email: "lu@example.com",
         phoneNumber: "405-555-0102",
         licenseState: "OK",
         licenseExpirationDate: day(12),

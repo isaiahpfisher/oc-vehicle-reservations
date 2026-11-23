@@ -1,13 +1,19 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import { useNoticeStore } from "../stores/notice.js";
 import { useRouter } from "vue-router";
 import driverServices from "../services/driverServices.js";
 import { useRequest } from "../composables/useRequest.js";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges.js";
 import FormSection from "../components/layout/FormSection.vue";
 import PageShell from "../components/layout/PageShell.vue";
-import { DRIVER_STATUS_OPTIONS, LICENSE_STATES, isValidPhoneNumber } from "../models/drivers.js";
+import MoreActionsMenu from "../components/common/MoreActionsMenu.vue";
+import { useConfirm } from "../composables/useConfirm.js";
+import { DRIVER_STATUS_OPTIONS, LICENSE_STATES, isValidEmail, isValidPhoneNumber, normalizePhoneNumber } from "../models/drivers.js";
 import { fullName } from "../models/users.js";
 
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const props = defineProps({
   /** The driver being edited; none on the create route. */
   id: { type: [String, Number], default: null },
@@ -20,6 +26,7 @@ const blank = () => ({
   userId: null,
   firstName: "",
   lastName: "",
+  email: "",
   phoneNumber: "",
   licenseState: "OK",
   licenseExpirationDate: "",
@@ -27,6 +34,14 @@ const blank = () => ({
 });
 
 const form = ref(blank());
+// UI/UX backlog #31: ask before leaving with unsaved changes. `baseline` is the form as loaded.
+const baseline = ref("");
+const snapshot = () => {
+  baseline.value = JSON.stringify(form.value);
+};
+const dirty = computed(() => baseline.value !== "" && JSON.stringify(form.value) !== baseline.value);
+const { allowLeave } = useUnsavedChanges(dirty);
+
 
 const loadForm = async (id) => {
   const [users, driver] = await Promise.all([
@@ -70,13 +85,23 @@ const userLabel = (user) => `${fullName(user)} (${user.email})`;
 
 const required = (value) => !!String(value ?? "").trim() || "Required";
 const maxLength = (value) => String(value ?? "").trim().length <= 255 || "Must be 255 characters or fewer.";
-const phoneFormat = (value) => isValidPhoneNumber(value) || "Phone number must be in format xxx-xxx-xxxx.";
+const phoneFormat = (value) =>
+  isValidPhoneNumber(normalizePhoneNumber(value)) || "Enter a 10-digit phone number, like 405-425-1234.";
+
+const emailFormat = (value) => isValidEmail(value) || "Enter an email address, like name@oc.edu.";
+
+/** Linking a user with no email typed yet fills in theirs; one already typed is left alone. */
+const onUserPicked = (userId) => {
+  const user = loaded.value.users.find(({ id }) => id === userId);
+  if (user?.email && !form.value.email.trim()) form.value.email = user.email;
+};
 
 const toPayload = (values) => ({
   ...values,
   firstName: values.firstName.trim(),
   lastName: values.lastName.trim(),
-  phoneNumber: values.phoneNumber.trim(),
+  email: values.email.trim().toLowerCase(),
+  phoneNumber: normalizePhoneNumber(values.phoneNumber),
 });
 
 const save = async () => {
@@ -84,11 +109,16 @@ const save = async () => {
   if (!valid) return;
 
   if (await saveDriver(toPayload(form.value))) {
+    notify(props.id ? "Driver saved." : "Driver created.");
+    allowLeave();
     await router.push({ name: "drivers" });
   }
 };
 
-const cancel = () => router.push({ name: "drivers" });
+const cancel = () => {
+  allowLeave();
+  router.push({ name: "drivers" });
+};
 
 watch(
   () => props.id,
@@ -100,16 +130,36 @@ watch(
             userId: driver.userId,
             firstName: driver.firstName,
             lastName: driver.lastName,
+            email: driver.email ?? "",
             phoneNumber: driver.phoneNumber,
             licenseState: driver.licenseState,
             licenseExpirationDate: driver.licenseExpirationDate,
             status: driver.status,
           }
         : blank();
+      snapshot();
     }
   },
   { immediate: true },
 );
+
+/** UI/UX backlog #36: delete lives in the page's ⋮ menu, not on every list row. */
+const confirmDelete = useConfirm();
+const deleteDriver = async () => {
+  const deleted = await confirmDelete({
+    title: "Delete driver",
+    message: `Delete "${title.value}"? This action is permanent.`,
+    confirmText: "Delete Driver",
+    confirmColor: "error",
+    onConfirm: () => driverServices.removeDriver(props.id),
+  });
+
+  if (deleted) {
+    notify("Driver deleted.");
+    allowLeave();
+    await router.push({ name: "drivers" });
+  }
+};
 </script>
 
 <template>
@@ -122,6 +172,18 @@ watch(
     :max-width="1040"
     centered
   >
+    <template v-if="id" #actions>
+      <MoreActionsMenu>
+        <v-list-item
+          prepend-icon="mdi-delete-outline"
+          title="Delete driver"
+          base-color="error"
+          data-test="delete-driver"
+          @click="deleteDriver"
+        />
+      </MoreActionsMenu>
+    </template>
+
     <v-form ref="formRef" @submit.prevent="save">
       <FormSection title="Name" subtitle="How the driver appears in the drivers list and on vehicle requests.">
         <v-row density="comfortable">
@@ -137,7 +199,28 @@ watch(
       <FormSection title="Contact" subtitle="How to reach the driver about a trip.">
         <v-row density="comfortable">
           <v-col cols="12" sm="6">
-            <v-text-field v-model="form.phoneNumber" hide-details="auto" label="Phone Number" placeholder="405-425-1234" :rules="[required, phoneFormat]" />
+            <v-text-field
+              v-model="form.email"
+              hide-details="auto"
+              label="Email"
+              type="email"
+              inputmode="email"
+              autocomplete="off"
+              placeholder="name@oc.edu"
+              :rules="[required, emailFormat, maxLength]"
+              data-test="driver-email"
+            />
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-text-field
+              v-model="form.phoneNumber"
+              hide-details="auto"
+              label="Phone Number"
+              placeholder="405-425-1234"
+              inputmode="tel"
+              :rules="[required, phoneFormat]"
+              @blur="form.phoneNumber = normalizePhoneNumber(form.phoneNumber)"
+            />
           </v-col>
         </v-row>
       </FormSection>
@@ -155,6 +238,7 @@ watch(
           label="User"
           no-data-text="No matching users."
           clearable
+          @update:model-value="onUserPicked"
         />
       </FormSection>
 

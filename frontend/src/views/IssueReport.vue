@@ -3,13 +3,16 @@
  * Feature 14 (US-14.6): create, edit, or view one issue report with the shared IssueReportForm, then its notes.
  * Who may edit follows Feature 10, FR-014: admins, or area admins of the report's vehicle area. The author reads it.
  */
+import MoreActionsMenu from "../components/common/MoreActionsMenu.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useNoticeStore } from "../stores/notice.js";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
 import issueReportServices from "../services/issueReportServices.js";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
 import requestServices from "../services/requestServices.js";
 import vehicleServices from "../services/vehicleServices.js";
 import Utils from "../config/utils.js";
+import { needStatusLabel } from "../models/maintenanceNeeds.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRoles } from "../composables/useRoles.js";
 import {
@@ -34,6 +37,8 @@ const props = defineProps({
 
 const route = useRoute();
 const router = useRouter();
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const confirm = useConfirm();
 const { hasRole, hasAnyRole, areaAdminAreaIds } = useRoles();
 
@@ -45,7 +50,6 @@ const loading = ref(false);
 const loadError = ref("");
 const saving = ref(false);
 const saveError = ref("");
-const notice = ref("");
 const vehicles = ref([]);
 const trips = ref([]);
 const assignees = ref([]);
@@ -69,6 +73,8 @@ const dirty = computed(() => mode.value !== "view" && JSON.stringify(form.value)
 
 /** Came from a trip's "Report an issue": Cancel goes back to it. */
 const fromTrip = computed(() => (isCreate.value && /^\d+$/.test(String(route.query.vehicleRequestId ?? "")) ? Number(route.query.vehicleRequestId) : null));
+/** UI/UX backlog #18: came from a vehicle's "Report an issue": the vehicle is filled in, and Cancel goes back to it. */
+const fromVehicle = computed(() => (isCreate.value && /^\d+$/.test(String(route.query.vehicleId ?? "")) ? Number(route.query.vehicleId) : null));
 
 const title = computed(() => {
   if (isCreate.value) return "Report an issue";
@@ -87,9 +93,11 @@ const breadcrumbs = computed(() => [
   { title: title.value || "Issue Report", disabled: true },
 ]);
 
-const cancelTarget = computed(() =>
-  fromTrip.value ? { name: "request", params: { requestId: fromTrip.value } } : { name: "issue-reports" },
-);
+const cancelTarget = computed(() => {
+  if (fromTrip.value) return { name: "request", params: { requestId: fromTrip.value } };
+  if (fromVehicle.value) return { name: "vehicleDetails", params: { id: fromVehicle.value } };
+  return { name: "issue-reports" };
+});
 
 const listed = (result) => (result.status === "fulfilled" && Array.isArray(result.value?.data) ? result.value.data : []);
 const skip = () => Promise.resolve(null);
@@ -187,10 +195,6 @@ const load = async () => {
   leaving.value = false;
   report.value = null;
   linkedNeed.value = null;
-  notice.value = window.history.state?.notice ?? "";
-  if (notice.value) {
-    window.history.replaceState({ ...window.history.state, notice: null }, "");
-  }
 
   try {
     if (isCreate.value) {
@@ -200,6 +204,8 @@ const load = async () => {
       if (trip) {
         // Arriving from a trip fills it in; that counts as the starting point, not an unsaved change.
         resetForm(withTrip({ ...form.value, vehicleRequestId: trip.id }, trip));
+      } else if (vehicles.value.some(({ id }) => id === fromVehicle.value)) {
+        resetForm({ ...form.value, vehicleId: fromVehicle.value });
       }
     } else {
       const { data } = await issueReportServices.getIssueReport(props.issueReportId);
@@ -247,12 +253,13 @@ const submit = async () => {
     if (isCreate.value) {
       const { data } = await issueReportServices.createIssueReport(payload());
       leaving.value = true;
-      await router.replace({ name: "issueReport", params: { issueReportId: data.id }, state: { notice: "Issue report submitted." } });
+      notify("Issue report submitted.");
+      await router.replace({ name: "issueReport", params: { issueReportId: data.id } });
     } else {
       const { data } = await issueReportServices.updateIssueReport(report.value.id, payload());
       report.value = data;
       resetForm(toIssueReportForm(data));
-      notice.value = "Changes saved.";
+      notify("Changes saved.");
     }
   } catch (err) {
     saveError.value = Utils.errorMessage(err, isCreate.value ? "Failed to submit issue report." : "Failed to save changes.");
@@ -276,6 +283,7 @@ const remove = async () => {
   });
 
   if (deleted) {
+    notify("Issue report deleted.");
     leaving.value = true;
     await router.push({ name: "issue-reports" });
   }
@@ -321,20 +329,15 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnOnUnload));
         >
           {{ statusLabel(report.status) }}
         </v-chip>
-        <v-menu v-if="canManage" location="bottom end">
-          <template #activator="{ props: menu }">
-            <v-btn v-bind="menu" icon="mdi-dots-vertical" variant="text" aria-label="More actions" data-test="more-actions" />
-          </template>
-          <v-list density="compact" min-width="220">
-            <v-list-item
-              prepend-icon="mdi-delete-outline"
-              title="Delete issue report"
-              base-color="error"
-              data-test="delete-report"
-              @click="remove"
-            />
-          </v-list>
-        </v-menu>
+        <MoreActionsMenu v-if="canManage">
+          <v-list-item
+            prepend-icon="mdi-delete-outline"
+            title="Delete issue report"
+            base-color="error"
+            data-test="delete-report"
+            @click="remove"
+          />
+        </MoreActionsMenu>
       </div>
     </template>
 
@@ -385,7 +388,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnOnUnload));
         <v-icon icon="mdi-tools" color="primary" />
         <div class="flex-grow-1">
           <div class="text-title-small font-weight-bold" data-test="linked-need-title">{{ linkedNeed.title }}</div>
-          <div class="text-body-small text-medium-emphasis">{{ linkedNeed.status }} · {{ linkedNeed.priority }} priority</div>
+          <div class="text-body-small text-medium-emphasis">{{ needStatusLabel(linkedNeed.status) }} · {{ linkedNeed.priority }} priority</div>
         </div>
         <v-btn
           color="primary"
@@ -421,10 +424,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnOnUnload));
       <NotesThread parent-key="issueReportId" :parent-id="report.id" />
     </SectionCard>
   </PageShell>
-
-  <v-snackbar :model-value="!!notice" color="success" timeout="3000" @update:model-value="notice = ''">
-    {{ notice }}
-  </v-snackbar>
 </template>
 
 <style scoped>

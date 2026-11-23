@@ -1,27 +1,21 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useNoticeStore } from "../stores/notice.js";
 import serviceTypeServices from "../services/serviceTypeServices.js";
-import { validateServiceTypeForm } from "../models/serviceTypes.js";
+import vehicleServices from "../services/vehicleServices.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
 import ListState from "../components/common/ListState.vue";
+import { matchesWords } from "../utils/search.js";
 import PageShell from "../components/layout/PageShell.vue";
 import ServiceTypeFormModal from "../components/serviceTypes/ServiceTypeFormModal.vue";
 
-const ITEMS_PER_PAGE = 10;
-
-const headers = [
-  { title: "Name", key: "name" },
-  { title: "Frequency Days", key: "service_frequency_days" },
-  { title: "Frequency Miles", key: "service_frequency_miles" },
-  { title: "Actions", key: "actions", sortable: false, align: "end", nowrap: true },
-];
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 
 const formOpen = ref(false);
-const editingId = ref(null);
-const draft = ref({ name: "", service_frequency_days: "", service_frequency_miles: "" });
-const formError = ref("");
-const saving = ref(false);
+// UI/UX backlog #34: create and edit both use the dialog.
+const editing = ref(null);
 
 const {
   data: serviceTypes,
@@ -33,60 +27,57 @@ const {
   fallback: "Failed to fetch service types.",
 });
 
+/**
+ * UI/UX backlog #74: one schedule in words instead of two mostly-empty columns: "Every 5,000 mi or 180 days, whichever
+ * comes first", "Every 365 days".
+ */
+const schedule = (serviceType) => {
+  const miles = serviceType.service_frequency_miles ? `${serviceType.service_frequency_miles.toLocaleString()} mi` : "";
+  const days = serviceType.service_frequency_days ? `${serviceType.service_frequency_days.toLocaleString()} days` : "";
+  if (miles && days) return `Every ${miles} or ${days}, whichever comes first`;
+  return miles || days ? `Every ${miles || days}` : "No schedule";
+};
+
+/**
+ * How many vehicles are overdue or due soon for each service (Feature 18's per-vehicle service states), so the page
+ * says where work is waiting. Retired vehicles don't count.
+ */
+const { data: fleet, run: getFleet } = useRequest(vehicleServices.getVehicles, { initial: [] });
+const dueCounts = computed(() => {
+  const counts = new Map();
+  for (const vehicle of fleet.value) {
+    if (vehicle.status === "retired") continue;
+    for (const { serviceType, state } of vehicle.condition?.services ?? []) {
+      if (state !== "overdue" && state !== "due_soon") continue;
+      const count = counts.get(serviceType.id) ?? { overdue: 0, due_soon: 0 };
+      count[state] += 1;
+      counts.set(serviceType.id, count);
+    }
+  }
+  return counts;
+});
+const due = (serviceType) => dueCounts.value.get(serviceType.id) ?? { overdue: 0, due_soon: 0 };
+const vehiclesLink = (serviceType, state) => ({ name: "vehicles", query: { service: serviceType.name, due: state } });
+
 const openCreate = () => {
+  editing.value = null;
   formOpen.value = true;
 };
 
-const createServiceType = async (payload) => {
-  await serviceTypeServices.createServiceType(payload);
-  await getServiceTypes();
+const openEdit = (serviceType) => {
+  editing.value = serviceType;
+  formOpen.value = true;
 };
 
-const startEdit = (serviceType) => {
-  if (saving.value) {
-    return;
+const saveServiceType = async (payload) => {
+  if (editing.value) {
+    await serviceTypeServices.updateServiceType(editing.value.id, payload);
+    notify("Service type saved.");
+  } else {
+    await serviceTypeServices.createServiceType(payload);
+    notify("Service type created.");
   }
-
-  editingId.value = serviceType.id;
-  draft.value = {
-    name: serviceType.name,
-    service_frequency_days: serviceType.service_frequency_days ?? "",
-    service_frequency_miles: serviceType.service_frequency_miles ?? "",
-  };
-  formError.value = "";
-};
-
-const cancelEdit = () => {
-  if (saving.value) {
-    return;
-  }
-
-  editingId.value = null;
-  formError.value = "";
-};
-
-const saveEdit = async () => {
-  if (saving.value || editingId.value === null) {
-    return;
-  }
-
-  const result = validateServiceTypeForm(draft.value, serviceTypes.value, editingId.value);
-  formError.value = result.message || "";
-  if (result.message) {
-    return;
-  }
-
-  saving.value = true;
-
-  try {
-    await serviceTypeServices.updateServiceType(editingId.value, result.value);
-    editingId.value = null;
-    await getServiceTypes();
-  } catch (saveError) {
-    formError.value = saveError.response?.data?.message || "Failed to save service type.";
-  } finally {
-    saving.value = false;
-  }
+  await Promise.all([getServiceTypes(), getFleet()]);
 };
 
 const confirmDelete = useConfirm();
@@ -101,112 +92,178 @@ const deleteServiceType = async (serviceType) => {
   });
 
   if (deleted) {
-    if (editingId.value === serviceType.id) {
-      editingId.value = null;
-      formError.value = "";
-    }
-    await getServiceTypes();
+    notify("Service type deleted.");
+    await Promise.all([getServiceTypes(), getFleet()]);
   }
 };
 
-onMounted(getServiceTypes);
+onMounted(() => {
+  getServiceTypes();
+  getFleet();
+});
+
+// UI/UX backlog #32: search the list. Alphabetical, all on one page: about a dozen never needs paging.
+const search = ref("");
+const searched = computed(() =>
+  serviceTypes.value
+    .filter((type) => matchesWords(search.value, [type.name, schedule(type)]))
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
 </script>
 
 <template>
-  <PageShell title="Service Type Management">
+  <!-- UI/UX backlog #42: the page title matches its menu label. -->
+  <PageShell
+    title="Service Types"
+    subtitle="The maintenance every vehicle gets, how often, and which vehicles are due."
+  >
     <template #actions>
       <v-btn color="primary" variant="elevated" class="oc-cta" @click="openCreate">+ New Service Type</v-btn>
     </template>
+
+    <v-text-field
+      v-model="search"
+      prepend-inner-icon="mdi-magnify"
+      placeholder="Search service types"
+      aria-label="Search service types"
+      variant="outlined"
+      density="compact"
+      clearable
+      hide-details
+      class="oc-list-search mb-4"
+      data-test="list-search"
+    />
 
     <ListState
       :loading
       :error
       :empty="!serviceTypes.length"
-      empty-title="No service types yet. Create your first service type."
-      empty-icon="mdi-wrench-outline"
+      :no-results="!searched.length"
+      no-results-title="Nothing matches your search."
+      no-results-text=""
+      empty-title="No service types yet"
+      empty-text="Service types set what gets serviced and how often, so each vehicle shows when it's due."
+      empty-art="maintenance"
     >
-      <v-alert v-if="formError" type="error" density="compact" class="mb-4">{{ formError }}</v-alert>
+      <template #empty-actions>
+        <v-btn color="primary" variant="elevated" class="oc-cta" @click="openCreate">+ New Service Type</v-btn>
+      </template>
 
-      <v-data-table
-        :headers="headers"
-        :items="serviceTypes"
-        :items-per-page="ITEMS_PER_PAGE"
-        :items-per-page-options="[ITEMS_PER_PAGE]"
-        item-value="id"
-      >
-        <template #[`item.name`]="{ item }">
-          <v-text-field
-            v-if="editingId === item.id"
-            v-model="draft.name"
-            label="Name"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else class="service-type-name d-block text-truncate" :title="item.name">{{ item.name }}</span>
-        </template>
+      <!-- UI/UX backlog #74: one line per service (its schedule in words, where it's due), not a four-column table. -->
+      <v-card>
+        <ul class="service-list" data-test="service-list">
+          <li v-for="serviceType in searched" :key="serviceType.id" class="service-row" data-test="service-row">
+            <div class="service-row__main">
+              <div class="text-body-large font-weight-medium text-truncate" :title="serviceType.name">{{ serviceType.name }}</div>
+              <div class="text-body-medium text-medium-emphasis" data-test="service-schedule">{{ schedule(serviceType) }}</div>
+            </div>
 
-        <template #[`item.service_frequency_days`]="{ item }">
-          <v-text-field
-            v-if="editingId === item.id"
-            v-model="draft.service_frequency_days"
-            label="Frequency Days"
-            type="number"
-            min="1"
-            step="1"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ item.service_frequency_days }}</span>
-        </template>
+            <div class="service-row__due" data-test="service-due">
+              <v-chip
+                v-if="due(serviceType).overdue"
+                :to="vehiclesLink(serviceType, 'overdue')"
+                color="error"
+                variant="tonal"
+                size="small"
+                label
+                prepend-icon="mdi-alert-circle-outline"
+                data-test="service-overdue"
+              >
+                {{ due(serviceType).overdue }} overdue
+              </v-chip>
+              <v-chip
+                v-if="due(serviceType).due_soon"
+                :to="vehiclesLink(serviceType, 'due_soon')"
+                color="warning"
+                variant="tonal"
+                size="small"
+                label
+                prepend-icon="mdi-clock-outline"
+                data-test="service-due-soon"
+              >
+                {{ due(serviceType).due_soon }} due soon
+              </v-chip>
+              <span v-if="!due(serviceType).overdue && !due(serviceType).due_soon" class="text-body-small text-medium-emphasis">
+                Nothing due
+              </span>
+            </div>
 
-        <template #[`item.service_frequency_miles`]="{ item }">
-          <v-text-field
-            v-if="editingId === item.id"
-            v-model="draft.service_frequency_miles"
-            label="Frequency Miles"
-            type="number"
-            min="1"
-            step="1"
-            density="compact"
-            hide-details
-            variant="outlined"
-          />
-          <span v-else>{{ item.service_frequency_miles }}</span>
-        </template>
-
-        <template #[`item.actions`]="{ item }">
-          <div v-if="editingId === item.id" class="d-flex justify-end ga-1">
-            <v-btn size="small" variant="text" color="primary" :loading="saving" @click="saveEdit">Save</v-btn>
-            <v-btn size="small" variant="text" :disabled="saving" @click="cancelEdit">Cancel</v-btn>
-          </div>
-          <div v-else class="d-flex justify-end ga-1">
-            <v-btn
-              icon="mdi-pencil"
-              size="small"
-              variant="text"
-              aria-label="Edit service type"
-              @click="startEdit(item)"
-            />
-            <v-btn
-              icon="mdi-delete"
-              size="small"
-              variant="text"
-              aria-label="Delete service type"
-              @click="deleteServiceType(item)"
-            />
-          </div>
-        </template>
-      </v-data-table>
+            <!-- UI/UX backlog #36: one quiet menu instead of a pencil and a trash can on every row. -->
+            <v-menu location="bottom end">
+              <template #activator="{ props: menu }">
+                <v-btn
+                  v-bind="menu"
+                  icon="mdi-dots-vertical"
+                  size="small"
+                  variant="text"
+                  class="text-medium-emphasis"
+                  :aria-label="`Actions for ${serviceType.name}`"
+                  data-test="service-actions"
+                />
+              </template>
+              <v-list density="compact" min-width="200">
+                <v-list-item prepend-icon="mdi-pencil-outline" title="Edit service type" data-test="edit-service-type" @click="openEdit(serviceType)" />
+                <v-list-item
+                  prepend-icon="mdi-delete-outline"
+                  title="Delete service type"
+                  base-color="error"
+                  data-test="delete-service-type"
+                  @click="deleteServiceType(serviceType)"
+                />
+              </v-list>
+            </v-menu>
+          </li>
+        </ul>
+      </v-card>
     </ListState>
 
-    <ServiceTypeFormModal v-model="formOpen" :service-types="serviceTypes" :save="createServiceType" />
+    <ServiceTypeFormModal v-model="formOpen" :service-types="serviceTypes" :service-type="editing" :save="saveServiceType" />
   </PageShell>
 </template>
 
 <style scoped>
-.service-type-name {
-  max-width: 16rem;
+.service-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.service-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 16px;
+  padding: 12px 8px 12px 20px;
+}
+
+.service-row + .service-row {
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.service-row__main {
+  min-width: 0;
+}
+
+.service-row__due {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Phones: the due chips go under the name instead of squeezing it. */
+@media (max-width: 600px) {
+  .service-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .service-row__due {
+    grid-column: 1;
+    grid-row: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
 </style>

@@ -1,8 +1,9 @@
 import apiClient from "./services.js";
 
 const vehicleTypeInstructionServices = {
-  getVehicleTypeInstructions() {
-    return apiClient.get("vehicle-type-instructions");
+  /** UI/UX backlog #9: `{ vehicleTypeId }` loads one vehicle type's instructions. */
+  getVehicleTypeInstructions(params) {
+    return apiClient.get("vehicle-type-instructions", params ? { params } : undefined);
   },
 
   getVehicleTypeInstructionById(vehicleTypeInstructionId) {

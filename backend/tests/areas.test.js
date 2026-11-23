@@ -241,6 +241,42 @@ describe("Feature 2 — Area Management", () => {
       expect(list.body.map((area) => area.name)).not.toContain("Athletics");
     });
 
+    // UI/UX backlog #33: move every vehicle to another area as part of the delete; requests still block it.
+    it("User deletes an area and moves its vehicles to another area", async () => {
+      const headers = await signIn();
+      const created = await createArea(headers);
+      const other = await db.area.create({ name: "Music", logo: "" });
+      const type = await db.vehicleType.create({ name: "Van", identifier: "VIN" });
+      await db.vehicle.create({
+        areaId: created.body.id, vehicleTypeId: type.id, universityId: "V-1", identifier: "1HGCM82633A004352", make: "Ford",
+        model: "Transit", year: 2015, purchasedAt: "2018-01-01", color: "gray", passengerCapacity: 8, status: "active",
+      });
+
+      const bad = await request(app).delete(`/api/areas/${created.body.id}?moveVehiclesTo=${created.body.id}`).set(headers);
+      expect(bad.body).toEqual({ message: "Choose another existing area to move the vehicles to." });
+
+      const response = await request(app).delete(`/api/areas/${created.body.id}?moveVehiclesTo=${other.id}`).set(headers);
+
+      expect(response.status).toBe(200);
+      expect((await db.vehicle.findOne()).areaId).toBe(other.id);
+      expect(await db.area.findByPk(created.body.id)).toBeNull();
+    });
+
+    // UI/UX backlog #4: the area's instruction overrides (Feature 15) go with it instead of failing the delete.
+    it("User deletes an area that has vehicle type instructions", async () => {
+      const headers = await signIn();
+      const created = await createArea(headers);
+      const type = await db.vehicleType.create({ name: "Van", identifier: "VIN" });
+      await db.vehicleTypeInstruction.create({ vehicleTypeId: type.id, areaId: created.body.id, content: "Park in the lot." });
+      await db.vehicleTypeInstruction.create({ vehicleTypeId: type.id, areaId: null, content: "Keys are in the office." });
+
+      const response = await request(app).delete(`/api/areas/${created.body.id}`).set(headers);
+
+      expect(response.status).toBe(200);
+      expect(await db.vehicleTypeInstruction.count()).toBe(1);
+      expect((await db.vehicleTypeInstruction.findOne()).areaId).toBeNull();
+    });
+
     it("User updates an area that does not exist", async () => {
       const headers = await signIn();
 

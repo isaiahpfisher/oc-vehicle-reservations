@@ -33,7 +33,7 @@ globs: "frontend/src/**/*, frontend/vite.config.js"
 *   `baseURL`: `http://localhost:3200/api/` in development; in production it must match `API_PREFIX` in `backend/server.js`.
 *   `withCredentials: true`.
 *   Request interceptor: attach `Authorization: Bearer <token>` from `useAuthStore().token`.
-*   Response interceptor: on `401` or an unauthorized message, `useAuthStore().signOut()` and `router.push({ name: "login" })`.
+*   Response interceptor: on a `401` status only (never on a message match — a `403` can say "Unauthorized"), `useAuthStore().signOut()` and `router.push({ name: "login" })`.
 *   FormData uploads: delete `Content-Type` header so the browser sets the boundary.
 
 ## Router Conventions (`router.js`)
@@ -44,7 +44,7 @@ globs: "frontend/src/**/*, frontend/vite.config.js"
     *   `public: true` — open without a session (login).
     *   `roles: [...]` — the user needs any one (admins always pass); no `roles` = any signed-in user.
     *   `nav: "Label"`, `icon: "mdi-…"` — adds the page to the MenuBar/Sidebar, shown only when `canOpen(route)` is true. Never hand-add nav links.
-    *   `navGroup: "Trips" | "Fleet" | "Administration"` — the Sidebar section for that link (`NAV_GROUPS` in `composables/useAppNav.js`). Links keep the order routes are defined in `router.js`; `pinned: true` sits above the profile instead.
+    *   `navGroup: "Trips" | "Fleet" | "Setup" | "Administration"` — the Sidebar section for that link (`NAV_GROUPS` in `composables/useAppNav.js`). Links keep the order routes are defined in `router.js`; `pinned: true` sits above the profile instead.
 *   `router.beforeEach` enforces these per `auth-patterns.mdc`.
 
 ## Shared State (Pinia)
