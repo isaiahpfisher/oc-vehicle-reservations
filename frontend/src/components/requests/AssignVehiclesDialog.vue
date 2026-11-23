@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import EmptyIllustration from "../common/EmptyIllustration.vue";
 import requestServices from "../../services/requestServices.js";
 import { useRequest } from "../../composables/useRequest.js";
 import Utils from "../../config/utils.js";
@@ -109,12 +110,13 @@ const submit = async () => {
       <v-card-text class="pa-0" style="max-height: 420px">
         <div v-if="loading" class="pa-6"><v-skeleton-loader type="list-item-two-line@3" /></div>
         <v-alert v-else-if="error" type="error" class="ma-4">{{ error }}</v-alert>
+        <!-- UI/UX backlog #46: the app's own drawing, not a stock icon. -->
         <v-empty-state
           v-else-if="!shown.length"
-          icon="mdi-car-off"
           :title="options.length ? 'No vehicles match these filters' : 'This area has no vehicles yet'"
           :text="hiddenCount ? `${hiddenCount} hidden by filters` : ''"
         >
+          <template #media><EmptyIllustration name="vehicles" /></template>
           <template v-if="hiddenCount" #actions>
             <v-btn variant="outlined" color="primary" class="oc-cta" @click="onlyShow = []">Show all vehicles</v-btn>
           </template>

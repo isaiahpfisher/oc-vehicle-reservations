@@ -1,12 +1,21 @@
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { canAccessArea, holdsAnyRole } from "../authorization/authorization.js";
+import { odometerProblem } from "../helpers/odometer.js";
 
 const exports = {};
 
 const withRelations = [
   { model: db.user, as: "user", attributes: ["id", "firstName", "lastName"] },
   { model: db.vehicle, as: "vehicle", attributes: ["id", "universityId", "areaId"] },
+  // UI/UX backlog #56: which service visit (if any) recorded this reading.
+  {
+    model: db.serviceLog,
+    as: "serviceLogs",
+    attributes: ["id"],
+    required: false,
+    include: [{ model: db.serviceType, as: "serviceType", attributes: ["name"] }],
+  },
 ];
 
 const asDate = (value) => {
@@ -33,6 +42,8 @@ const present = (log) => ({
     ? { id: log.user.id, firstName: log.user.firstName, lastName: log.user.lastName }
     : null,
   vehicle: log.vehicle ? { id: log.vehicle.id, universityId: log.vehicle.universityId } : null,
+  // UI/UX backlog #56: the services logged at this reading; empty when it was entered by hand.
+  services: (log.serviceLogs ?? []).map(({ serviceType }) => serviceType?.name).filter(Boolean),
   createdAt: log.createdAt,
   updatedAt: log.updatedAt,
 });
@@ -217,6 +228,11 @@ exports.create = async (req, res) => {
       return;
     }
 
+    const problem = await odometerProblem({ vehicleId: existing.id, reading: reading.value, day: recordedAt.value });
+    if (problem) {
+      return res.status(400).send({ message: problem });
+    }
+
     const created = await db.mileageLog.create({
       vehicleId: existing.id,
       userId: req.user.id,
@@ -261,6 +277,16 @@ exports.update = async (req, res) => {
     const recordedAt = dateField(req.body.recordedAt);
     if (recordedAt.message) {
       return res.status(400).send({ message: recordedAt.message });
+    }
+
+    const problem = await odometerProblem({
+      vehicleId: log.vehicleId,
+      reading: reading.value,
+      day: recordedAt.value,
+      excludeId: log.id,
+    });
+    if (problem) {
+      return res.status(400).send({ message: problem });
     }
 
     await log.update({

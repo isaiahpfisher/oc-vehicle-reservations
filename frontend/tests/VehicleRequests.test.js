@@ -185,6 +185,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   signInAs(null);
+  // UI/UX backlog #50: the remembered list view would otherwise carry from one test to the next.
+  localStorage.removeItem("view:myRequests");
+  localStorage.removeItem("view:adminRequests");
   vi.resetAllMocks();
   areaServices.getAreas.mockResolvedValue({ data: [athletics, music] });
   driverServices.getSelectableDrivers.mockResolvedValue({ data: [dana, sam] });
@@ -204,6 +207,16 @@ afterEach(() => {
 
 describe("Feature 8 — Vehicle Request Management", () => {
   describe("US-8.1 — Create vehicle request", () => {
+    // UI/UX backlog #64: the request form explains its less obvious fields.
+    it("explains Area, Number of people, and who can be a driver", async () => {
+      await mountAppAt("/requests/new");
+      await waitFor(() => expect(byTest("people")).not.toBeNull());
+
+      expect(document.body.textContent).toContain("The department the trip is for. Its area admins approve the request.");
+      expect(document.body.textContent).toContain("Everyone going, drivers included.");
+      expect(document.body.textContent).toContain("Not listed? Only approved drivers with a current license appear.");
+    });
+
     it("Authenticated user creates a request", async () => {
       const created = tripRequest({ id: 7, startAt: "2030-12-18", endAt: "2030-12-21" });
       requestServices.createRequest.mockResolvedValue({ status: 201, data: created });
@@ -274,6 +287,33 @@ describe("Feature 8 — Vehicle Request Management", () => {
         { id: tulsa.id },
         { name: "Grandma's House", addressLine1: "1 Main St", addressLine2: "", city: "Guthrie", state: "OK", zipCode: "" },
       ]);
+    });
+
+    // UI/UX backlog #6: typing a place that's already saved points to it, so it isn't added again.
+    it("User is pointed to the saved destination at the address they type", async () => {
+      const bok = { ...tulsa, addressLine1: "200 S Denver Ave", zipCode: "74103" };
+      destinationServices.getSelectableDestinations.mockResolvedValue({ data: [okc, bok] });
+      requestServices.createRequest.mockResolvedValue({ status: 201, data: tripRequest() });
+      requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
+      await mountAppAt("/requests/new");
+
+      await fillBasics();
+      await selectDrivers([dana.id]);
+      await click("Custom address");
+      await field("Place name").setValue("Concert");
+      expect(byTest("destination-suggestions")).toBeNull();
+      await field("Street address").setValue("200 s. denver ave");
+      await field("City").setValue("tulsa");
+      await settle();
+
+      await waitFor(() => expect(byTest("destination-suggestions")?.textContent).toContain("BOK Center"));
+      byTest("use-saved-destination").click();
+      await settle();
+
+      await waitFor(() => expect(stopNames()).toEqual(["BOK Center"]));
+      await click("Submit request");
+      await waitFor(() => expect(requestServices.createRequest).toHaveBeenCalledTimes(1));
+      expect(requestServices.createRequest.mock.calls[0][0].destinations).toEqual([{ id: bok.id }]);
     });
 
     it("User searches for a custom address", async () => {
@@ -430,8 +470,9 @@ describe("Feature 8 — Vehicle Request Management", () => {
         expect(element).not.toBeNull();
         return element;
       });
-      await waitFor(() => expect(calendar.textContent).toContain("Away game"));
-      expect(calendar.textContent).not.toContain("Spring retreat");
+      // UI/UX backlog #44: events are named like the trip's page, not by the purpose text.
+      await waitFor(() => expect(calendar.textContent).toContain("Trip to BOK Center"));
+      expect(calendar.textContent).not.toContain("Trip to Paycom Center");
       // The title spans the week, within a month and across months or years.
       expect(calendarTitle("2026-10-30", "week")).toMatch(/^Oct 25\s–\s31, 2026$/);
       expect(calendarTitle("2026-10-01", "week")).toMatch(/^Sep 27\s–\sOct 3, 2026$/);
@@ -442,11 +483,13 @@ describe("Feature 8 — Vehicle Request Management", () => {
       requestServices.getMyRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/");
 
-      // The month calendar is the default view.
-      await waitFor(() => expect(named("Month").classList).toContain("v-btn--active"));
+      // UI/UX backlog #50: the table is the default now; the month calendar is one click away.
+      await waitFor(() => expect(named("Table").classList).toContain("v-btn--active"));
+      await click("Month");
 
-      await waitFor(() => expect(document.body.querySelector(".v-calendar")?.textContent).toContain("Away game"));
-      expect(document.body.querySelector(".v-calendar").textContent).not.toContain("Spring retreat");
+      // UI/UX backlog #44: events are named like the trip's page, not by the purpose text.
+      await waitFor(() => expect(document.body.querySelector(".v-calendar")?.textContent).toContain("Trip to BOK Center"));
+      expect(document.body.querySelector(".v-calendar").textContent).not.toContain("Trip to Paycom Center");
 
       // A key names every status's event color, matching the colors the events use.
       const key = [...document.body.querySelectorAll('[aria-label="Status key"] li')];
@@ -454,6 +497,37 @@ describe("Feature 8 — Vehicle Request Management", () => {
       Object.values(STATUSES).forEach(({ color }, index) =>
         expect(key[index].querySelector("span").classList).toContain(`bg-${color}`),
       );
+    });
+
+    // UI/UX backlog #50: the view you pick is remembered next time.
+    it("Remembers the chosen view", async () => {
+      requestServices.getMyRequests.mockResolvedValue({ data: [tripRequest()] });
+      await mountAppAt("/");
+      await click("Week");
+      wrapper.unmount();
+      document.body.innerHTML = "";
+
+      await mountAppAt("/");
+      await waitFor(() => expect(named("Week").classList).toContain("v-btn--active"));
+    });
+
+    // UI/UX backlog #49: upcoming trips first (soonest at the top), then past ones; the calendar hides cancelled
+    // and denied trips unless the status filter asks for them.
+    it("Lists upcoming trips first and keeps cancelled trips off the calendar", async () => {
+      const past = tripRequest({ id: 3, purpose: "Last month", startAt: day(-30), endAt: day(-29), status: "returned" });
+      const soon = tripRequest({ id: 4, purpose: "Next week", startAt: day(7), endAt: day(7) });
+      const later = tripRequest({ id: 5, purpose: "Next month", startAt: day(30), endAt: day(30) });
+      const dropped = tripRequest({ id: 6, purpose: "Called off", startAt: day(0), endAt: day(0), status: "cancelled" });
+      requestServices.getMyRequests.mockResolvedValue({ data: [past, later, soon, dropped] });
+      await mountAppAt("/");
+
+      await waitFor(() => expect(rowTexts()).toHaveLength(4));
+      const order = ["Next week", "Next month", "Last month"].map((name) => rowTexts().findIndex((row) => row.includes(name)));
+      expect(order).toEqual([...order].sort((a, b) => a - b));
+
+      await click("Month");
+      await waitFor(() => expect(document.body.querySelector('[data-test="calendar-hidden"]')?.textContent).toContain("1 cancelled or denied trip is hidden"));
+      expect(document.body.querySelector(".v-calendar").textContent).not.toContain("Called off");
     });
 
     it("User searches and filters requests", async () => {
@@ -529,6 +603,18 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(document.body.querySelector(".detail-header h2").textContent).toBe("Trip to BOK Center +1 more");
       expect(byTest("trip-purpose").textContent).toBe("Away game");
     });
+
+    // UI/UX backlog #66: the trip page shows its area's logo.
+    it("shows the area's logo on the trip page", async () => {
+      requestServices.getRequest.mockResolvedValue({
+        data: tripRequest({ area: { ...athletics, logo: "https://example.com/athletics.png" } }),
+      });
+      await mountAppAt("/requests/1");
+
+      await waitFor(() => expect(byTest("area-logo")).not.toBeNull());
+      expect(byTest("area-logo").querySelector("img")?.getAttribute("src")).toBe("https://example.com/athletics.png");
+    });
+
   });
 
   describe("US-8.4 — List vehicle requests for admins", () => {
@@ -562,11 +648,24 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("shows the admin empty state", async () => {
       await mountAppAt("/requests", admin);
 
-      await waitFor(() => expect(document.body.textContent).toContain("No one has any submitted requests."));
+      await waitFor(() => expect(document.body.textContent).toContain("No requests yet"));
     });
   });
 
   describe("US-8.5 — Search and filter vehicle requests", () => {
+    // The Areas page links an area's "awaiting approval" count here as `?area=<id>&status=pending`.
+    it("starts filtered from an area's link, with the Filters panel closed", async () => {
+      requestServices.getRequests.mockResolvedValue({
+        data: [tripRequest(), tripRequest({ id: 2, status: "reserved" }), { ...farTrip, id: 3, status: "pending" }],
+      });
+      await mountAppAt(`/requests?area=${athletics.id}&status=pending`, admin);
+      await click("Table");
+
+      await waitFor(() => expect(rowTexts()).toHaveLength(1));
+      expect(byTest("toggle-filters").getAttribute("aria-expanded")).toBe("false");
+      expect(byTest("toggle-filters").textContent).toContain("1");
+    });
+
     it("Admin searches and filters requests", async () => {
       requestServices.getRequests.mockResolvedValue({ data: [tripRequest(), farTrip] });
       await mountAppAt("/requests", admin);
@@ -637,6 +736,26 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(requestServices.updateRequest).toHaveBeenCalledWith(1, { status: "awaiting_vehicle" });
       await waitFor(() => expect(document.body.textContent).toContain("Awaiting vehicle"));
       expect(named("Approve")).toBeUndefined();
+    });
+
+    // UI/UX backlog #11: the any-status picker hides behind "Override status" and asks before saving.
+    it("Admin overrides a request's status only after opening the override and confirming", async () => {
+      requestServices.getRequest.mockResolvedValue({ data: tripRequest() });
+      requestServices.updateRequest.mockResolvedValue({ data: tripRequest({ status: "returned" }) });
+      await mountAppAt("/requests/1", admin);
+
+      await waitFor(() => expect(byTest("review")).not.toBeNull());
+      expect(byTest("status")).toBeNull();
+      await click("Override status");
+      field("Status", "VSelect").vm.$emit("update:modelValue", "returned");
+      await settle();
+
+      expect(requestServices.updateRequest).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Change this request from Pending to Returned?");
+      await click("Change Status");
+
+      expect(requestServices.updateRequest).toHaveBeenCalledWith(1, { status: "returned" });
+      await waitFor(() => expect(byTest("status")).toBeNull());
     });
 
     it("opens a request whose stops are missing so they can be added back", async () => {

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
+import { useNoticeStore } from "../stores/notice.js";
 import { useRoute, useRouter } from "vue-router";
 import areaServices from "../services/areaServices.js";
 import maintenanceNeedServices from "../services/maintenanceNeedServices.js";
@@ -10,21 +11,26 @@ import vehicleServices from "../services/vehicleServices.js";
 import vehicleTypeServices from "../services/vehicleTypeServices.js";
 import { fullName } from "../models/users.js";
 import { formatTripDates } from "../models/requests.js";
-import { vehicleName } from "../models/vehicles.js";
+import { VIN_CHARACTERS_MESSAGE, formatDay, isVinCharacters, purchaseDateMessage, vehicleName } from "../models/vehicles.js";
 import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges.js";
 import { useRoles } from "../composables/useRoles.js";
-import FormSection from "../components/layout/FormSection.vue";
+import VehicleFields from "../components/vehicles/VehicleFields.vue";
+import SectionCard from "../components/layout/SectionCard.vue";
 import PageShell from "../components/layout/PageShell.vue";
+import MoreActionsMenu from "../components/common/MoreActionsMenu.vue";
 import MileageLogFormModal from "../components/mileageLogs/MileageLogFormModal.vue";
 import ServiceLogFormModal from "../components/serviceLogs/ServiceLogFormModal.vue";
-import RecentMileageLogs from "../components/vehicles/RecentMileageLogs.vue";
-import RecentServiceVisits from "../components/vehicles/RecentServiceVisits.vue";
 import VehicleStatusCard from "../components/vehicles/VehicleStatusCard.vue";
+import VehicleWork from "../components/vehicles/VehicleWork.vue";
 import Utils from "../config/utils.js";
+import { canOpen } from "../router.js";
 
 const route = useRoute();
 const router = useRouter();
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const { hasRole, areaAdminAreaIds } = useRoles();
 
 const isCreate = computed(() => route.name === "vehicleCreate");
@@ -51,11 +57,25 @@ const blank = () => ({
   licensePlate: "",
   licensePlateExpirationDate: "",
   status: null,
+  /** UI/UX backlog #19: create only — becomes the first mileage log. */
+  odometerReading: "",
 });
 
 const form = ref(blank());
+// UI/UX backlog #31: ask before leaving with unsaved changes. `baseline` is the form as loaded.
+const baseline = ref("");
+const snapshot = () => {
+  baseline.value = JSON.stringify(form.value);
+};
+const dirty = computed(() => baseline.value !== "" && JSON.stringify(form.value) !== baseline.value);
+/**
+ * An existing vehicle's page is read-only; "Edit details" opens the fields in a dialog (your call, after #34). So the
+ * leave-the-page guard only matters on New Vehicle, or while that dialog is open with changes.
+ */
+const editOpen = ref(false);
+const { allowLeave } = useUnsavedChanges(computed(() => (isCreate.value || editOpen.value) && dirty.value));
+
 const serviceLogOpen = ref(false);
-const serviceLogSaved = ref("");
 const serviceUsers = ref([]);
 const serviceTypes = ref([]);
 const serviceNeeds = ref([]);
@@ -89,26 +109,22 @@ const visibleAreas = computed(() => {
 
 const areaItems = computed(() => visibleAreas.value.map((area) => ({ title: area.name, value: area.id })));
 const typeItems = computed(() => vehicleTypes.value.map((type) => ({ title: type.name, value: type.id })));
-// Stored lowercase; shown capitalized.
-const statusItems = [
-  { title: "Active", value: "active" },
-  { title: "Retired", value: "retired" },
-];
-
 const selectedType = computed(() => vehicleTypes.value.find((type) => type.id === form.value.vehicleTypeId));
 const identifierLabel = computed(() => (selectedType.value?.identifier === "Serial" ? "Serial" : "VIN"));
 
 const title = computed(() => {
   if (isCreate.value) {
-    return "New vehicle";
+    return "New Vehicle";
   }
 
-  return loaded.value ? `${loaded.value.make} ${loaded.value.model}` : "";
+  // "2022 Ford Transit", the same vehicle name the mileage and service log pages use.
+  return loaded.value ? vehicleName(loaded.value) : "";
 });
 
 const breadcrumbs = computed(() => [
   { title: "Vehicles", to: { name: "vehicles" } },
-  { title: title.value || "Vehicle", disabled: true },
+  // UI/UX backlog #39: the University ID, the same label the mileage and service log pages use for this vehicle.
+  { title: loaded.value?.universityId || title.value || "Vehicle", disabled: true },
 ]);
 
 const fromVehicle = (vehicle) => ({
@@ -137,6 +153,27 @@ const canEditVehicle = computed(
 
 const readOnly = computed(() => !isCreate.value && !canEditVehicle.value);
 
+/** UI/UX backlog #63: the vehicle's details as text (everyone, now; editors change them in the dialog). */
+const facts = computed(() => {
+  const vehicle = loaded.value ?? {};
+  return [
+    { label: "Area", value: areas.value.find((area) => area.id === vehicle.areaId)?.name },
+    { label: "Vehicle type", value: vehicleTypes.value.find((type) => type.id === vehicle.vehicleTypeId)?.name },
+    { label: "University ID", value: vehicle.universityId },
+    { label: identifierLabel.value, value: vehicle.identifier },
+    { label: "Year, make, and model", value: vehicle.make ? vehicleName(vehicle) : "" },
+    { label: "Color", value: vehicle.color },
+    { label: "Passenger capacity", value: vehicle.passengerCapacity },
+    { label: "Purchased", value: vehicle.purchasedAt ? formatDay(vehicle.purchasedAt) : "" },
+    { label: "License plate", value: vehicle.licensePlate },
+    { label: "Plate expires", value: vehicle.licensePlateExpirationDate ? formatDay(vehicle.licensePlateExpirationDate) : "" },
+    { label: "Status", value: vehicle.status === "retired" ? "Retired" : "Active" },
+  ];
+});
+
+/** UI/UX backlog #28: maintenance-only users don't file issue reports. */
+const canReportIssues = computed(() => canOpen(router.resolve({ name: "issueReportCreate" })));
+
 const load = async () => {
   loading.value = true;
   loadError.value = "";
@@ -155,6 +192,7 @@ const load = async () => {
     if (isCreate.value) {
       loaded.value = null;
       form.value = blank();
+      snapshot();
       return;
     }
 
@@ -166,6 +204,7 @@ const load = async () => {
 
     loaded.value = data;
     form.value = fromVehicle(data);
+    snapshot();
     getMileageLogs(data.id);
     getServiceLogs(data.id);
   } catch (error) {
@@ -219,40 +258,60 @@ const currentId = computed(() => (isCreate.value ? null : Number(route.params.id
 
 const blankText = (value) => value === null || value === undefined || String(value).trim() === "";
 
-const validate = () => {
+/**
+ * UI/UX backlog #29: every problem, keyed by the field it belongs to, so each shows under its own field
+ * (`fieldErrors`). The API checks the same things.
+ */
+const validateFields = () => {
   const value = form.value;
-  if (blankText(value.areaId) || blankText(value.vehicleTypeId) || blankText(value.universityId)) {
-    return "Required field.";
-  }
-  if (blankText(value.identifier) || blankText(value.make) || blankText(value.model) || blankText(value.year)) {
-    return "Required field.";
-  }
-  if (blankText(value.purchasedAt) || blankText(value.color) || blankText(value.passengerCapacity) || blankText(value.status)) {
-    return "Required field.";
+  const errors = {};
+  const set = (key, message) => {
+    if (!errors[key]) errors[key] = message;
+  };
+
+  for (const key of ["areaId", "vehicleTypeId", "universityId", "identifier", "make", "model", "year", "purchasedAt", "color", "passengerCapacity", "status"]) {
+    if (blankText(value[key])) set(key, "Required field.");
   }
 
-  const universityId = String(value.universityId).trim();
-  const make = String(value.make).trim();
-  const modelName = String(value.model).trim();
-  const identifier = String(value.identifier).trim();
-  const color = String(value.color).trim();
+  const universityId = String(value.universityId ?? "").trim();
+  const identifier = String(value.identifier ?? "").trim();
   const plate = String(value.licensePlate ?? "").trim();
 
-  if (universityId.length > 255) return "University id too long.";
-  if (make.length > 255) return "Make too long.";
-  if (modelName.length > 255) return "Model too long.";
-  if (selectedType.value?.identifier === "VIN" && identifier.length !== 17) return "VIN must be 17 characters.";
-  if (identifier.length > 255) return "Serial number too long.";
-  if (color.length > 255) return "Color too long.";
-  if (plate.length > 8) return "License plate too long.";
+  if (universityId.length > 255) set("universityId", "University id too long.");
+  if (String(value.make ?? "").trim().length > 255) set("make", "Make too long.");
+  if (String(value.model ?? "").trim().length > 255) set("model", "Model too long.");
+  if (identifier && selectedType.value?.identifier === "VIN" && identifier.length !== 17) set("identifier", "VIN must be 17 characters.");
+  if (identifier && selectedType.value?.identifier === "VIN" && !isVinCharacters(identifier)) set("identifier", VIN_CHARACTERS_MESSAGE);
+  if (identifier.length > 255) set("identifier", "Serial number too long.");
+  const purchaseMessage = purchaseDateMessage(value.year, value.purchasedAt);
+  if (purchaseMessage) set("purchasedAt", purchaseMessage);
+  if (isCreate.value && !/^\d*$/.test(String(value.odometerReading ?? "").trim())) {
+    set("odometerReading", "Starting odometer reading must be a whole number of 0 or more.");
+  }
+  if (String(value.color ?? "").trim().length > 255) set("color", "Color too long.");
+  if (plate.length > 8) set("licensePlate", "License plate too long.");
 
   const others = vehicles.value.filter((vehicle) => vehicle.id !== currentId.value);
-  if (others.some((vehicle) => vehicle.universityId === universityId)) return "University id already taken.";
-  if (others.some((vehicle) => vehicle.identifier === identifier)) return "Identifier already taken.";
-  if (plate && others.some((vehicle) => vehicle.licensePlate === plate)) return "License plate already taken.";
+  if (universityId && others.some((vehicle) => vehicle.universityId === universityId)) set("universityId", "University id already taken.");
+  if (identifier && others.some((vehicle) => vehicle.identifier === identifier)) set("identifier", "Identifier already taken.");
+  if (plate && others.some((vehicle) => vehicle.licensePlate === plate)) set("licensePlate", "License plate already taken.");
 
-  return "";
+  return errors;
 };
+
+const fieldErrors = ref({});
+/** Typing in a field clears its message. */
+watch(
+  form,
+  (next, previous) => {
+    if (next !== previous) return;
+    fieldErrors.value = Object.fromEntries(
+      Object.entries(fieldErrors.value).filter(([key]) => String(next[key] ?? "") === String(lastChecked.value[key] ?? "")),
+    );
+  },
+  { deep: true },
+);
+const lastChecked = ref({});
 
 const payload = () => ({
   areaId: form.value.areaId,
@@ -268,6 +327,7 @@ const payload = () => ({
   licensePlate: String(form.value.licensePlate ?? "").trim() || null,
   licensePlateExpirationDate: String(form.value.licensePlateExpirationDate ?? "").trim() || null,
   status: form.value.status,
+  ...(isCreate.value ? { odometerReading: String(form.value.odometerReading ?? "").trim() || null } : {}),
 });
 
 const submit = async (event) => {
@@ -281,8 +341,9 @@ const submit = async (event) => {
   await nextTick();
 
   try {
-    formError.value = validate();
-    if (formError.value) {
+    fieldErrors.value = validateFields();
+    lastChecked.value = { ...form.value };
+    if (Object.keys(fieldErrors.value).length) {
       return;
     }
 
@@ -292,6 +353,8 @@ const submit = async (event) => {
         formError.value = "Failed to save vehicle.";
         return;
       }
+      notify("Vehicle created.");
+      allowLeave();
       await router.push({ name: "vehicles" });
       return;
     }
@@ -306,7 +369,11 @@ const submit = async (event) => {
       return;
     }
 
-    await router.push({ name: "vehicles" });
+    notify("Vehicle saved.");
+    // Stay on the vehicle: close the dialog and show what was saved.
+    loaded.value = { ...loaded.value, ...(response.data ?? {}) };
+    await refreshVehicle();
+    editOpen.value = false;
   } catch (error) {
     formError.value = Utils.errorMessage(error, "Failed to save vehicle.");
   } finally {
@@ -314,42 +381,60 @@ const submit = async (event) => {
   }
 };
 
-const setYear = (value) => {
-  const digits = String(value ?? "").replace(/\D/g, "");
-  if (digits.length <= 4) {
-    form.value.year = digits;
-    return;
-  }
-
-  const previous = String(form.value.year ?? "");
-  form.value.year = previous.length === 4 ? previous : digits.slice(0, 4);
-};
-
-const onYearKeydown = (event) => {
-  if (["e", "E", "+", "-", "."].includes(event.key)) {
-    event.preventDefault();
-    return;
-  }
-
-  if (event.key.length !== 1 || !/\d/.test(event.key)) {
-    return;
-  }
-
-  const input = event.target;
-  const selected = (input.selectionEnd ?? 0) - (input.selectionStart ?? 0);
-  if (String(form.value.year ?? "").length - selected >= 4) {
-    event.preventDefault();
-  }
-};
-
 const cancel = () => {
+  allowLeave();
   router.push({ name: "vehicles" });
+};
+
+/** Open the "Edit details" dialog with the vehicle as saved. */
+const openEdit = () => {
+  form.value = fromVehicle(loaded.value);
+  snapshot();
+  fieldErrors.value = {};
+  lastChecked.value = {};
+  formError.value = "";
+  editOpen.value = true;
+};
+
+const closeEdit = () => {
+  if (saving.value) return;
+  editOpen.value = false;
+  form.value = fromVehicle(loaded.value);
+  snapshot();
+};
+
+/** After saving, everything on the page that depends on the vehicle (status, title, details) reloads. */
+const refreshVehicle = async () => {
+  try {
+    const { data } = await vehicleServices.getVehicle(route.params.id);
+    loaded.value = data;
+    form.value = fromVehicle(data);
+    snapshot();
+  } catch {
+    // The saved values already show; the status catches up on the next visit.
+  }
+};
+
+/** UI/UX backlog #36: delete lives in the page's ⋮ menu, not on every list row. */
+const deleteVehicle = async () => {
+  const deleted = await confirm({
+    title: "Delete vehicle",
+    message: `Delete ${vehicleName(loaded.value)}? This action is permanent.`,
+    confirmText: "Delete",
+    confirmColor: "error",
+    onConfirm: () => vehicleServices.removeVehicle(route.params.id),
+  });
+
+  if (deleted) {
+    notify("Vehicle deleted.");
+    allowLeave();
+    await router.push({ name: "vehicles" });
+  }
 };
 
 const withLabel = (user) => ({ ...user, label: fullName(user) });
 
 const openServiceLog = async () => {
-  serviceLogSaved.value = "";
   const [userResult, typeResult, needResult] = await Promise.allSettled([
     maintenanceNeedServices.getMaintenanceNeedOptions(),
     serviceTypeServices.getServiceTypes(),
@@ -359,7 +444,10 @@ const openServiceLog = async () => {
   serviceTypes.value = typeResult.status === "fulfilled" ? typeResult.value.data : [];
   serviceNeeds.value =
     needResult.status === "fulfilled"
-      ? needResult.value.data.filter((need) => String(need.vehicleId) === String(route.params.id))
+      ? // UI/UX backlog #57: only needs still open can take new work.
+        needResult.value.data.filter(
+          (need) => String(need.vehicleId) === String(route.params.id) && ["Open", "In Progress"].includes(need.status),
+        )
       : [];
   serviceUsers.value = userResult.status === "fulfilled" ? userResult.value.data.assignees.map(withLabel) : [];
 
@@ -368,18 +456,17 @@ const openServiceLog = async () => {
 
 const createServiceLog = async (payload) => {
   await serviceLogServices.createServiceLog({ ...payload, vehicleId: Number(route.params.id) });
-  serviceLogSaved.value = "Service log created.";
+  notify("Service log created.");
   await Promise.all([getServiceLogs(route.params.id), getMileageLogs(route.params.id), refreshStatus()]);
 };
 
 const openMileageLog = () => {
-  serviceLogSaved.value = "";
   mileageLogOpen.value = true;
 };
 
 const createMileageLog = async (payload) => {
   await mileageLogServices.createMileageLog({ ...payload, vehicleId: Number(route.params.id) });
-  serviceLogSaved.value = "Mileage log created.";
+  notify("Mileage log created.");
   await Promise.all([getMileageLogs(route.params.id), refreshStatus()]);
 };
 </script>
@@ -394,99 +481,72 @@ const createMileageLog = async (payload) => {
     :max-width="1040"
     centered
   >
+    <!-- UI/UX backlog #18: report a problem or plan work without leaving the vehicle; each form returns here. -->
+    <template v-if="!isCreate && loaded" #actions>
+      <v-btn
+        v-if="canReportIssues"
+        variant="outlined"
+        color="primary"
+        class="oc-cta"
+        :to="{ name: 'issueReportCreate', query: { vehicleId: route.params.id } }"
+        data-test="vehicle-report-issue"
+      >
+        Report an issue
+      </v-btn>
+      <v-btn
+        variant="outlined"
+        color="primary"
+        class="oc-cta"
+        :to="{ name: 'maintenanceNeedCreate', query: { vehicleId: route.params.id } }"
+        data-test="vehicle-new-need"
+      >
+        New maintenance need
+      </v-btn>
+      <MoreActionsMenu v-if="canEditVehicle">
+        <v-list-item
+          prepend-icon="mdi-delete-outline"
+          title="Delete vehicle"
+          base-color="error"
+          data-test="delete-vehicle"
+          @click="deleteVehicle"
+        />
+      </MoreActionsMenu>
+    </template>
+
     <div class="d-flex flex-column ga-6">
       <VehicleStatusCard v-if="!isCreate && loaded?.condition" :vehicle="loaded" :can-open-trip="canOpenTrip" />
 
-      <v-form @submit.prevent="submit">
-        <FormSection title="Assignment" subtitle="The area that manages it, and whether it's still in the fleet. Retired vehicles can't be assigned to trips.">
-          <v-row density="comfortable">
-            <v-col cols="12" sm="6">
-              <v-select v-model="form.areaId" :items="areaItems" item-title="title" item-value="value" label="Area" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-select v-model="form.status" :items="statusItems" label="Status" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-          </v-row>
-        </FormSection>
+      <!-- An existing vehicle's details read as text; editors change them in the "Edit details" dialog. -->
+      <SectionCard v-if="!isCreate" title="Details" data-test="vehicle-details">
+        <template v-if="canEditVehicle" #append>
+          <v-btn variant="tonal" color="primary" class="oc-cta" prepend-icon="mdi-pencil-outline" data-test="edit-vehicle" @click="openEdit">
+            Edit details
+          </v-btn>
+        </template>
+        <dl class="vehicle-facts">
+          <template v-for="fact in facts" :key="fact.label">
+            <dt>{{ fact.label }}</dt>
+            <dd>{{ fact.value || "—" }}</dd>
+          </template>
+        </dl>
+      </SectionCard>
 
-        <FormSection title="Identity" subtitle="How the university and the manufacturer identify it. Service schedules count from the purchase date until a service is logged.">
-          <v-row density="comfortable">
-            <v-col cols="12" sm="6">
-              <v-select
-                v-model="form.vehicleTypeId"
-                :items="typeItems"
-                item-title="title"
-                item-value="value"
-                label="Vehicle Type"
-                hide-details="auto"
-                :disabled="readOnly"
-              />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="form.universityId" label="University Id" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="form.identifier" :label="identifierLabel" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="form.purchasedAt" label="Purchase Date" type="date" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-          </v-row>
-        </FormSection>
-
-        <FormSection title="Description" subtitle="What it is and how many people it carries.">
-          <v-row density="comfortable">
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="form.make" label="Make" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="form.model" label="Model" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field
-                :model-value="form.year"
-                label="Year"
-                type="number"
-                step="1"
-                max="9999"
-                hide-details="auto"
-                :disabled="readOnly"
-                @update:model-value="setYear"
-                @keydown="onYearKeydown"
-              />
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field v-model="form.color" label="Color" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field v-model="form.passengerCapacity" label="Passenger Capacity" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-          </v-row>
-        </FormSection>
-
-        <FormSection title="Registration" subtitle="Vehicles whose plate expires before a trip ends are flagged when they're assigned.">
-          <v-row density="comfortable">
-            <v-col cols="12" sm="6">
-              <v-text-field v-model="form.licensePlate" label="License Plate" hide-details="auto" :disabled="readOnly" />
-            </v-col>
-            <v-col cols="12" sm="6">
-              <v-text-field
-                v-model="form.licensePlateExpirationDate"
-                label="License Plate Expiration Date"
-                type="date"
-                hide-details="auto"
-                :disabled="readOnly"
-              />
-            </v-col>
-          </v-row>
-        </FormSection>
+      <!-- New Vehicle: the whole page is the form. -->
+      <v-form v-else @submit.prevent="submit">
+        <VehicleFields
+          v-model="form"
+          :field-errors="fieldErrors"
+          :area-items="areaItems"
+          :type-items="typeItems"
+          :identifier-label="identifierLabel"
+          show-odometer
+        />
 
         <v-divider />
         <v-alert v-if="formError" type="error" density="compact" class="mt-6">{{ formError }}</v-alert>
         <div class="d-flex justify-end ga-2 pt-6">
           <v-btn color="secondary" variant="text" class="vehicle-form__cancel" :disabled="saving" @click="cancel">Cancel</v-btn>
           <v-btn
-            v-if="!readOnly"
             type="submit"
             color="primary"
             variant="elevated"
@@ -495,26 +555,80 @@ const createMileageLog = async (payload) => {
             :aria-busy="saving"
             @click="submit"
           >
-            {{ saving ? "Saving…" : isCreate ? "Create" : "Save" }}
+            {{ saving ? "Saving…" : "Create" }}
           </v-btn>
         </div>
       </v-form>
 
-      <v-row v-if="!isCreate" density="comfortable">
-        <v-col cols="12" md="6">
-          <RecentMileageLogs :logs="mileageLogs" :error="mileageLogsError" :vehicle-id="route.params.id" @add="openMileageLog" />
-        </v-col>
-        <v-col cols="12" md="6">
-          <RecentServiceVisits :logs="serviceLogs" :error="serviceLogsError" :vehicle-id="route.params.id" @add="openServiceLog" />
-        </v-col>
-      </v-row>
+      <!-- UI/UX backlog #20: service visits, mileage, needs, issue reports, and trips, as tabs of one card. -->
+      <VehicleWork
+        v-if="!isCreate && loaded"
+        :vehicle-id="route.params.id"
+        :recent-trips="loaded.recentTrips ?? []"
+        :show-issues="canReportIssues"
+        :can-open-trip="canOpenTrip"
+        :mileage-logs="mileageLogs ?? []"
+        :mileage-logs-error="mileageLogsError"
+        :service-logs="serviceLogs ?? []"
+        :service-logs-error="serviceLogsError"
+        @add-mileage-log="openMileageLog"
+        @add-service-log="openServiceLog"
+      />
     </div>
 
-    <v-snackbar :model-value="!!serviceLogSaved" color="success" timeout="3000" @update:model-value="serviceLogSaved = ''">
-      {{ serviceLogSaved }}
-    </v-snackbar>
 
-    <MileageLogFormModal v-if="!isCreate" v-model="mileageLogOpen" :save="createMileageLog" />
+
+    <!-- Edit details: the same fields as New Vehicle, in a dialog that keeps the page behind it. -->
+    <v-dialog
+      v-if="!isCreate"
+      v-model="editOpen"
+      max-width="880"
+      scrollable
+      :fullscreen="$vuetify.display.xs"
+      :persistent="saving || dirty"
+    >
+      <v-form class="h-100" @submit.prevent="submit">
+        <v-card rounded="lg" data-test="edit-vehicle-dialog">
+          <v-card-item>
+            <v-card-title>Edit details</v-card-title>
+            <v-card-subtitle>{{ loaded?.universityId }} · {{ title }}</v-card-subtitle>
+          </v-card-item>
+          <v-divider />
+          <v-card-text class="px-6">
+            <VehicleFields
+              v-model="form"
+              :field-errors="fieldErrors"
+              :area-items="areaItems"
+              :type-items="typeItems"
+              :identifier-label="identifierLabel"
+            />
+            <v-alert v-if="formError" type="error" density="compact" class="mt-4">{{ formError }}</v-alert>
+          </v-card-text>
+          <v-divider />
+          <v-card-actions class="px-6 py-4">
+            <v-spacer />
+            <v-btn color="secondary" variant="text" class="vehicle-form__cancel" :disabled="saving" @click="closeEdit">Cancel</v-btn>
+            <v-btn
+              type="submit"
+              color="primary"
+              variant="elevated"
+              class="oc-cta vehicle-form__save"
+              :disabled="saving"
+              :aria-busy="saving"
+            >
+              {{ saving ? "Saving…" : "Save" }}
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-form>
+    </v-dialog>
+
+    <MileageLogFormModal
+      v-if="!isCreate"
+      v-model="mileageLogOpen"
+      :latest-reading="(mileageLogs ?? []).length ? Math.max(...mileageLogs.map(({ odometerReading }) => odometerReading)) : null"
+      :save="createMileageLog"
+    />
     <ServiceLogFormModal
       v-if="!isCreate"
       v-model="serviceLogOpen"
@@ -525,3 +639,27 @@ const createMileageLog = async (payload) => {
     />
   </PageShell>
 </template>
+
+<style scoped>
+.vehicle-facts {
+  display: grid;
+  grid-template-columns: minmax(140px, auto) 1fr;
+  gap: 8px 24px;
+  margin: 0;
+}
+
+/* Two pairs a row where there's room, so eleven facts don't run down one narrow column. */
+@media (min-width: 960px) {
+  .vehicle-facts {
+    grid-template-columns: minmax(140px, auto) 1fr minmax(140px, auto) 1fr;
+  }
+}
+
+.vehicle-facts dt {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.vehicle-facts dd {
+  margin: 0;
+}
+</style>

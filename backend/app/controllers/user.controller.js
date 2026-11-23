@@ -4,6 +4,7 @@ import { ROLE_NAMES } from "../models/role.model.js";
 import { parseId, requiredInt } from "../helpers/fields.js";
 import { driverInclude, rolesInclude, toLinkedDriverResponse, toUserResponse } from "../helpers/users.js";
 import { isAdmin } from "../authorization/authorization.js";
+import { listText } from "../helpers/text.js";
 
 const exports = {};
 
@@ -146,6 +147,18 @@ exports.remove = async (req, res) => {
     // Feature 14: notes keep their author so threads stay readable.
     if ((await db.note.count({ where: { authorId: userId } })) > 0) {
       return res.status(400).send({ message: "User has notes and can't be deleted." });
+    }
+
+    // UI/UX backlog #4: records that name the user as their author keep them too, instead of the delete failing with a 500.
+    const authored = [
+      [db.mileageLog, { userId }, "mileage logs"],
+      [db.issueReport, { authorId: userId }, "issue reports"],
+      [db.maintenanceNeed, { authorId: userId }, "maintenance needs"],
+    ];
+    const counts = await Promise.all(authored.map(([model, where]) => model.count({ where })));
+    const kept = authored.filter((_, i) => counts[i] > 0).map(([, , label]) => label);
+    if (kept.length) {
+      return res.status(400).send({ message: `User has ${listText(kept)} and can't be deleted.` });
     }
 
     await user.destroy();

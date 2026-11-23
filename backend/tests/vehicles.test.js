@@ -217,6 +217,96 @@ describe("Feature 5 — Vehicles", () => {
       expect(response.body).toEqual({ message: "VIN must be 17 characters." });
     });
 
+    // UI/UX backlog: VINs are 17 letters and digits, never I, O, or Q.
+    it.each([
+      ["a VIN with an O", "1HGCM82633A0O4352"],
+      ["a VIN with an I", "1HGCM82633AI04352"],
+      ["a VIN with a Q", "1HGCM82633AQ04352"],
+      ["a VIN with a dash", "1HGCM82633-004352"],
+      ["a VIN with a space", "1HGCM82633 004352"],
+    ])("Admin user requests to create a vehicle with %s", async (_label, identifier) => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { identifier });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "VIN can only use letters and numbers, and never I, O, or Q." });
+    });
+
+    it("Admin user creates a vehicle with a lowercase VIN", async () => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { identifier: "1hgcm82633a004352" });
+
+      expect(response.status).toBe(201);
+    });
+
+    it("Admin user creates a vehicle with a Serial identifier that isn't VIN-shaped", async () => {
+      const headers = await signIn();
+      await seed();
+      const serialType = await db.vehicleType.create({ name: "Golf Cart", identifier: "Serial" });
+
+      const response = await postVehicle(headers, { vehicle_type_id: serialType.id, identifier: "SN-GC01-12345" });
+
+      expect(response.status).toBe(201);
+    });
+
+    // UI/UX backlog #19: a starting odometer reading becomes the vehicle's first mileage log.
+    it("Admin user creates a vehicle with a starting odometer reading", async () => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { odometerReading: "45210" });
+
+      expect(response.status).toBe(201);
+      const logs = await db.mileageLog.findAll();
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({ vehicleId: response.body.id, odometerReading: 45210 });
+    });
+
+    it("Admin user creates a vehicle without a starting odometer reading", async () => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { odometerReading: "" });
+
+      expect(response.status).toBe(201);
+      expect(await db.mileageLog.count()).toBe(0);
+    });
+
+    it.each([["-5"], ["12.5"], ["lots"]])("Admin user requests a vehicle with a starting odometer of %s", async (odometerReading) => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { odometerReading });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Starting odometer reading must be a whole number of 0 or more." });
+      expect(await db.vehicle.count()).toBe(0);
+    });
+
+    // UI/UX backlog: a vehicle can't be bought before the year before its model year (a 2027 model sells in 2026).
+    it("Admin user requests to create a vehicle bought before the year before its model year", async () => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { year: 2015, purchased_at: "2013-12-31" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Purchase date must be in 2014 or later for a 2015 vehicle." });
+    });
+
+    it("Admin user creates a vehicle bought the year before its model year", async () => {
+      const headers = await signIn();
+      await seed();
+
+      const response = await postVehicle(headers, { year: 2015, purchased_at: "2014-09-01" });
+
+      expect(response.status).toBe(201);
+    });
+
     const saveBlankPlate = async () => {
       const headers = await signIn();
       await seed();
@@ -277,6 +367,18 @@ describe("Feature 5 — Vehicles", () => {
   });
 
   describe("US-5.4 — Edit and delete vehicles", () => {
+    // UI/UX backlog: changing only the year still checks it against the saved purchase date.
+    it("Admin user requests to change only the year to one too late for the saved purchase date", async () => {
+      const headers = await signIn();
+      await seed();
+      await postVehicle(headers, { year: 2015, purchased_at: "2018-01-01" });
+
+      const response = await request(app).put("/api/vehicles/1").set(headers).send({ year: 2020 });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Purchase date must be in 2019 or later for a 2020 vehicle." });
+    });
+
     it("Admin user edits a vehicle area", async () => {
       const headers = await signIn();
       await seed({ areaNames: ["Athletics", "Maintenance"] });
@@ -430,6 +532,24 @@ describe("Feature 5 — Vehicles", () => {
 
       expect(response.status).toBe(200);
       expect(await db.vehicle.count()).toBe(0);
+    });
+
+    // UI/UX backlog #4: a vehicle's history keeps it, with a message naming what's there (not a 500).
+    it("Admin user requests to delete a vehicle that has mileage logs and an issue report", async () => {
+      const headers = await signIn();
+      await seed();
+      await postVehicle(headers);
+      const author = await db.user.findOne();
+      await db.mileageLog.create({ vehicleId: 1, userId: author.id, odometerReading: 1000, recordedAt: "2026-01-02" });
+      await db.issueReport.create({ vehicleId: 1, authorId: author.id, type: "dirty", description: "Mud", status: "pending" });
+
+      const response = await request(app).delete("/api/vehicles/1").set(headers);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        message: "Vehicle has mileage logs and issue reports and can't be deleted. Set its status to retired instead.",
+      });
+      expect(await db.vehicle.count()).toBe(1);
     });
 
     it("Admin user updates a vehicle that does not exist", async () => {

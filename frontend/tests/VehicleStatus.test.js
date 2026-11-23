@@ -143,7 +143,7 @@ const byTest = (id) => document.body.querySelector(`[data-test="${id}"]`);
 const allByTest = (id) => [...document.body.querySelectorAll(`[data-test="${id}"]`)];
 const text = () => document.body.textContent.replace(/\s+/g, " ");
 const rowTexts = () => [...document.body.querySelectorAll(".v-data-table tbody tr")].map((row) => row.textContent);
-const activeOverlay = () => document.body.querySelector(".v-overlay--active");
+const activeOverlay = () => document.body.querySelector(".v-overlay--active:not(.v-snackbar)");
 
 const component = (label, name = "VSelect") =>
   waitFor(() => {
@@ -154,6 +154,17 @@ const component = (label, name = "VSelect") =>
 
 const choose = async (label, value, name = "VSelect") => {
   (await component(label, name)).vm.$emit("update:modelValue", value);
+  await settle();
+};
+
+/** The vehicle page's "Work and history" card: open one of its tabs. */
+const openWorkTab = async (name) => {
+  const tab = await waitFor(() => {
+    const match = byTest(`vehicle-work-tab-${name}`);
+    expect(match).not.toBeNull();
+    return match;
+  });
+  tab.click();
   await settle();
 };
 
@@ -178,6 +189,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  // The vehicle page remembers its last tab in this browser; every test starts without one.
+  localStorage.removeItem("view:vehicle-work-tab");
   signInAs(null);
   vi.resetAllMocks();
   apiClient.get.mockImplementation(async (url) => (String(url).startsWith("users/") ? { data: { roles } } : { data: [] }));
@@ -218,10 +231,12 @@ const fleet = [
   vehicle(6, { make: "Dodge", model: "Caravan", color: "Tan", year: 2005, status: "retired", condition: condition("retired") }),
 ];
 
-const listedMakes = () => rowTexts().map((row) => row.split(/\s+/)[0]);
+// UI/UX backlog #37: a row starts with the University ID, then "2022 Ford Transit · White".
+const rowFor = (v) => (row) => row.startsWith(`${v.universityId}${v.year} ${v.make} ${v.model}`);
+const listedMakes = () => rowTexts().map((row) => fleet.find((v) => rowFor(v)(row))?.make);
 const listedIds = () => {
   const seen = rowTexts();
-  return fleet.filter((v) => seen.some((row) => row.startsWith(`${v.make}${v.model}${v.year}${v.color}`))).map(({ id }) => id);
+  return fleet.filter((v) => seen.some(rowFor(v))).map(({ id }) => id);
 };
 
 const openList = async (signedIn = admin) => {
@@ -242,7 +257,7 @@ describe("Feature 18 — Vehicle Status", () => {
       );
       expect(labels).toEqual(["Available", "Out of Service", "Service Overdue", "Service Due Soon", "Plate Expired", "Retired"]);
       // Each row shows its vehicle type (US-18.2 filters by it).
-      const typeCells = [...document.body.querySelectorAll(".v-data-table tbody tr")].map((row) => row.children[4].textContent.trim());
+      const typeCells = [...document.body.querySelectorAll(".v-data-table tbody tr")].map((row) => row.children[1].textContent.trim());
       expect(typeCells).toEqual(["Car", "Van", "Van", "Car", "Van", "Car"]);
       expect(text()).not.toContain("active");
     });
@@ -274,6 +289,30 @@ describe("Feature 18 — Vehicle Status", () => {
 
       expect(listedIds()).toEqual([2, 3, 5]);
       expect(byTest("toggle-filters").textContent).toContain("1");
+    });
+
+    // Search the vehicle list by anything that identifies a vehicle (University ID, year/make/model, color, plate…).
+    it("Vehicle list can be searched", async () => {
+      await openList();
+      const search = wrapper.findAllComponents({ name: "VTextField" }).find((field) => field.attributes("data-test") === "vehicle-search");
+
+      await search.setValue("ford white");
+      await settle();
+      expect(listedIds()).toEqual([2]);
+
+      await search.setValue("V-6");
+      await settle();
+      expect(listedIds()).toEqual([6]);
+
+      // Feature 21, US-21.6: a plate number finds its vehicle.
+      await search.setValue("abc3");
+      await settle();
+      expect(listedIds()).toEqual([3]);
+
+      await search.setValue("no such vehicle");
+      await settle();
+      expect(listedIds()).toEqual([]);
+      expect(text()).toContain("No vehicles match these filters");
     });
 
     it("Filtering by status shows only vehicles with that status", async () => {
@@ -469,6 +508,9 @@ describe("Feature 18 — Vehicle Status", () => {
       });
       await openVehicle();
 
+      // UI/UX backlog #20: the logs are tabs of the "Work and history" card; with nothing open, it starts on service.
+      await waitFor(() => expect(byTest("recent-service-logs")).not.toBeNull());
+      await openWorkTab("mileage");
       const mileage = await waitFor(() => {
         const items = byTest("recent-mileage-logs").querySelectorAll(".v-list-item");
         expect(items).toHaveLength(5);
@@ -481,7 +523,12 @@ describe("Feature 18 — Vehicle Status", () => {
       expect(byTest("recent-mileage-logs").textContent).toContain("Latest 5 of 7 readings");
       expect(byTest("recent-mileage-logs").querySelector('a[href="/vehicles/1/mileage-logs"]').textContent).toContain("View all");
 
-      const services = byTest("recent-service-logs").querySelectorAll(".v-list-item");
+      await openWorkTab("service");
+      const services = await waitFor(() => {
+        const items = byTest("recent-service-logs").querySelectorAll(".v-list-item");
+        expect(items).toHaveLength(2);
+        return items;
+      });
       expect(services).toHaveLength(2);
       expect(services[0].textContent).toContain("11,900 mi");
       expect(services[0].textContent).toContain("Max Fix");
@@ -498,11 +545,14 @@ describe("Feature 18 — Vehicle Status", () => {
     it("Maintenance user sees the vehicle page read-only but can add mileage and service logs", async () => {
       await openVehicle(fullVehicle(), maintenance);
 
-      expect(wrapper.findAllComponents({ name: "VTextField" }).every((field) => field.props("disabled"))).toBe(true);
+      // UI/UX backlog #63: read-only details are text, not disabled inputs.
+      expect(byTest("vehicle-details").textContent).toContain("V-1");
+      expect(wrapper.findAllComponents({ name: "VTextField" }).some((field) => field.props("label") === "Make")).toBe(false);
       expect(document.body.querySelector(".vehicle-form__save")).toBeNull();
       // Maintenance can't open requests, so trips aren't links.
       expect(byTest("upcoming-trips").querySelector("a")).toBeNull();
 
+      await openWorkTab("mileage");
       await clickText("+ New Mileage Log");
       const odometer = await component("Odometer reading", "VTextField");
       await odometer.setValue("12500");
@@ -517,6 +567,7 @@ describe("Feature 18 — Vehicle Status", () => {
       expect(vehicleServices.getVehicle).toHaveBeenCalledTimes(2);
       expect(mileageLogServices.getMileageLogs).toHaveBeenCalledTimes(2);
 
+      await openWorkTab("service");
       await clickText("+ New Service Log");
       await waitFor(() => expect(activeOverlay()?.textContent).toContain("Service Type"));
     });
@@ -899,6 +950,27 @@ describe("Feature 18 — Vehicle Status", () => {
       expect(byTest("vehicle-problems-filter").textContent).toContain("1");
     });
 
+    it("The calendar marks requests with problematic vehicles too", async () => {
+      // Today, so the trips are on this month's calendar whatever day the tests run.
+      requestServices.getRequests.mockResolvedValue({
+        data: [
+          problemRequest({ id: 1, purpose: "Flagged trip", startAt: day(0), endAt: day(0) }),
+          tripRequest({ id: 2, purpose: "Clean trip", status: "reserved", vehicles: [assignedVan], vehicleProblems: {}, startAt: day(0), endAt: day(0) }),
+        ],
+      });
+      await mountAppAt("/requests");
+      await clickText("Month");
+
+      const flags = await waitFor(() => {
+        const found = allByTest("calendar-problem-flag");
+        expect(found).toHaveLength(1);
+        return found;
+      });
+      expect(flags[0].closest(".v-event").textContent).toContain("Trip to");
+      expect(flags[0].closest("[title]").getAttribute("title")).toContain("VAN-5: Out of service: Brakes.");
+      expect(byTest("calendar-problem-key")).not.toBeNull();
+    });
+
     it("Filtering to requests with vehicle problems shows only flagged requests", async () => {
       await listRequests();
 
@@ -918,8 +990,8 @@ describe("Feature 18 — Vehicle Status", () => {
 
   const needOptions = {
     vehicles: [
-      { id: 1, color: "Gray", make: "Toyota", model: "Sienna", licensePlate: "ABC1", areaId: 1, condition: { status: "available" } },
-      { id: 2, color: "White", make: "Ford", model: "Transit", licensePlate: "ABC2", areaId: 1, condition: { status: "service_overdue" } },
+      { id: 1, universityId: "V-1", year: 2015, color: "Gray", make: "Toyota", model: "Sienna", licensePlate: "ABC1", areaId: 1, condition: { status: "available" } },
+      { id: 2, universityId: "V-2", year: 2022, color: "White", make: "Ford", model: "Transit", licensePlate: "ABC2", areaId: 1, condition: { status: "service_overdue" } },
     ],
     assignees: [],
   };
@@ -1021,8 +1093,9 @@ describe("Feature 18 — Vehicle Status", () => {
 
       const select = await component("Vehicle");
       expect(select.props("items").map(({ title, status }) => [title, status])).toEqual([
-        ["Gray Toyota Sienna (ABC1)", "available"],
-        ["White Ford Transit (ABC2)", "service_overdue"],
+        // UI/UX backlog #37: the same vehicle label as everywhere else.
+        ["V-1 · 2015 Toyota Sienna", "available"],
+        ["V-2 · 2022 Ford Transit", "service_overdue"],
       ]);
 
       select.find(".v-field").trigger("mousedown");
@@ -1043,6 +1116,10 @@ describe("Feature 18 — Vehicle Status", () => {
   const retire = async (data) => {
     vehicleServices.getVehicle.mockResolvedValue({ data });
     await mountAppAt(`/vehicles/${data.id}`);
+    // The vehicle's fields are in the "Edit details" dialog.
+    await waitFor(() => expect(document.body.querySelector('[data-test="edit-vehicle"]')).not.toBeNull());
+    document.body.querySelector('[data-test="edit-vehicle"]').click();
+    await settle();
     await waitFor(() => expect(document.body.querySelector(".vehicle-form__save")).not.toBeNull());
     await choose("Status", "retired");
     document.body.querySelector(".vehicle-form__save").click();
@@ -1050,7 +1127,7 @@ describe("Feature 18 — Vehicle Status", () => {
   };
 
   const confirmDialog = () =>
-    [...document.body.querySelectorAll(".v-overlay--active")].find((overlay) => overlay.textContent.includes("Retire vehicle"));
+    [...document.body.querySelectorAll(".v-overlay--active:not(.v-snackbar)")].find((overlay) => overlay.textContent.includes("Retire vehicle"));
 
   describe("US-18.12 — Warn before retiring a booked vehicle", () => {
     it("When a user retires a vehicle, they're warned about affected requests", async () => {
@@ -1093,7 +1170,8 @@ describe("Feature 18 — Vehicle Status", () => {
       await clickText("Retire Vehicle", confirmDialog());
 
       await waitFor(() => expect(vehicleServices.updateVehicle).toHaveBeenCalledWith("1", expect.objectContaining({ status: "retired" })));
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles"));
+      // Saving keeps you on the vehicle.
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
     });
   });
 

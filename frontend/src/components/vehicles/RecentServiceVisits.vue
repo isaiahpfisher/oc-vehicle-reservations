@@ -1,11 +1,11 @@
 <script setup>
 import { computed } from "vue";
-import SectionCard from "../layout/SectionCard.vue";
 import { formatDay, formatMiles } from "../../models/vehicles.js";
 import { mileageReading, serviceTypeName, userName } from "../../models/serviceLogs.js";
 
 /**
- * Feature 18, US-18.3: the vehicle page's latest service visits. Logs from the same day and odometer reading are one
+ * Feature 18, US-18.3: the vehicle page's latest service visits, as the Service visits tab of its "Work and history"
+ * card. Logs from the same day and odometer reading are one
  * visit, so a visit that logged 14 services is one row. Each row shows the date and who did it on the left, the
  * odometer on the right, and the services as chips (two, then "+N" with the rest in a tooltip).
  */
@@ -53,10 +53,11 @@ const subtitle = computed(() => {
 </script>
 
 <template>
-  <SectionCard title="Service log" :subtitle class="recent-log-card h-100" data-test="recent-service-logs">
-    <template #append>
-      <v-btn variant="text" color="primary" class="oc-cta" @click="$emit('add')">+ New Service Log</v-btn>
-    </template>
+  <div data-test="recent-service-logs">
+    <div class="recent-log-head">
+      <span class="text-body-small text-medium-emphasis">{{ subtitle }}</span>
+      <v-btn variant="text" color="primary" size="small" class="oc-cta" @click="$emit('add')">+ New Service Log</v-btn>
+    </div>
 
     <v-alert v-if="error" type="error" density="compact">{{ error }}</v-alert>
 
@@ -90,28 +91,41 @@ const subtitle = computed(() => {
     </v-list>
 
     <div v-else class="recent-log-empty">
-      <v-icon icon="mdi-wrench-outline" size="28" class="text-medium-emphasis" />
       <div class="text-body-medium font-weight-medium">No services logged yet</div>
       <div class="text-body-small text-medium-emphasis">Until one is, each service is counted as due from the purchase date.</div>
     </div>
 
-    <template #actions>
-      <v-btn variant="text" color="primary" class="oc-cta" append-icon="mdi-arrow-right" :to="{ name: 'service-logs', params: { vehicleId } }">
+    <div class="recent-log-foot">
+      <v-btn
+        variant="text"
+        color="primary"
+        size="small"
+        class="oc-cta"
+        append-icon="mdi-arrow-right"
+        :to="{ name: 'service-logs', params: { vehicleId } }"
+      >
         View all service logs
       </v-btn>
-    </template>
-  </SectionCard>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-/* Side-by-side cards end at the same height, with their footers lined up. */
-.recent-log-card {
+/* The count on the left, adding one on the right; "View all" closes the tab. */
+.recent-log-head,
+.recent-log-foot {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
 }
 
-.recent-log-card :deep(.v-card-text) {
-  flex-grow: 1;
+.recent-log-foot {
+  justify-content: flex-end;
+  margin-top: 4px;
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  padding-top: 4px;
 }
 
 .recent-log-row + .recent-log-row {

@@ -5,8 +5,10 @@
 import db from "../app/models/index.js";
 import request from "supertest";
 import app from "../server.js";
-import { SEED_DESTINATIONS, SEED_DRIVERS, SEED_ISSUE_REPORTS, SEED_MAINTENANCE_NEEDS, SEED_MILEAGE_LOGS, SEED_NOTES, SEED_SERVICE_LOGS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
+import { SEED_DESTINATIONS,
+  SEED_VEHICLE_TYPE_INSTRUCTIONS, SEED_DRIVERS, SEED_ISSUE_REPORTS, SEED_MAINTENANCE_NEEDS, SEED_MILEAGE_LOGS, SEED_NOTES, SEED_SERVICE_LOGS, SEED_SERVICE_TYPES, SEED_VEHICLE_TYPES, SEED_VEHICLES, seed } from "../scripts/seed.mjs";
 import { createUserWithRoles, syncTestDatabase } from "./helpers.js";
+import { unknownVariables } from "../app/helpers/instructionVariables.js";
 
 beforeEach(async () => {
   await syncTestDatabase();
@@ -27,6 +29,14 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     expect(await db.serviceType.count()).toBe(SEED_SERVICE_TYPES.length);
     expect(await db.driver.count()).toBe(SEED_DRIVERS.length);
     expect(await db.destination.count()).toBe(SEED_DESTINATIONS.length);
+    // UI/UX backlog #71: every vehicle type but Truck has a default instruction, and a few areas have their own.
+    expect(await db.vehicleTypeInstruction.count()).toBe(SEED_VEHICLE_TYPE_INSTRUCTIONS.length);
+    expect(await db.vehicleTypeInstruction.count({ where: { areaId: null } })).toBe(SEED_VEHICLE_TYPES.length - 1);
+    // The van instructions show off variables, and every seeded one would pass the API's check.
+    expect(SEED_VEHICLE_TYPE_INSTRUCTIONS.some(({ content }) => content.includes("{{vehicle}}"))).toBe(true);
+    expect(SEED_VEHICLE_TYPE_INSTRUCTIONS.flatMap(({ content }) => unknownVariables(content))).toEqual([]);
+    const truck = await db.vehicleType.findOne({ where: { name: "Truck" }, include: ["vehicleTypeInstructions"] });
+    expect(truck.vehicleTypeInstructions.map(({ areaId }) => areaId === null)).toEqual([false]);
     expect(await db.issueReport.count()).toBe(SEED_ISSUE_REPORTS.length);
     expect(await db.maintenanceNeed.count()).toBe(SEED_MAINTENANCE_NEEDS.length);
     // Feature 13: service logs share their visit's reading in SEED_MILEAGE_LOGS.
@@ -41,10 +51,13 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     }
     expect(new Set(SEED_ISSUE_REPORTS.map(({ status }) => status))).toEqual(new Set(["pending", "resolved", "cancelled", "moved_to_maintenance"]));
 
-    // Enough rows to page through, and every driver status and both kinds of destination.
-    expect(SEED_VEHICLES.length).toBeGreaterThanOrEqual(50);
-    expect(SEED_DRIVERS.length).toBeGreaterThanOrEqual(50);
-    expect(SEED_DESTINATIONS.length).toBeGreaterThanOrEqual(50);
+    // Enough to show every screen without burying it: about one page of each list.
+    expect(SEED_VEHICLES.length).toBeLessThanOrEqual(25);
+    expect(SEED_DRIVERS.length).toBeLessThanOrEqual(15);
+    expect(SEED_DESTINATIONS.length).toBeLessThanOrEqual(25);
+    expect(SEED_ISSUE_REPORTS.length).toBeLessThanOrEqual(10);
+    expect(SEED_MAINTENANCE_NEEDS.length).toBeLessThanOrEqual(10);
+    // Every driver status, both kinds of destination, and both vehicle statuses.
     expect(new Set(SEED_DRIVERS.map(({ status }) => status))).toEqual(new Set(["pending", "approved", "denied", "revoked", "former"]));
     expect(new Set(SEED_DESTINATIONS.map(({ isSaved }) => isSaved))).toEqual(new Set([true, false]));
     expect(new Set(SEED_VEHICLES.map(({ status }) => status))).toEqual(new Set(["active", "retired"]));
@@ -65,7 +78,12 @@ describe("Feature 8 — Vehicle Request Management sample data", () => {
     const marcus = await db.driver.findOne({ where: { lastName: "Bell" } });
     const marcusUser = await db.user.findOne({ where: { email: "marcus.bell@oc.edu" } });
     expect(marcus.userId).toBe(marcusUser.id);
-    expect((await db.driver.findOne({ where: { lastName: "Delgado" } })).userId).toBeNull();
+    expect(marcus.email).toBe("marcus.bell@oc.edu");
+    // Every driver has an email; one without an account has a personal one.
+    const frank = await db.driver.findOne({ where: { lastName: "Delgado" } });
+    expect(frank.userId).toBeNull();
+    expect(frank.email).toBe("frank.delgado@example.com");
+    expect(SEED_DRIVERS.every(({ email }) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))).toBe(true);
 
     // A request made against the old data is gone after re-seeding, and re-seeding gives the same counts.
     const { body: me } = await createUserWithRoles([], { email: "me@eagles.oc.edu" });
@@ -178,11 +196,20 @@ describe("Feature 18 — Vehicle Status sample data", () => {
     expect(statuses.filter((status) => status === "available").length).toBeGreaterThan(vehicles.length / 2);
 
     expect(statusOf["ATH-V01"].status).toBe("out_of_service");
-    expect(statusOf["ATH-M01"].status).toBe("service_due_soon");
+    expect(statusOf["ATH-S01"].status).toBe("service_due_soon");
+    expect(statusOf["FAC-T01"].status).toBe("service_due_soon");
+    expect(statusOf["MUS-C01"].status).toBe("service_overdue");
+    expect(statusOf["STU-B01"].status).toBe("service_overdue");
+    expect(statusOf["THE-T01"].status).toBe("plate_expired");
+    // Its plate runs out in 6 days, so it needs attention before it lapses.
+    expect(statusOf["STU-V01"].status).toBe("plate_expiring");
+    expect(statusOf["ATH-V03"].status).toBe("retired");
     expect(statusOf["MUS-B01"].status).toBe("available");
     expect(statusOf["MUS-V01"].status).toBe("available");
-    expect(statusOf["HON-S01"]).toMatchObject({ status: "available" });
-    expect(statusOf["HON-S01"].services.every(({ lastServicedAt }) => lastServicedAt === null)).toBe(true);
+    expect(statusOf["ADM-S01"]).toMatchObject({ status: "available" });
+    expect(statusOf["ADM-S01"].services.every(({ lastServicedAt }) => lastServicedAt === null)).toBe(true);
+    // ATH-V02's volleyball trip came after its last reading, so its miles are estimated.
+    expect(statusOf["ATH-V02"].mileage.tripCount).toBe(1);
     expect(vehicles.some(({ condition }) => condition.mileage.tripCount > 0)).toBe(true);
 
     const { body: requests } = await request(app).get("/api/requests").set(headers);

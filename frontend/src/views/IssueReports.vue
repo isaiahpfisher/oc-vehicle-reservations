@@ -4,6 +4,7 @@
  * and only the columns that matter, so the table fits without scrolling sideways. Everything else is on the report page.
  */
 import { computed, onMounted, ref, watch } from "vue";
+import { PAGE_SIZES } from "../utils/lists.js";
 import { useDisplay } from "vuetify";
 import issueReportServices from "../services/issueReportServices.js";
 import {
@@ -15,13 +16,11 @@ import {
   statusLabel,
   typeLabel,
 } from "../models/issueReports.js";
-import { useConfirm } from "../composables/useConfirm.js";
 import { useRequest } from "../composables/useRequest.js";
 import { useRoles } from "../composables/useRoles.js";
 import ListState from "../components/common/ListState.vue";
+import NoteCount from "../components/common/NoteCount.vue";
 import PageShell from "../components/layout/PageShell.vue";
-
-const ITEMS_PER_PAGE = 10;
 
 const { hasAnyRole, user } = useRoles();
 const canManage = computed(() => hasAnyRole(["admin", "area_admin"]));
@@ -32,7 +31,8 @@ const { smAndDown } = useDisplay();
 const headers = computed(() => [
   { title: "Issue", key: "description" },
   { title: "Vehicle", key: "vehicleName", width: 120, nowrap: true },
-  { title: "Status", key: "statusText", width: 136, nowrap: true },
+  // Wide enough for the longest chip ("Moved to maintenance", icon included) so it never crops.
+  { title: "Status", key: "statusText", width: 216, nowrap: true },
   { title: "Reported", key: "createdAt", width: 136, nowrap: true },
   { title: "Actions", key: "actions", sortable: false, align: "end", width: canManage.value ? 104 : 72, nowrap: true },
 ]);
@@ -59,7 +59,8 @@ const loadReports = () => {
 };
 
 const search = ref("");
-const statusFilter = ref(null);
+// Pending first: those still need someone. Clearing the filter (or "Clear filters") shows every status.
+const statusFilter = ref("pending");
 const typeFilter = ref(null);
 const page = ref(1);
 const sortBy = ref([{ key: "createdAt", order: "desc" }]);
@@ -98,6 +99,8 @@ const filtered = computed(() => {
 });
 
 const filtering = computed(() => !!search.value?.trim() || !!statusFilter.value || !!typeFilter.value);
+/** Only the starting Pending filter is on, so an empty list means nothing's waiting, not a search that missed. */
+const onlyPending = computed(() => statusFilter.value === "pending" && !search.value?.trim() && !typeFilter.value);
 
 const clearFilters = () => {
   search.value = "";
@@ -113,22 +116,6 @@ watch([search, statusFilter, typeFilter], () => {
 const formatDay = (value) =>
   value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
 
-const confirmDelete = useConfirm();
-
-const deleteIssueReport = async (report) => {
-  const deleted = await confirmDelete({
-    title: "Delete issue report",
-    message: `Delete "${report.description}"? This action is permanent.`,
-    confirmText: "Delete",
-    confirmColor: "error",
-    onConfirm: () => issueReportServices.removeIssueReport(report.id),
-  });
-
-  if (deleted) {
-    await loadReports();
-  }
-};
-
 onMounted(loadReports);
 </script>
 
@@ -138,46 +125,46 @@ onMounted(loadReports);
       <v-btn color="primary" variant="elevated" class="oc-cta" :to="{ name: 'issueReportCreate' }">+ New Issue Report</v-btn>
     </template>
 
-    <v-row density="comfortable" class="mb-2" data-test="filters">
-      <v-col cols="12" md="6">
-        <v-text-field
-          v-model="search"
-          label="Search"
-          placeholder="Description, vehicle, person, or trip"
-          prepend-inner-icon="mdi-magnify"
-          density="comfortable"
-          clearable
-          hide-details
-          data-test="search"
-        />
-      </v-col>
-      <v-col cols="6" md="3">
-        <v-select
-          v-model="statusFilter"
-          :items="statusOptions"
-          label="Status"
-          placeholder="All statuses"
-          persistent-placeholder
-          density="comfortable"
-          clearable
-          hide-details
-          data-test="status-filter"
-        />
-      </v-col>
-      <v-col cols="6" md="3">
-        <v-select
-          v-model="typeFilter"
-          :items="typeOptions"
-          label="Type"
-          placeholder="All types"
-          persistent-placeholder
-          density="comfortable"
-          clearable
-          hide-details
-          data-test="type-filter"
-        />
-      </v-col>
-    </v-row>
+    <div class="oc-list-toolbar" data-test="filters">
+      <v-text-field
+        v-model="search"
+        placeholder="Search by description, vehicle, person, or trip"
+        aria-label="Search issue reports"
+        prepend-inner-icon="mdi-magnify"
+        variant="outlined"
+        density="compact"
+        clearable
+        hide-details
+        class="oc-list-search"
+        data-test="search"
+      />
+      <v-select
+        v-model="statusFilter"
+        :items="statusOptions"
+        label="Status"
+        placeholder="All statuses"
+        persistent-placeholder
+        variant="outlined"
+        density="compact"
+        clearable
+        hide-details
+        class="oc-list-filter"
+        data-test="status-filter"
+      />
+      <v-select
+        v-model="typeFilter"
+        :items="typeOptions"
+        label="Type"
+        placeholder="All types"
+        persistent-placeholder
+        variant="outlined"
+        density="compact"
+        clearable
+        hide-details
+        class="oc-list-filter"
+        data-test="type-filter"
+      />
+    </div>
 
     <!-- Outside ListState so "Clear filters" stays reachable when nothing matches. -->
     <div
@@ -196,18 +183,21 @@ onMounted(loadReports);
       :error
       :empty="!issueReports.length"
       :no-results="!filtered.length"
-      empty-title="No issue reports yet. Create your first issue report."
-      empty-icon="mdi-alert-circle-outline"
-      no-results-title="No issue reports match"
-      no-results-text="Try other words, or clear the filters."
+      empty-title="No issue reports"
+      empty-text="Problems reported with vehicles show up here."
+      empty-art="maintenance"
+      :no-results-title="onlyPending ? 'No pending issue reports' : 'No issue reports match'"
+      :no-results-text="onlyPending ? 'Everything reported has been handled. Clear the filters to see past reports.' : 'Try other words, or clear the filters.'"
     >
+      <template #empty-actions>
+        <v-btn color="primary" variant="elevated" class="oc-cta" :to="{ name: 'issueReportCreate' }">+ New Issue Report</v-btn>
+      </template>
       <v-data-table
         v-model:page="page"
         v-model:sort-by="sortBy"
         :headers="headers"
         :items="filtered"
-        :items-per-page="ITEMS_PER_PAGE"
-        :items-per-page-options="[ITEMS_PER_PAGE]"
+        :items-per-page-options="PAGE_SIZES"
         must-sort
         item-value="id"
         hover
@@ -228,6 +218,7 @@ onMounted(loadReports);
                   </router-link>
                   <div class="text-body-small text-medium-emphasis text-truncate">
                     {{ typeLabel(item.type) }} · {{ personName(item.author) }}
+                <NoteCount :record="item" class="ml-1" />
                   </div>
                   <div class="d-flex align-center flex-wrap ga-2 mt-2 text-body-small text-medium-emphasis">
                     <v-chip
@@ -245,17 +236,24 @@ onMounted(loadReports);
                   </div>
                 </div>
                 <div class="d-flex flex-column align-end flex-shrink-0">
-                  <v-btn
-                    v-if="!canManage"
+                  <v-tooltip v-if="!canManage" text="View issue report" location="top">
+                    <template #activator="{ props: tooltip }">
+                      <v-btn v-bind="tooltip"
+                   
                     icon="mdi-eye-outline"
                     size="small"
                     variant="text"
                     aria-label="View issue report"
                     :to="reportPage(item)"
                   />
+                    </template>
+                  </v-tooltip>
                   <template v-else>
-                    <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit issue report" :to="reportPage(item)" />
-                    <v-btn icon="mdi-delete" size="small" variant="text" aria-label="Delete issue report" @click="deleteIssueReport(item)" />
+                    <v-tooltip text="Edit issue report" location="top">
+                      <template #activator="{ props: tooltip }">
+                        <v-btn v-bind="tooltip" icon="mdi-pencil" size="small" variant="text" aria-label="Edit issue report" :to="reportPage(item)" />
+                      </template>
+                    </v-tooltip>
                   </template>
                 </div>
               </div>
@@ -274,6 +272,7 @@ onMounted(loadReports);
               </router-link>
               <div class="text-body-small text-medium-emphasis text-truncate">
                 {{ typeLabel(item.type) }} · {{ personName(item.author) }}
+                <NoteCount :record="item" class="ml-1" />
               </div>
             </div>
           </div>
@@ -292,23 +291,24 @@ onMounted(loadReports);
         <template #[`item.createdAt`]="{ item }">{{ formatDay(item.createdAt) }}</template>
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-1">
-            <v-btn
-              v-if="!canManage"
+            <v-tooltip v-if="!canManage" text="View issue report" location="top">
+              <template #activator="{ props: tooltip }">
+                <v-btn v-bind="tooltip"
+             
               icon="mdi-eye-outline"
               size="small"
               variant="text"
               aria-label="View issue report"
               :to="reportPage(item)"
             />
+              </template>
+            </v-tooltip>
             <template v-if="canManage">
-              <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Edit issue report" :to="reportPage(item)" />
-              <v-btn
-                icon="mdi-delete"
-                size="small"
-                variant="text"
-                aria-label="Delete issue report"
-                @click="deleteIssueReport(item)"
-              />
+              <v-tooltip text="Edit issue report" location="top">
+                <template #activator="{ props: tooltip }">
+                  <v-btn v-bind="tooltip" icon="mdi-pencil" size="small" variant="text" aria-label="Edit issue report" :to="reportPage(item)" />
+                </template>
+              </v-tooltip>
             </template>
           </div>
         </template>

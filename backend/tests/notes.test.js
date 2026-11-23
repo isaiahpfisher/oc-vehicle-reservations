@@ -466,3 +466,39 @@ describe("Feature 14 — Notes", () => {
     });
   });
 });
+
+// UI/UX backlog #73: list rows say how many notes a record has (that the viewer may read) and when the latest came.
+describe("UI/UX backlog #73 — Note counts on lists", () => {
+  const list = (user, path, query = {}) => request(app).get(path).query(query).set(bearer(user.token));
+  const byId = (rows, id) => rows.find((row) => row.id === id);
+
+  it("counts a request's notes, leaving hidden notes out for the requester", async () => {
+    const { requester, areaAdmin } = world;
+    await addNote({ vehicleRequestId: world.ownRequest.id, authorId: requester.userId, createdAt: new Date("2026-10-01T12:00:00Z") });
+    await addNote({ vehicleRequestId: world.ownRequest.id, authorId: areaAdmin.userId, createdAt: new Date("2026-10-03T12:00:00Z") });
+    await addNote({ vehicleRequestId: world.ownRequest.id, authorId: areaAdmin.userId, isVisible: false });
+
+    const mine = await list(requester, "/api/me/requests");
+    expect(mine.status).toBe(200);
+    expect(byId(mine.body, world.ownRequest.id)).toMatchObject({ noteCount: 2, lastNoteAt: "2026-10-03T12:00:00.000Z" });
+
+    const managed = await list(areaAdmin, "/api/requests");
+    expect(byId(managed.body, world.ownRequest.id).noteCount).toBe(3);
+  });
+
+  it("counts issue report and maintenance need notes, and is zero with none", async () => {
+    const { requester, admin, maintenance } = world;
+    await addNote({ issueReportId: world.ownReport.id, authorId: requester.userId });
+    await addNote({ maintenanceNeedId: world.athleticsNeed.id, authorId: maintenance.userId });
+    await addNote({ maintenanceNeedId: world.athleticsNeed.id, authorId: admin.userId, isVisible: false });
+
+    const reports = await list(admin, "/api/issue-reports");
+    expect(byId(reports.body, world.ownReport.id).noteCount).toBe(1);
+    expect(byId(reports.body, world.musicReport.id)).toMatchObject({ noteCount: 0, lastNoteAt: null });
+
+    const needs = await list(maintenance, "/api/maintenance-needs");
+    expect(needs.status).toBe(200);
+    expect(byId(needs.body, world.athleticsNeed.id).noteCount).toBe(2);
+    expect(byId(needs.body, world.musicNeed.id).noteCount).toBe(0);
+  });
+});

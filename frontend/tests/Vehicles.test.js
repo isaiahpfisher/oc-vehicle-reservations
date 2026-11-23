@@ -10,7 +10,7 @@ import apiClient from "../src/services/services.js";
 import areaServices from "../src/services/areaServices.js";
 import vehicleServices from "../src/services/vehicleServices.js";
 import vehicleTypeServices from "../src/services/vehicleTypeServices.js";
-import { signInAs, vuetify } from "./testUtils.js";
+import { chooseMoreAction, signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -258,27 +258,45 @@ describe("Feature 5 — Vehicles", () => {
       });
     });
 
+    // UI/UX backlog #46: the empty state offers to create a vehicle only to people who can.
+    it("Vehicles empty state offers to create a vehicle, but not to maintenance", async () => {
+      signIn();
+      await mountAppAt("/vehicles");
+      const emptyState = () => document.body.querySelector('[data-test="list-empty"]');
+      await waitFor(() => expect(emptyState()?.textContent).toContain("+ New Vehicle"));
+      expect(emptyState().textContent).toContain("Add a vehicle and it's ready to assign to trips.");
+      wrapper.unmount();
+      document.body.innerHTML = "";
+
+      roles = [{ id: 3, role: "maintenance", areaId: null, area: null }];
+      signInAs({ ...signedInUser, roles });
+      await mountAppAt("/vehicles");
+      await waitFor(() => expect(emptyState()?.textContent).toContain("Vehicles in your areas will show here."));
+      expect(emptyState().textContent).not.toContain("+ New Vehicle");
+    });
+
     it("Vehicles empty state", async () => {
       signIn();
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No vehicles yet. Create your first vehicle.");
+        expect(document.body.textContent).toContain("No vehicles yet");
       });
     });
   });
 
   describe("US-5.3 — Manage vehicle rows", () => {
-    it("Vehicle rows have edit and delete actions", async () => {
+    // UI/UX backlog #36: rows keep edit; delete moved to the vehicle page's ⋮ menu.
+    it("Vehicle rows have an edit action, and no delete", async () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle] });
       await mountAppAt("/vehicles");
 
       await waitFor(() => {
         expect(document.body.querySelector('[aria-label="Edit vehicle"]')).toBeTruthy();
-        expect(document.body.querySelector('[aria-label="Delete vehicle"]')).toBeTruthy();
-        const make = [...document.body.querySelectorAll("td")].find((cell) => cell.textContent.trim() === "Toyota");
-        expect(make?.querySelector("a")).toBeNull();
+        expect(document.body.querySelector('[aria-label="Delete vehicle"]')).toBeNull();
+        // UI/UX backlog #35/#37: the University ID leads the row and opens the vehicle.
+        expect(document.body.querySelector(`tbody a[href="/vehicles/${vehicle.id}"]`)?.textContent.trim()).toBe(vehicle.universityId);
       });
     });
 
@@ -314,6 +332,24 @@ describe("Feature 5 — Vehicles", () => {
       });
     });
 
+    // A plate that runs out within 30 days needs renewing before it lapses, so it's flagged and counted.
+    it("A plate expiring soon gets a yellow chip and counts as needing attention", async () => {
+      signIn();
+      vehicleServices.getVehicles.mockResolvedValue({
+        data: [withStatus("plate_expiring", { licensePlateExpirationDate: "2099-01-01" }), withStatus("available", { id: 2, make: "Honda" })],
+      });
+      await mountAppAt("/vehicles");
+
+      await waitFor(() => expect(document.body.textContent).toContain("Plate Expiring"));
+      expect(chips("warning")).toHaveLength(1);
+      const attention = document.body.querySelector('[data-test="needs-attention"]');
+      expect(attention.textContent).toContain("1");
+      attention.click();
+      await settle();
+      await waitFor(() => expect(document.body.querySelectorAll(".v-data-table tbody tr")).toHaveLength(1));
+      expect(document.body.querySelector(".v-data-table tbody").textContent).toContain("Plate Expiring");
+    });
+
     it("Vehicle rows with red chip", async () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({
@@ -339,6 +375,10 @@ describe("Feature 5 — Vehicles", () => {
       await settle();
 
       await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
+      // The page shows the details; their fields are in the "Edit details" dialog.
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-details"]')).not.toBeNull());
+      document.body.querySelector('[data-test="edit-vehicle"]').click();
+      await settle();
       await expectVehicleFields();
     });
 
@@ -352,28 +392,82 @@ describe("Feature 5 — Vehicles", () => {
       await settle();
 
       await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
+      // The page shows the details; their fields are in the "Edit details" dialog.
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-details"]')).not.toBeNull());
+      document.body.querySelector('[data-test="edit-vehicle"]').click();
+      await settle();
       await expectVehicleFields();
       const area = await selectField("Area");
       expect(area.props("items")).toEqual([{ title: "Athletics", value: 1 }]);
     });
 
+    // UI/UX backlog #36: from the vehicle page's ⋮ menu, then back to the list.
     it("Admin user deletes a vehicle", async () => {
       signIn();
       const response = { status: 200, data: { message: "Vehicle deleted successfully." } };
       vehicleServices.removeVehicle.mockResolvedValue(response);
-      vehicleServices.getVehicles.mockResolvedValueOnce({ data: [vehicle] }).mockResolvedValue({ data: [] });
-      await mountAppAt("/vehicles");
+      vehicleServices.getVehicles.mockResolvedValue({ data: [] });
+      await mountAppAt(`/vehicles/${vehicle.id}`);
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete vehicle"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete vehicle"]').click();
-      await settle();
+      await chooseMoreAction("delete-vehicle");
       await clickNamed("Delete");
 
-      await waitFor(() => expect(vehicleServices.removeVehicle).toHaveBeenCalledWith(1));
+      await waitFor(() => expect(vehicleServices.removeVehicle).toHaveBeenCalledWith("1"));
       expect(response.status).toBe(200);
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No vehicles yet. Create your first vehicle.");
+        expect(router.currentRoute.value.name).toBe("vehicles");
+        expect(document.body.textContent).toContain("No vehicles yet");
       });
+      // UI/UX backlog #48: the app-wide toast says it happened.
+      await waitFor(() => expect(document.body.querySelector('[data-test="app-notice"]')?.textContent).toContain("Vehicle deleted."));
+    });
+  });
+
+  // An area's card on the Areas page links to `/vehicles?area=<name>`, which starts the list filtered to that area.
+  describe("Areas link — vehicles filtered by area", () => {
+    it("starts filtered to the area in the link, with the filter shown", async () => {
+      signIn();
+      vehicleServices.getVehicles.mockResolvedValue({
+        data: [vehicle, { ...vehicle, id: 2, areaId: areas[1].id, universityId: "V-200" }],
+      });
+      await mountAppAt(`/vehicles?area=${encodeURIComponent(areas[1].name)}`);
+
+      await waitFor(() => {
+        const ids = [...document.body.querySelectorAll("tbody tr")].map((row) => row.textContent);
+        expect(ids).toHaveLength(1);
+        expect(ids[0]).toContain("V-200");
+      });
+      const areaFilter = wrapper.findAllComponents({ name: "VSelect" }).find((field) => field.props("label") === "Area");
+      expect(areaFilter.props("modelValue")).toBe(areas[1].name);
+      // The panel stays closed; the Filters button's count says one is on.
+      expect(document.body.querySelector('[data-test="toggle-filters"]').getAttribute("aria-expanded")).toBe("false");
+      expect(document.body.querySelector('[data-test="toggle-filters"]').textContent).toContain("1");
+    });
+  });
+
+  // Service Types links its "overdue" counts here as `?service=<name>&due=overdue`.
+  describe("Service Types link — vehicles due for a service", () => {
+    it("lists only the vehicles due for that service, with a chip to clear it", async () => {
+      signIn();
+      const oil = (state) => ({ ...vehicle.condition, services: [{ serviceType: { id: 1, name: "Oil Change" }, state }] });
+      vehicleServices.getVehicles.mockResolvedValue({
+        data: [
+          { ...vehicle, condition: oil("overdue") },
+          { ...vehicle, id: 2, universityId: "V-200", condition: oil("ok") },
+          { ...vehicle, id: 3, universityId: "V-300", status: "retired", condition: oil("overdue") },
+        ],
+      });
+      await mountAppAt("/vehicles?service=Oil%20Change&due=overdue");
+
+      await waitFor(() => expect(document.body.querySelectorAll("tbody tr")).toHaveLength(1));
+      expect(document.body.querySelector("tbody tr").textContent).toContain(vehicle.universityId);
+      const chip = document.body.querySelector('[data-test="service-due-filter"]');
+      expect(chip.textContent).toContain("Overdue: Oil Change");
+
+      chip.querySelector("button, .v-chip__close").click();
+      await settle();
+      await waitFor(() => expect(document.body.querySelectorAll("tbody tr")).toHaveLength(3));
+      await waitFor(() => expect(router.currentRoute.value.query.service).toBeUndefined());
     });
   });
 
@@ -469,14 +563,16 @@ describe("Feature 5 — Vehicles", () => {
 
       await waitFor(() => {
         expect(router.currentRoute.value.path).toBe("/vehicles/1");
-        const fields = wrapper.findAllComponents({ name: "VTextField" });
-        expect(fields.length).toBeGreaterThan(0);
-        expect(fields.every((field) => field.props("disabled"))).toBe(true);
-        expect(wrapper.findAllComponents({ name: "VSelect" }).every((field) => field.props("disabled"))).toBe(true);
+        // UI/UX backlog #63: read-only details are text, not disabled inputs.
+        expect(document.body.querySelector('[data-test="vehicle-details"]')?.textContent).toContain(vehicle.universityId);
       });
+      expect(wrapper.findAllComponents({ name: "VTextField" }).some((field) => field.props("label") === "Make")).toBe(false);
       expect(document.body.querySelector("button.vehicle-form__save")).toBeNull();
-      expect(document.body.textContent).toContain("Mileage log");
-      expect(document.body.textContent).toContain("Service log");
+      // UI/UX backlog #36: no ⋮ menu (and so no delete) for someone who can't edit the vehicle.
+      expect(document.body.querySelector('[data-test="more-actions"]')).toBeNull();
+      // The logs are tabs of the Work and history card, and maintenance users can still add to them.
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-work-tab-mileage"]')).not.toBeNull());
+      expect(document.body.querySelector('[data-test="vehicle-work-tab-service"]').textContent).toContain("Service visits");
       expect(document.body.textContent).toContain("+ New Service Log");
     });
 

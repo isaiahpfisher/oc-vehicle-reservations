@@ -4,7 +4,8 @@ const dateOnly = (value) => new Date(value).toISOString().slice(0, 10);
 
 /** Sequelize `include` that loads everything a vehicle request response shows. */
 export const requestInclude = () => [
-  { model: db.area, as: "area", attributes: ["id", "name"] },
+  // UI/UX backlog #66: the logo, so the trip page can show whose trip it is.
+  { model: db.area, as: "area", attributes: ["id", "name", "logo"] },
   { model: db.user, as: "user", attributes: ["id", "firstName", "lastName", "email"] },
   { model: db.user, as: "approver", attributes: ["id", "firstName", "lastName"] },
   {

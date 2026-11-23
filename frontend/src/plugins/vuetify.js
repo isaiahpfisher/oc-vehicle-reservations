@@ -81,6 +81,11 @@ const vuetify = createVuetify({
     VDialog: {
       scrim: true,
     },
+    // UI/UX backlog #52: on phones (below `sm`), every table stacks each row as label / value pairs instead of
+    // scrolling sideways. A table with its own phone layout (issue reports) sets `mobile` itself.
+    VDataTable: {
+      mobileBreakpoint: "sm",
+    },
   },
   icons: { defaultSet: "mdi" },
 });

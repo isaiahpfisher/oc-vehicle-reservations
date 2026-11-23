@@ -109,24 +109,39 @@ Then set `DEV_LOGIN=true` in your `.env`, restart the backend, and use the **Dev
 | `multirole@oc.edu` | Maintenance, Area Admin — Music, Area Admin — Theatre |
 | `requester@oc.edu` | none (requester) |
 
-The seed also adds about 150 staff and students across ten areas, with at least one area admin per area; see `backend/scripts/seed.mjs`.
+The seed data is small and hand-written: enough to show every screen, status, and warning, and about one page of each list. Dates are offsets from the day you seed, so it always looks current. Besides the test accounts above, it adds:
 
-It also replaces vehicle types, vehicles, service types, drivers, destinations, and vehicle requests with enough sample data to try searching, filtering, paging, and the calendar: about 80 vehicles, 75 drivers (every status, plus expired and soon-to-expire licenses), 60 destinations (a few unofficial), 14 service types, and 300 requests across every area and status, dated from four months before to four months after the day you seed (`requester@oc.edu` owns about 15). It adds the fleet's day-to-day records too: 32 issue reports and 15 maintenance needs (mileage and service history is described below). It also adds about 65 notes in short threads on requests (including `requester@oc.edu`'s), issue reports, and maintenance needs, some marked staff only. The data comes from a fixed random seed, so every run gives the same rows.
+| What | How many | Highlights |
+| ---- | -------- | ---------- |
+| Areas | 6 | Every area has an area admin; Athletics has three |
+| Users | 28 | The test accounts, the project team, and a few staff and students |
+| Vehicle types | 6 | Truck has only Theatre's instructions, so it shows the "No default instructions" warning |
+| Service types | 4 | Schedules by miles and days, by miles only, and by days only |
+| Vehicles | 19 | Every status: available, due soon, overdue, plate expired, out of service, retired |
+| Drivers | 13 | Every status, an expired license, one expiring in 12 days, and two without an account |
+| Destinations | 19 | Three are custom stops typed on a request |
+| Requests | 31 | Every area and status, from about six weeks ago to six weeks out; `requester@oc.edu` has 5 |
+| Issue reports and maintenance needs | 8 and 6 | Every type, status, and priority; two needs came from reports |
+| Mileage and service history | 56 readings, 81 services | Oil and inspection visits, several in the last few weeks |
+| Notes | 18 | Short threads on requests, reports, and needs, some staff only |
 
-Every vehicle also gets an odometer history and a recent service visit that logs every service type (about 170 mileage logs and 1,100 service logs; each completed maintenance need is closed out by a service log), so about two thirds of the fleet is **Available** and the rest is due soon, overdue, out of service, plate expired, or retired. These rows are pinned so each vehicle status warning has an example (Feature 18):
+These rows each have a story (Feature 18):
 
 | Where to look | What it shows |
 | ------------- | ------------- |
-| `ATH-V01`, request **Track meet at Oklahoma State** | Out of service, and reserved for a trip in 3 days |
-| `ATH-M01`, request **Soccer match at Southern Nazarene** | Service due soon by date, coming due before the trip |
+| `ATH-V01`, request **Track meet at Oklahoma State** | Out of service (brakes), and reserved for a trip in 3 days |
+| `ATH-S01`, request **Soccer match at Southern Nazarene** | Oil change due soon by date, coming due before the trip |
 | `MUS-B01`, request **Choir tour: Abilene and Lubbock** | Available, but the trip's miles pass its next oil change |
-| `STU-V01`, request **International student airport run** (7 days out) | License plate expires before the trip |
-| `ATH-V06`, request **Cross country meet at UCO** | Retired, still assigned to an upcoming trip |
+| `STU-V01`, request **International student airport run** | License plate expires before the trip |
+| `ATH-V03`, request **Cross country meet at UCO** | Retired, still assigned to an upcoming trip |
 | `ATH-C01`, requests **Recruiting dinner in Norman** and **Coaching clinic at Oklahoma State** | Booked for two overlapping trips |
+| `STU-B01`, request **Outing to the Oklahoma City Zoo** | Overdue for service by date, on a trip today |
 | Request **Honor choir clinic in Tulsa** | Driver's license expires before the trip ends |
-| `HON-S01` | Bought this month and never serviced |
+| `MUS-C01` / `FAC-T01` / `THE-T01` | Overdue by miles / due soon by miles / plate expired |
+| `ADM-S01` | Bought this month and never serviced |
+| `THE-V01`, need **Brake pedal feels soft** | A maintenance need closed out by a service visit |
 
-Request mileage is estimated from the seed destinations' coordinates, so seeding makes no Google calls. Add `-- --google` to estimate it with Google Routes instead; that makes one billed call per request (about 300).
+Request mileage is estimated from the seed destinations' coordinates, so seeding makes no Google calls. Add `-- --google` to estimate it with Google Routes instead; that makes one billed call per request (31).
 
 ## Branching
 

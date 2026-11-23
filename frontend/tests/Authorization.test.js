@@ -121,6 +121,23 @@ describe("Feature 3 — User Role Management UI", () => {
       expect(app.router.currentRoute.value.name).toBe("home");
     });
 
+    // UI/UX backlog #17: being sent home says why, and the notice doesn't stick to the URL.
+    it("Explains a redirect home from a page the user can't open, or one that doesn't exist", async () => {
+      await pageLoad(storedUser([athleticsAdmin]));
+      await openApp("/");
+
+      await app.router.push("/users/5");
+      await settle();
+      expect(app.router.currentRoute.value.name).toBe("home");
+      await waitFor(() => expect(document.body.textContent).toContain("You don't have access to that page."));
+      await waitFor(() => expect(app.router.currentRoute.value.query).toEqual({}));
+
+      await app.router.push("/no-such-page");
+      await settle();
+      await waitFor(() => expect(document.body.textContent).toContain("That page doesn't exist."));
+      await waitFor(() => expect(app.router.currentRoute.value.query).toEqual({}));
+    });
+
     it("Navigation hides unauthorized links", async () => {
       await pageLoad(storedUser([]));
       await openApp("/");
@@ -186,6 +203,22 @@ describe("Feature 3 — User Role Management UI", () => {
 
       expect(app.router.currentRoute.value.name).toBe("areaOrMaintenance");
       expect(wrapper.text()).toContain("Shared page");
+    });
+
+    // UI/UX backlog #28: `meta.notForOnly` keeps maintenance-only users off issue reports; another role lets them in.
+    it("meta.notForOnly blocks users whose only role is maintenance", async () => {
+      await pageLoad(storedUser([maintenance]));
+      await openApp("/");
+
+      await app.router.push({ name: "issue-reports" });
+      await settle();
+      expect(app.router.currentRoute.value.name).toBe("home");
+
+      await pageLoad(storedUser([maintenance, athleticsAdmin]));
+      await openApp("/");
+      await app.router.push({ name: "issue-reports" });
+      await settle();
+      expect(app.router.currentRoute.value.name).toBe("issue-reports");
     });
 
     it("Routes without meta.roles are open to every signed-in user", async () => {

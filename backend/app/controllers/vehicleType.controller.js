@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import db from "../models/index.js";
 import logger from "../config/logger.js";
+import { listText } from "../helpers/text.js";
 import { parseId, requiredText } from "../helpers/fields.js";
 
 const exports = {};
@@ -181,14 +182,43 @@ exports.remove = async (req, res) => {
       return res.status(404).send({ message: `Vehicle type with id=${vehicleTypeId} not found.` });
     }
 
-    const vehicleCount = await db.vehicle.count({ where: { vehicleTypeId } });
-    if (vehicleCount > 0) {
+    // UI/UX backlog #33: `?moveVehiclesTo=<type id>` moves this type's vehicles there as part of the delete.
+    const moveTo = req.query.moveVehiclesTo;
+    let target = null;
+    if (moveTo !== undefined && String(moveTo).trim() !== "") {
+      const targetId = parseId(moveTo);
+      target = targetId === null || targetId === vehicleTypeId ? null : await db.vehicleType.findByPk(targetId);
+      if (!target) {
+        return res.status(400).send({ message: "Choose another existing vehicle type to move the vehicles to." });
+      }
+    }
+
+    const vehicles = await db.vehicle.findAll({ where: { vehicleTypeId }, attributes: ["id", "universityId", "identifier"] });
+    if (vehicles.length > 0 && !target) {
       return res.status(400).send({
         message: "Vehicle type has vehicles. Delete vehicles or reassign them to a different vehicle type first.",
       });
     }
 
-    await db.vehicleType.destroy({ where: { id: vehicleTypeId } });
+    // A VIN type needs real VINs; a serial number can't move there.
+    if (target?.identifier === "VIN") {
+      const notVins = vehicles.filter(({ identifier }) => !/^[A-HJ-NPR-Z0-9]{17}$/i.test(identifier)).map(({ universityId }) => universityId);
+      if (notVins.length) {
+        return res.status(400).send({
+          message: `${target.name} vehicles need a VIN, and ${listText(notVins)} ${notVins.length === 1 ? "doesn't have one" : "don't have one"}.`,
+        });
+      }
+    }
+
+    // UI/UX backlog #4: a type's pickup/return instructions (Feature 15) mean nothing without it, so they go with it
+    // instead of the foreign key failing the delete.
+    await db.sequelize.transaction(async (transaction) => {
+      if (target) {
+        await db.vehicle.update({ vehicleTypeId: target.id }, { where: { vehicleTypeId }, transaction });
+      }
+      await db.vehicleTypeInstruction.destroy({ where: { vehicleTypeId }, transaction });
+      await db.vehicleType.destroy({ where: { id: vehicleTypeId }, transaction });
+    });
 
     return res.status(200).send({ message: "Vehicle type deleted successfully." });
   } catch (err) {

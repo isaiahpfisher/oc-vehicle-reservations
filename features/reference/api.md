@@ -138,6 +138,7 @@ Success body: `{ "id", "vehicleTypeId", "areaId", "content", "vehicleType", "are
 | `areaId` is not an integer | `400` | `{ "message": "Invalid area id." }` |
 | Area id does not exist | `404` | `{ "message": "Area not found." }` |
 | Missing or whitespace-only `content` | `400` | `{ "message": "Missing instruction message." }` |
+| `content` has a `{{name}}` that isn't one of the variables (`trip`, `pickup_time`, `return_time`, `vehicle`, `driver_first_name`, `area_admins`) | `400` | `{ "message": "Unknown variable {{name}}." }` (the first one) |
 | Same vehicle type and area already has an instruction | `400` | `{ "message": "An instruction for this vehicle type and area already exists." }` |
 | `:vehicleTypeInstructionId` is not an integer | `400` | `{ "message": "Invalid vehicle type instruction id." }` |
 | Instruction id does not exist | `404` | `{ "message": "Vehicle type instruction with id=… not found." }` |
@@ -158,7 +159,7 @@ Every vehicle route requires a Bearer token. `GET` allows `admin`, `area_admin`,
 
 | Field | Shape |
 | ----- | ----- |
-| `status` | The first that applies: `retired`, `out_of_service`, `service_overdue`, `plate_expired`, `service_due_soon`, `available` (FR-002) |
+| `status` | The first that applies: `retired`, `out_of_service`, `service_overdue`, `plate_expired`, `service_due_soon`, `plate_expiring` (good through its date, but expiring within 30 days), `available` (FR-002) |
 | `reasons` | Every reason that applies, in that order: `[{ status, message }]`, e.g. `{ "status": "service_overdue", "message": "Oil Change is overdue by 1,000 mi." }` |
 | `mileage` | `{ miles, reading, tripMiles, tripCount, unknownTripCount }`. `reading` is the latest mileage log `{ odometerReading, recordedAt }` or `null` (then the vehicle starts at 0). Trips are ended, not cancelled or denied, and started after the reading's date (FR-003) |
 | `services` | One per service type, by name: `{ serviceType: { id, name, frequencyDays, frequencyMiles }, lastServicedAt, lastServiceMiles, dueDate, dueMiles, daysLeft, milesLeft, state }`. `state` is `overdue`, `due_soon` (500 mi / 14 days or fewer), `ok`, or `never_due` (no frequency) (FR-004) |
@@ -205,11 +206,11 @@ Every route requires a Bearer token. Every route except `GET /api/drivers/select
 | `PUT` | `/api/drivers/:driverId` | Admin or area admin | `200` with the updated driver. A field omitted from the body keeps its stored value. A blank `userId` unlinks the user. |
 | `DELETE` | `/api/drivers/:driverId` | Admin or area admin | `200` `{ "message": "Driver deleted successfully." }`. `400` while a vehicle request uses the driver (Feature 8). |
 
-Create body: `{ "userId", "firstName", "lastName", "phoneNumber", "licenseState", "licenseExpirationDate", "status" }`. The same keys are accepted with underscores (`user_id`, `first_name`). `userId` is optional. A blank `status` is saved as `pending`.
+Create body: `{ "userId", "firstName", "lastName", "email", "phoneNumber", "licenseState", "licenseExpirationDate", "status" }`. The same keys are accepted with underscores (`user_id`, `first_name`). `userId` is optional. A blank `status` is saved as `pending`.
 
 `approvedAt` is set by the server and ignored in request bodies: the current time when `status` becomes `approved`, and `null` when it changes to anything else.
 
-Success body: `{ "id", "userId", "firstName", "lastName", "phoneNumber", "licenseState", "licenseExpirationDate", "status", "approvedAt", "createdAt", "updatedAt" }`.
+Success body: `{ "id", "userId", "firstName", "lastName", "email", "phoneNumber", "licenseState", "licenseExpirationDate", "status", "approvedAt", "createdAt", "updatedAt" }`.
 
 | Condition | Status | Body |
 | --------- | ------ | ---- |
@@ -218,8 +219,10 @@ Success body: `{ "id", "userId", "firstName", "lastName", "phoneNumber", "licens
 | Unknown or non-integer `userId` | `400` | `{ "message": "User does not exist." }` |
 | `userId` linked to another driver | `400` | `{ "message": "User is already linked to a driver." }` |
 | `phoneNumber` used by another driver | `400` | `{ "message": "Phone number already taken." }` |
-| Missing or whitespace-only first name, last name, phone number, license state, or expiration date | `400` | `{ "message": "Missing first name." }` and the matching message for that field |
+| Missing or whitespace-only first name, last name, email, phone number, license state, or expiration date | `400` | `{ "message": "Missing first name." }` and the matching message for that field |
 | First or last name longer than 255 characters after trim | `400` | `{ "message": "First name too long." }` or `{ "message": "Last name too long." }` |
+| Email not like `name@domain.tld` | `400` | `{ "message": "Email must be a valid email address." }` |
+| Email longer than 255 characters after trim | `400` | `{ "message": "Email too long." }` |
 | Phone number not in format `xxx-xxx-xxxx` | `400` | `{ "message": "Phone number must be in format 'xxx-xxx-xxxx'." }` |
 | License state is not a state abbreviation | `400` | `{ "message": "Invalid license state." }` |
 | Expiration date is not a real `yyyy-mm-dd` date | `400` | `{ "message": "License expiration date must be in format 'yyyy-mm-dd'." }` |
@@ -544,3 +547,30 @@ A stop in `destinations` is `{ id }` or `{ name, addressLine1, addressLine2, cit
 ### Delete guards
 
 Requests are never deleted, so these return `400` while a request points at the row: `DELETE /api/destinations/:id`, `/api/vehicles/:id`, `/api/drivers/:id`, `/api/areas/:id`, and `/api/users/:id` (for the user who made the request). Deleting a user who only approved a request clears `approverId`.
+
+## UI/UX backlog changes (scratch branch, not yet specced)
+
+Added or changed while working through `docs/ui-ux-backlog.md`. Where this section and an earlier row disagree, this section is current; fold it into the owning feature's spec and rows when the spec is written.
+
+| Method | Endpoint | Auth | Change |
+| ------ | -------- | ---- | ------ |
+| `GET` | `/api/nav-counts` | Bearer | **New** (#15). `200` `{ requests, issueReports, maintenanceNeeds, vehicles, drivers }`, each a number or `null` when the caller can't open that page. `requests`: requests in the caller's areas (admins: all) that are pending or awaiting a vehicle, or are headed for a trip with a problem on an assigned vehicle; each counts once. `issueReports`: pending reports on vehicles in their areas. `maintenanceNeeds` (admins, area admins, maintenance users): every Open/In Progress need they can see (admins and maintenance users: all; area admins: their areas). `vehicles` (admins, area admins, maintenance users): vehicles they can see whose status is out of service, service overdue or due soon, or plate expired or expiring (the Vehicles page's "Needs attention"). `drivers` (admins and area admins): approved or pending drivers whose license has expired or expires within 30 days. |
+| `GET` | `/api/destinations/:destinationId/trips` | Admin or area admin | **New** (#69). `200` array of `{ id, purpose, startAt, endAt, allDay, status, numberOfPeople, area, user }` for requests that stop there, newest first, scoped like `GET /api/requests`. Bad id `400`, unknown `404`. |
+| `GET` | `/api/vehicles/:vehicleId` | (unchanged) | Also returns `recentTrips` (#20): up to 5 reserved or returned trips that have happened, newest first, in the `upcomingTrips` shape. |
+| `PUT` | `/api/requests/:requestId` | (unchanged) | A request with vehicles that would become `awaiting_vehicle` (approval, or re-saving the same vehicles) is `reserved` instead (#5). |
+| `POST` | `/api/service-logs` | (unchanged) | Accepts `serviceTypeIds: [..]` instead of `serviceTypeId` (#26): one service log per type, sharing one mileage log; responds `201` with the array. Empty list `400` `Missing service type.`, non-ids `400` `Invalid service type.`, unknown `404` `Service type not found.`, and nothing is saved. |
+| `POST`/`PUT` | `/api/requests…` | (unchanged) | A new stop (address fields, no `id`) at an address that's already stored uses that destination instead of creating one: street, unit, city and state match ignoring case and punctuation; ZIP only when both have one; an official destination wins, then the oldest. The same new address twice in one trip is one destination (#6). |
+| `PUT` | `/api/service-logs/visits/:mileageLogId` | Admin, area admin (their areas), maintenance | **New (#54).** Edits a whole visit (the service logs sharing that reading). Body as create, with `serviceTypeIds: [..]`; services not listed are removed, new ones added, and every one gets the user, need, and date; the reading takes `miles` and the date. Same checks as create, plus `400` `Vehicle cannot be changed.`; `400` `Invalid service visit id.`; `404` `Service visit with id=N not found.`. Responds with the visit's logs. |
+| `DELETE` | `/api/service-logs/visits/:mileageLogId` | Admin, area admin (their areas), maintenance | **New (#54).** Deletes every service log at the visit; the reading stays. `200` `{ "message": "Service visit deleted successfully." }`. |
+| `GET` | `/api/vehicle-type-instructions` | (unchanged) | Area admins also get the defaults (`areaId: null`), read-only; `GET /:id` of a default works for them, writes stay `403`. `?vehicleTypeId=` lists one type's (`400` `Invalid vehicle type id.`) (#9). |
+| `GET` | `/api/requests`, `/api/me/requests`, `/api/issue-reports`, `/api/maintenance-needs` | (unchanged) | Each row adds `noteCount` and `lastNoteAt` (ISO time, or `null`), counting only notes the caller may read; hidden notes count only for people who can see them (#73). |
+| `GET` | `/api/mileage-logs?vehicleId=`, `/api/mileage-logs/:mileageLogId` | (unchanged) | Adds `services: ["Oil Change", …]`, the service types logged at that reading; `[]` when it was entered by hand (#56). |
+| `POST`/`PUT` | `/api/mileage-logs…`, `/api/service-logs…` | (unchanged) | Readings must be at least the highest reading on or before their date and at most the lowest after it (#3): `400` `Odometer reading can't be lower than 12,050 mi, recorded Oct 1, 2026.` / `…can't be higher than…`. Mileage log dates can't be in the future: `400` `Recorded date can't be in the future.` |
+| `POST` | `/api/vehicles` | (unchanged) | Optional `odometerReading` (#19) becomes the first mileage log (today); not a whole number ≥ 0 is `400` `Starting odometer reading must be a whole number of 0 or more.` |
+| `POST`/`PUT` | `/api/vehicles…` | (unchanged) | VINs are letters and digits without I, O, Q: `400` `VIN can only use letters and numbers, and never I, O, or Q.` Purchase date no earlier than the year before the model year: `400` `Purchase date must be in 2014 or later for a 2015 vehicle.` (checked when either changes). |
+| `DELETE` | `/api/vehicles/:vehicleId` | (unchanged) | A vehicle with mileage logs, service logs, issue reports, or maintenance needs is `400` `Vehicle has mileage logs and issue reports and can't be deleted. Set its status to retired instead.` (#4). |
+| `DELETE` | `/api/users/:id` | (unchanged) | A user with mileage logs, or who wrote issue reports or maintenance needs, is `400` `User has mileage logs, issue reports, and maintenance needs and can't be deleted.` (#4). |
+| `DELETE` | `/api/vehicle-types/:id`, `/api/areas/:id` | (unchanged) | Their vehicle type instructions are deleted with them (#4). `?moveVehiclesTo=<id>` moves the vehicles there in the same transaction, then deletes (#33). Self or unknown target `400`; moving serial-numbered vehicles to a VIN type `400` naming them; an area with requests stays `400`. |
+| all | `/api/issue-reports…`, issue report notes | (changed) | Users whose only role is maintenance get `403` `Maintenance users can't use issue reports.` (notes: the notes API's `403`) (#28). `GET /api/issue-reports/assignees` lists admins and the vehicle's area admins only; assigning anyone else is `400` `Assignee must be an admin or an area admin for this vehicle.` |
+| `PUT` | `/api/maintenance-needs/:id` | (unchanged) | Never changes `authorId` (#2). `GET /api/maintenance-needs/options` vehicles include `universityId` and `year` (#37). |
+| — | various | — | Messages reworded (#29): `Missing area.` / `Missing start date.` / `Missing end date.` / `Missing number of people.`, `Choose an area that exists.`, `Enter a real start date.`, `The trip can't end before it starts.`, `Number of people must be a whole number of 1 or more.` (0 is no longer allowed, #64), `Serviced date can't be in the future.`, `Missing serviced date.`, `Enter a real serviced date.`, `Choose whether the destination is official.`, `Official must be yes or no.` |

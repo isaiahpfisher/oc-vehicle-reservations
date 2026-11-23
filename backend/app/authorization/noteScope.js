@@ -1,5 +1,5 @@
 import db from "../models/index.js";
-import { canAccessArea, holdsAnyRole } from "./authorization.js";
+import { canAccessArea, holdsAnyRole, holdsOnlyRole } from "./authorization.js";
 import { canViewRequest } from "./vehicleRequestScope.js";
 
 /**
@@ -23,7 +23,9 @@ export const NOTE_PARENTS = {
     invalidMessage: "Invalid issue report id.",
     notFoundMessage: (id) => `Issue report with id=${id} not found.`,
     load: (id) => db.issueReport.findByPk(id, { include: [vehicleInclude] }),
-    canRead: (user, report) => report.authorId === user.id || canAccessArea(user, report.vehicle.areaId),
+    // UI/UX backlog #28: maintenance-only users can't open issue reports, so they can't read their notes either.
+    canRead: (user, report) =>
+      !holdsOnlyRole(user, "maintenance") && (report.authorId === user.id || canAccessArea(user, report.vehicle.areaId)),
   },
   maintenanceNeedId: {
     param: "maintenanceNeedId",

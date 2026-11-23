@@ -376,6 +376,24 @@ describe("Feature 11 — Maintenance Needs", () => {
   });
 
   describe("US-11.5 — Edit and delete maintenance needs", () => {
+    // UI/UX backlog #2: FR-005 names the creator as author, so an edit by someone else keeps it.
+    it("Editing a maintenance need keeps its original author", async () => {
+      await seedFleet();
+      const author = await registerUser({ email: "author@oc.edu", firstName: "Ann", lastName: "Author" });
+      const { headers, user: editor } = await signIn(["maintenance"]);
+      await createNeed({ authorId: author.body.userId });
+
+      const response = await request(app)
+        .put("/api/maintenance-needs/1")
+        .set(headers)
+        .send(validBody({ status: "In Progress", authorId: editor.userId }));
+
+      expect(response.status).toBe(200);
+      expect(response.body.authorId).toBe(author.body.userId);
+      expect(response.body.author).toMatchObject({ firstName: "Ann", lastName: "Author" });
+      expect((await db.maintenanceNeed.findByPk(1)).authorId).toBe(author.body.userId);
+    });
+
     const rejected = [
       ["Admin user requests to edit a maintenance need with a missing title", { title: "" }, "Missing title."],
       ["Admin user requests to edit a maintenance need with a whitespace-only title", { title: " " }, "Missing title."],

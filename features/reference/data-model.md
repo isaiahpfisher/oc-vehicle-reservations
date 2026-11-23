@@ -104,6 +104,7 @@ JSON keys are the camelCase names above.
 | `userId` (`user_id`) | INTEGER | Null when there is no linked user. References `users.id`. Unique when not null. Set to null when the user is deleted. |
 | `firstName` (`first_name`) | STRING | Required, trimmed, max 255 |
 | `lastName` (`last_name`) | STRING | Required, trimmed, max 255 |
+| `email` | STRING | Required, trimmed, lowercased, max 255. Not unique. Where trip emails to the driver go |
 | `phoneNumber` (`phone_number`) | STRING | Required, trimmed, unique. Format `xxx-xxx-xxxx` |
 | `licenseState` (`license_state`) | STRING | Required. A state abbreviation (the 50 states and `DC`) |
 | `licenseExpirationDate` (`license_expiration_date`) | DATEONLY | Required. `yyyy-mm-dd`. Past dates are allowed |

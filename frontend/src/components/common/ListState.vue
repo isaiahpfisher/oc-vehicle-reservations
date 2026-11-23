@@ -1,4 +1,11 @@
 <script setup>
+import EmptyIllustration from "./EmptyIllustration.vue";
+
+/**
+ * Loading, error, empty, and no-results states for a list (ui-style-system.mdc).
+ * UI/UX backlog #46: empty states use the app's own drawings (`emptyArt`), never stock icons, and pages put a
+ * create button in `#empty-actions` when the viewer can create something.
+ */
 defineProps({
   loading: Boolean,
   error: { type: String, default: "" },
@@ -7,18 +14,19 @@ defineProps({
 
   emptyTitle: { type: String, default: "Nothing here yet" },
   emptyText: { type: String, default: "" },
-  emptyIcon: { type: String, default: "mdi-inbox-outline" },
+  /** EmptyIllustration name (vehicles, trips, maintenance, logs, people, places, search, soon); none = text only. */
+  emptyArt: { type: String, default: "" },
   noResultsTitle: { type: String, default: "No matches" },
   noResultsText: { type: String, default: "Try different search terms." },
-  skeletons: { type: Number, default: 3 },
+  skeletons: { type: Number, default: 5 },
 });
 </script>
 
 <template>
-  <!-- STILL LOADING -->
-  <div v-if="loading && empty" class="d-flex flex-column ga-4">
-    <v-skeleton-loader v-for="n in skeletons" :key="n" type="article" />
-  </div>
+  <!-- STILL LOADING: UI/UX backlog #52, shaped like the table that's coming, not like an article. -->
+  <v-card v-if="loading && empty" flat border>
+    <v-skeleton-loader :type="`table-thead, table-row-divider@${skeletons}`" />
+  </v-card>
 
   <!-- ERROR -->
   <v-alert v-else-if="error && empty" type="error" variant="tonal">
@@ -26,7 +34,10 @@ defineProps({
   </v-alert>
 
   <!-- NO DATA -->
-  <v-empty-state v-else-if="empty" :icon="emptyIcon" :title="emptyTitle" :text="emptyText">
+  <v-empty-state v-else-if="empty" :title="emptyTitle" :text="emptyText" class="list-empty" data-test="list-empty">
+    <template v-if="emptyArt" #media>
+      <EmptyIllustration :name="emptyArt" />
+    </template>
     <template v-if="$slots['empty-actions']" #actions>
       <slot name="empty-actions" />
     </template>
@@ -37,7 +48,22 @@ defineProps({
     <v-progress-linear :active="loading" indeterminate class="mb-2" />
     <v-alert v-if="error" type="error" density="compact" class="mb-4">{{ error }}</v-alert>
 
-    <v-empty-state v-if="noResults" icon="mdi-magnify" :title="noResultsTitle" :text="noResultsText" />
+    <v-empty-state v-if="noResults" :title="noResultsTitle" :text="noResultsText" class="list-empty">
+      <template #media>
+        <EmptyIllustration name="search" />
+      </template>
+    </v-empty-state>
     <slot v-else />
   </template>
 </template>
+
+<style scoped>
+.list-empty :deep(.v-empty-state__title) {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.list-empty :deep(.v-empty-state__text) {
+  max-width: 420px;
+}
+</style>

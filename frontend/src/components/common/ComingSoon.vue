@@ -1,4 +1,5 @@
 <script setup>
+import EmptyIllustration from "./EmptyIllustration.vue";
 /** Placeholder for a section a later feature fills in. */
 defineProps({
   text: { type: String, default: "" },
@@ -15,5 +16,8 @@ defineProps({
       <div v-if="text" class="text-body-medium">{{ text }}</div>
     </div>
   </div>
-  <v-empty-state v-else :icon title="Coming soon" :text />
+  <!-- UI/UX backlog #46: the app's own drawing, not a stock icon. -->
+  <v-empty-state v-else title="Coming soon" :text>
+    <template #media><EmptyIllustration name="soon" /></template>
+  </v-empty-state>
 </template>

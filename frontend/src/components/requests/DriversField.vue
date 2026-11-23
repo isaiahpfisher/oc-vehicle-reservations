@@ -28,6 +28,9 @@ const rules = [(value) => value.length > 0 || "Add at least one driver."];
     :item-title="personName"
     item-value="id"
     label="Drivers"
+    hint="Not listed? Only approved drivers with a current license appear. An area admin can add a driver."
+    persistent-hint
+    no-data-text="No approved drivers match. Ask an area admin to add the driver."
     multiple
     chips
     closable-chips

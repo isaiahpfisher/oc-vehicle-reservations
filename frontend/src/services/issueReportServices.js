@@ -17,7 +17,7 @@ const issueReportServices = {
     return apiClient.put(`issue-reports/${issueReportId}`, payload);
   },
 
-  /** Feature 14 (US-14.6): admins, area admins for that vehicle, and maintenance users. */
+  /** Feature 14 (US-14.6): admins and area admins for that vehicle (UI/UX backlog #28 dropped maintenance users). */
   getAssignees(vehicleId) {
     return apiClient.get("issue-reports/assignees", { params: { vehicleId } });
   },

@@ -135,6 +135,18 @@ const clickNamed = async (text) => {
   await settle();
 };
 
+// An existing vehicle's page is read-only; its fields are in the "Edit details" dialog.
+const openEditDialog = async () => {
+  const button = await waitFor(() => {
+    const match = document.body.querySelector('[data-test="edit-vehicle"]');
+    expect(match).not.toBeNull();
+    return match;
+  });
+  button.click();
+  await settle();
+  await waitFor(() => expect(document.body.querySelector('[data-test="edit-vehicle-dialog"]')).not.toBeNull());
+};
+
 const field = async (name, label) =>
   waitFor(() => {
     const match = wrapper.findAllComponents({ name }).find((component) => component.props("label") === label);
@@ -202,6 +214,8 @@ const blocked = async (message) => {
 };
 
 beforeEach(async () => {
+  // The vehicle page remembers its last tab in this browser; every test starts without one.
+  localStorage.removeItem("view:vehicle-work-tab");
   roles = adminRoles;
   signInAs(null);
   vi.resetAllMocks();
@@ -256,6 +270,10 @@ const tooLongCreate = [
   ["Admin user creates vehicle with model longer than 255 characters", { model: "m".repeat(256) }, "Model too long."],
   ["Admin user creates vehicle with VIN identifier less than 17 characters", { identifier: "SHORT" }, "VIN must be 17 characters."],
   ["Admin user creates vehicle with VIN identifier more than 17 characters", { identifier: "1".repeat(18) }, "VIN must be 17 characters."],
+  // UI/UX backlog: VIN characters and purchase date vs. model year (the API checks the same).
+  ["Admin user creates vehicle with a VIN containing an O", { identifier: "1HGCM82633A0O4352" }, "VIN can only use letters and numbers, and never I, O, or Q."],
+  ["Admin user creates vehicle with a VIN containing a dash", { identifier: "1HGCM82633-004352" }, "VIN can only use letters and numbers, and never I, O, or Q."],
+  ["Admin user creates vehicle bought before the year before its model year", { year: 2015, purchasedAt: "2013-06-01" }, "Purchase date must be in 2014 or later for a 2015 vehicle."],
   ["Admin user creates vehicle with color longer than 255 characters", { color: "c".repeat(256) }, "Color too long."],
   ["Admin user creates vehicle with license plate longer than 8 characters", { licensePlate: "PLATE1234" }, "License plate too long."],
 ];
@@ -391,6 +409,59 @@ describe("Feature 5 — Vehicle form", () => {
       expect(response.data.licensePlate).toBeNull();
     });
 
+    // UI/UX backlog #29: each problem shows on its own field, and fixing the field clears it.
+    it("Admin user sees each vehicle problem on its own field", async () => {
+      signIn();
+      await mountAppAt("/vehicles/new");
+      await fill({ make: "", identifier: "SHORT" });
+      await clickNamed("Create");
+
+      const make = await textField("Make");
+      const vin = await textField("VIN");
+      const messages = (field) => [field.props("errorMessages")].flat().filter(Boolean);
+      await waitFor(() => expect(messages(make)).toEqual(["Required field."]));
+      expect(messages(vin)).toEqual(["VIN must be 17 characters."]);
+      expect(messages(await textField("Model"))).toEqual([]);
+      expect(vehicleServices.createVehicle).not.toHaveBeenCalled();
+
+      await make.setValue("Toyota");
+      await settle();
+      expect(messages(make)).toEqual([]);
+      expect(messages(vin)).toEqual(["VIN must be 17 characters."]);
+    });
+
+    // UI/UX backlog #19: the optional starting odometer goes to the API, which logs it as the first reading.
+    it("Admin user creates a vehicle with a starting odometer reading", async () => {
+      signIn();
+      vehicleServices.createVehicle.mockResolvedValue({ status: 201, data: vehicle });
+      await mountAppAt("/vehicles/new");
+      await fill();
+      await (await textField("Current odometer")).setValue("45210");
+      await clickNamed("Create");
+
+      expect(vehicleServices.createVehicle).toHaveBeenCalledWith(expect.objectContaining({ odometerReading: "45210" }));
+    });
+
+    it("Admin user creates a vehicle with a starting odometer that isn't a whole number", async () => {
+      signIn();
+      await mountAppAt("/vehicles/new");
+      await fill();
+      await (await textField("Current odometer")).setValue("12.5");
+      await clickNamed("Create");
+
+      expect(vehicleServices.createVehicle).not.toHaveBeenCalled();
+      await blocked("Starting odometer reading must be a whole number of 0 or more.");
+    });
+
+    it("The starting odometer only appears when creating", async () => {
+      signIn();
+      await mountAppAt("/vehicles/1");
+      await openEditDialog();
+      await waitFor(() => expect(namedButton("Save")).toBeDefined());
+
+      expect(document.body.querySelector('[data-test="starting-odometer"]')).toBeNull();
+    });
+
     for (const [title, overrides, message] of tooLongCreate) {
       it(title, async () => {
         signIn();
@@ -448,27 +519,156 @@ describe("Feature 5 — Vehicle form", () => {
   });
 
   describe("US-5.4 — Edit vehicles", () => {
+    // Your call: the vehicle page reads as a dashboard (a Details card); editing happens in a dialog that stays on it.
+    it("The vehicle page shows details as text and edits them in a dialog that stays on the page", async () => {
+      signIn();
+      vehicleServices.getVehicle.mockResolvedValueOnce({ data: vehicle }).mockResolvedValue({ data: { ...vehicle, color: "white" } });
+      await mountAppAt("/vehicles/1");
+
+      const details = await waitFor(() => {
+        const match = document.body.querySelector('[data-test="vehicle-details"]');
+        expect(match?.textContent).toContain("gray");
+        return match;
+      });
+      expect(details.textContent).toContain("ABC123");
+      expect(wrapper.findAllComponents({ name: "VTextField" }).some((component) => component.props("label") === "Make")).toBe(false);
+
+      await openEditDialog();
+      expect((await textField("Make")).props("modelValue")).toBe("Toyota");
+      await (await textField("Color")).setValue("white");
+      await clickNamed("Save");
+
+      await waitFor(() => expect(vehicleServices.updateVehicle).toHaveBeenCalledWith("1", expect.objectContaining({ color: "white" })));
+      await waitFor(() => expect(document.body.querySelector('.v-overlay--active [data-test="edit-vehicle-dialog"]')).toBeNull());
+      expect(router.currentRoute.value.path).toBe("/vehicles/1");
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-details"]').textContent).toContain("white"));
+    });
+
+    it("People who can't edit the vehicle get the details without an Edit button", async () => {
+      roles = [{ id: 2, role: "maintenance", areaId: null, area: null }];
+      signInAs({ ...signedInUser, roles });
+      await mountAppAt("/vehicles/1");
+
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-details"]')).not.toBeNull());
+      expect(document.body.querySelector('[data-test="edit-vehicle"]')).toBeNull();
+    });
+
+    // UI/UX backlog #18: report a problem or plan work straight from the vehicle; the forms start with it filled in.
+    it("Vehicle page links to a new issue report and a new maintenance need for that vehicle", async () => {
+      signIn();
+      await mountAppAt("/vehicles/1");
+
+      const link = (id) => waitFor(() => {
+        const element = document.body.querySelector(`[data-test="${id}"]`);
+        expect(element).not.toBeNull();
+        return element;
+      });
+      expect((await link("vehicle-report-issue")).getAttribute("href")).toBe("/issue-reports/new?vehicleId=1");
+      expect((await link("vehicle-new-need")).getAttribute("href")).toBe("/maintenance-needs/new?vehicleId=1");
+    });
+
+    // UI/UX backlog #20: the vehicle page shows its maintenance needs, open issue reports, and recent trips.
+    it("Vehicle page shows its maintenance needs, open issue reports, and recent trips", async () => {
+      signIn();
+      apiClient.get.mockImplementation(async (url, config) => {
+        if (String(url).startsWith("users/")) return { data: { roles } };
+        if (url === "maintenance-needs") {
+          return {
+            data: [
+              { id: 1, vehicleId: 1, title: "Done long ago", status: "Completed", priority: "Low", createdAt: "2026-01-01T00:00:00Z" },
+              { id: 2, vehicleId: 1, title: "Wipers", status: "Open", priority: "High", createdAt: "2026-02-01T00:00:00Z" },
+              { id: 3, vehicleId: 9, title: "Another vehicle", status: "Open", priority: "High", createdAt: "2026-02-01T00:00:00Z" },
+            ],
+          };
+        }
+        if (url === "issue-reports") {
+          expect(config.params).toEqual({ vehicleId: "1" });
+          return {
+            data: [
+              { id: 5, vehicleId: 1, type: "dirty", status: "pending", description: "Mud inside", createdAt: "2026-02-03T00:00:00Z" },
+              { id: 6, vehicleId: 1, type: "dirty", status: "resolved", description: "Old mess", createdAt: "2026-01-03T00:00:00Z" },
+            ],
+          };
+        }
+        return { data: [] };
+      });
+      vehicleServices.getVehicle.mockResolvedValue({
+        data: {
+          ...vehicle,
+          recentTrips: [
+            { id: 7, purpose: "Away game", allDay: true, startAt: "2026-10-01", endAt: "2026-10-02", status: "returned", area: { id: 1, name: "Athletics" } },
+          ],
+        },
+      });
+      await mountAppAt("/vehicles/1");
+
+      const card = await waitFor(() => {
+        const element = document.body.querySelector('[data-test="vehicle-work"]');
+        expect(element?.textContent).toContain("Wipers");
+        return element;
+      });
+      // UI/UX backlog #20: service visits and mileage are tabs here too; with open needs, it starts on those.
+      const tabs = [...card.querySelectorAll('[data-test^="vehicle-work-tab-"]')].map((tab) => tab.dataset.test.replace("vehicle-work-tab-", ""));
+      expect(tabs).toEqual(["service", "mileage", "needs", "issues", "trips"]);
+      expect(card.querySelector('[data-test="vehicle-work-tab-needs"]').getAttribute("aria-selected")).toBe("true");
+      // Open first; other vehicles left out.
+      expect(card.textContent.indexOf("Wipers")).toBeLessThan(card.textContent.indexOf("Done long ago"));
+      expect(card.textContent).not.toContain("Another vehicle");
+
+      card.querySelector('[data-test="vehicle-work-tab-issues"]').click();
+      await settle();
+      await waitFor(() => expect(card.textContent).toContain("Mud inside"));
+      expect(card.textContent).not.toContain("Old mess");
+
+      card.querySelector('[data-test="vehicle-work-tab-trips"]').click();
+      await settle();
+      await waitFor(() => expect(card.textContent).toContain("Away game"));
+      // The last tab picked is where the next vehicle page opens.
+      expect(localStorage.getItem("view:vehicle-work-tab")).toBe("trips");
+    });
+
+    it("The vehicle page opens on the tab last picked", async () => {
+      localStorage.setItem("view:vehicle-work-tab", "mileage");
+      signIn();
+      await mountAppAt("/vehicles/1");
+
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-work-tab-mileage"]')?.getAttribute("aria-selected")).toBe("true"));
+      expect(document.body.querySelector('[data-test="recent-mileage-logs"]')).not.toBeNull();
+    });
+
+    it("Maintenance-only users get New maintenance need but not Report an issue", async () => {
+      roles = [{ id: 2, role: "maintenance", areaId: null, area: null }];
+      signInAs({ ...signedInUser, roles });
+      await mountAppAt("/vehicles/1");
+
+      await waitFor(() => expect(document.body.querySelector('[data-test="vehicle-new-need"]')).not.toBeNull());
+      expect(document.body.querySelector('[data-test="vehicle-report-issue"]')).toBeNull();
+    });
+
+    // The dialog's Cancel closes it and keeps you on the vehicle's page.
     it("Admin user cancels vehicle edits", async () => {
       signIn();
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await (await textField("Color")).setValue("white");
       await clickNamed("Cancel");
 
       expect(vehicleServices.updateVehicle).not.toHaveBeenCalled();
-      await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles"));
+      await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
     });
 
     for (const [title, overrides, key, expected] of editFields) {
       it(title, async () => {
         signIn();
         await mountAppAt("/vehicles/1");
+      await openEditDialog();
         await fill(overrides);
         await clickNamed("Save");
 
         const response = await vehicleServices.updateVehicle.mock.results.at(-1).value;
         expect(response.status).toBe(200);
         expect(response.data[key]).toBe(expected);
-        await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles"));
+        await waitFor(() => expect(router.currentRoute.value.path).toBe("/vehicles/1"));
       });
     }
 
@@ -476,6 +676,7 @@ describe("Feature 5 — Vehicle form", () => {
       signIn();
       vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [car, bus] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await fill({ vehicleTypeId: 2 });
       await clickNamed("Save");
 
@@ -491,6 +692,7 @@ describe("Feature 5 — Vehicle form", () => {
       });
       vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [golfFirst, bus] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await (await selectField("Vehicle Type")).setValue(2);
       await clickNamed("Save");
 
@@ -503,6 +705,7 @@ describe("Feature 5 — Vehicle form", () => {
       vehicleServices.getVehicle.mockResolvedValue({ data: { ...vehicle, vehicleTypeId: 1 } });
       vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [golfFirst, bus] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
 
       expect(await textField("Serial")).toBeDefined();
       await (await selectField("Vehicle Type")).setValue(2);
@@ -515,6 +718,7 @@ describe("Feature 5 — Vehicle form", () => {
       vehicleServices.getVehicle.mockResolvedValue({ data: { ...vehicle, vehicleTypeId: 2 } });
       vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [golfFirst, bus] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
 
       expect(await textField("VIN")).toBeDefined();
       await (await selectField("Vehicle Type")).setValue(1);
@@ -526,6 +730,7 @@ describe("Feature 5 — Vehicle form", () => {
       it(title, async () => {
         signIn();
         await mountAppAt("/vehicles/1");
+      await openEditDialog();
         await fill(overrides);
         await clickNamed("Save");
 
@@ -538,6 +743,7 @@ describe("Feature 5 — Vehicle form", () => {
       it(title, async () => {
         signIn();
         await mountAppAt("/vehicles/1");
+      await openEditDialog();
         await fill(overrides);
         await clickNamed("Save");
 
@@ -549,6 +755,7 @@ describe("Feature 5 — Vehicle form", () => {
     it("Admin user edits a vehicle to have a whitespace only license plate", async () => {
       signIn();
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await fill({ licensePlate: " " });
       await clickNamed("Save");
 
@@ -562,6 +769,7 @@ describe("Feature 5 — Vehicle form", () => {
       it(title, async () => {
         signIn();
         await mountAppAt("/vehicles/1");
+      await openEditDialog();
         await fill(overrides);
         await clickNamed("Save");
 
@@ -574,6 +782,7 @@ describe("Feature 5 — Vehicle form", () => {
       signIn();
       vehicleServices.getVehicle.mockResolvedValue({ data: { ...vehicle, vehicleTypeId: 2 } });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await fill({ vehicleTypeId: 2, identifier: "s".repeat(256) });
       await clickNamed("Save");
 
@@ -585,6 +794,7 @@ describe("Feature 5 — Vehicle form", () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle, otherVehicle] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await fill({ universityId: "TAKEN" });
       await clickNamed("Save");
 
@@ -596,6 +806,7 @@ describe("Feature 5 — Vehicle form", () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle, otherVehicle] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await fill({ identifier: "1HGCM82633A004353" });
       await clickNamed("Save");
 
@@ -607,6 +818,7 @@ describe("Feature 5 — Vehicle form", () => {
       signIn();
       vehicleServices.getVehicles.mockResolvedValue({ data: [vehicle, otherVehicle] });
       await mountAppAt("/vehicles/1");
+      await openEditDialog();
       await fill({ licensePlate: "DEF456" });
       await clickNamed("Save");
 

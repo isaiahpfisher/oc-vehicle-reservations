@@ -89,8 +89,9 @@ describe("Feature 10 — Issue Report", () => {
         await registerUser({ email: `pad${index}@example.com`, firstName: "Pad", lastName: String(index) });
       }
       const alex = await registerUser({ email: "alex@example.com", firstName: "Alex", lastName: "Kim" });
-      // Feature 14 (US-14.6): an assignee must be an admin, an area admin for the vehicle, or maintenance.
-      await db.role.create({ userId: alex.body.userId, role: "maintenance" });
+      // Feature 14 (US-14.6): an assignee must be an admin or an area admin for the vehicle
+      // (UI/UX backlog #28 removed maintenance users, who can't open issue reports).
+      await db.role.create({ userId: alex.body.userId, role: "area_admin", areaId: athletics.id });
       const requestDetails = {
         userId: alex.body.userId,
         areaId: athletics.id,
@@ -733,13 +734,14 @@ describe("Feature 14 — Notes (issue report page)", () => {
       const response = await request(app).get("/api/issue-reports/assignees?vehicleId=3").set(headers);
 
       expect(response.status).toBe(200);
-      // Admins, maintenance, and Athletics' area admin; not Music's area admin or a requester. Sorted by last name.
+      // Admins and Athletics' area admin; not maintenance (UI/UX backlog #28), Music's area admin, or a requester.
+      // Sorted by last name.
       expect(response.body).toEqual([
         { id: 1, firstName: "Ann", lastName: "Boss", roles: ["admin"] },
-        { id: both, firstName: "Bo", lastName: "Both", roles: ["maintenance"] },
         { id: coach, firstName: "Art", lastName: "Coach", roles: ["area_admin"] },
-        { id: fixer, firstName: "Max", lastName: "Fix", roles: ["maintenance"] },
       ]);
+      expect(response.body.map(({ id }) => id)).not.toContain(fixer);
+      expect(response.body.map(({ id }) => id)).not.toContain(both);
     });
 
     it("limits the assignee list to admins and area admins", async () => {
@@ -769,9 +771,11 @@ describe("Feature 14 — Notes (issue report page)", () => {
       const student = await addUser("student@example.com", "Sam", "Student");
       const bandAdmin = await addUser("band@example.com", "Mo", "Band", [{ role: "area_admin", areaId: music.id }]);
       const coach = await addUser("coach@example.com", "Art", "Coach", [{ role: "area_admin", areaId: athletics.id }]);
-      const message = { message: "Assignee must be an admin, an area admin for this vehicle, or a maintenance user." };
+      // UI/UX backlog #28: maintenance users can't open issue reports, so they can't be assigned one.
+      const fixer = await addUser("fix@example.com", "Max", "Fix", ["maintenance"]);
+      const message = { message: "Assignee must be an admin or an area admin for this vehicle." };
 
-      for (const assigneeId of [student, bandAdmin]) {
+      for (const assigneeId of [student, bandAdmin, fixer]) {
         const created = await request(app).post("/api/issue-reports").set(headers).send(validBody({ assigneeId }));
         expect(created.status).toBe(400);
         expect(created.body).toEqual(message);
@@ -815,6 +819,47 @@ describe("Feature 14 — Notes (issue report page)", () => {
       const reopened = await request(app).put(`/api/issue-reports/${created.body.id}`).set(headers).send(validBody());
       expect(reopened.status).toBe(200);
       expect(reopened.body).toMatchObject({ status: "pending", resolvedAt: null });
+    });
+  });
+
+  // UI/UX backlog #28: maintenance users don't use issue reports unless another role gives them access.
+  describe("UI/UX backlog #28 — Maintenance users and issue reports", () => {
+    const blocked = { message: "Maintenance users can't use issue reports." };
+
+    it("refuses every issue report endpoint to a user whose only role is maintenance", async () => {
+      await seedFleet();
+      const { headers, user } = await signIn(["maintenance"], { email: "fix@example.com" });
+      await createReport({ authorId: user.userId });
+
+      const calls = [
+        request(app).get("/api/issue-reports").set(headers),
+        request(app).get(`/api/issue-reports?userId=${user.userId}`).set(headers),
+        request(app).get("/api/issue-reports/1").set(headers),
+        request(app).post("/api/issue-reports").set(headers).send(validBody()),
+        request(app).put("/api/issue-reports/1").set(headers).send(validBody()),
+        request(app).delete("/api/issue-reports/1").set(headers),
+      ];
+
+      for (const response of await Promise.all(calls)) {
+        expect(response.status).toBe(403);
+      }
+      expect((await calls[0]).body).toEqual(blocked);
+      expect(await db.issueReport.count()).toBe(1);
+
+      // Notes follow their report (the notes API refuses a parent you can't read), even on their own report.
+      expect((await request(app).get("/api/issue-reports/1/notes").set(headers)).status).toBe(403);
+    });
+
+    it("keeps access for a maintenance user who is also an area admin, and for requesters", async () => {
+      const { athletics } = await seedFleet();
+      const { headers: both } = await signIn(["maintenance", { role: "area_admin", areaId: athletics.id }], {
+        email: "both@example.com",
+      });
+      const { headers: requester, user } = await signIn([], { email: "req@example.com" });
+
+      expect((await request(app).get("/api/issue-reports").set(both)).status).toBe(200);
+      expect((await request(app).post("/api/issue-reports").set(requester).send(validBody())).status).toBe(201);
+      expect((await request(app).get(`/api/issue-reports?userId=${user.userId}`).set(requester)).status).toBe(200);
     });
   });
 });

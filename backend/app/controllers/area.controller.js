@@ -198,19 +198,37 @@ exports.remove = async (req, res) => {
       return res.status(404).send({ message: `Area with id=${areaId} not found.` });
     }
 
+    // UI/UX backlog #33: `?moveVehiclesTo=<area id>` moves this area's vehicles there as part of the delete.
+    const moveTo = req.query.moveVehiclesTo;
+    let target = null;
+    if (moveTo !== undefined && String(moveTo).trim() !== "") {
+      const targetId = parseId(moveTo);
+      target = targetId === null || targetId === areaId ? null : await db.area.findByPk(targetId);
+      if (!target) {
+        return res.status(400).send({ message: "Choose another existing area to move the vehicles to." });
+      }
+    }
+
     const vehicleCount = await db.vehicle.count({ where: { areaId } });
-    if (vehicleCount > 0) {
+    if (vehicleCount > 0 && !target) {
       return res.status(400).send({
         message: "Area has vehicles. Delete vehicles or reassign them to a different area first.",
       });
     }
 
-    // Feature 8: requests are never deleted, so an area with requests stays.
+    // Feature 8: requests are never deleted, so an area with requests stays. Checked before anything moves.
     if ((await db.vehicleRequest.count({ where: { areaId } })) > 0) {
       return res.status(400).send({ message: "Area has vehicle requests and can't be deleted." });
     }
 
-    await db.area.destroy({ where: { id: areaId } });
+    // UI/UX backlog #4: the area's instruction overrides (Feature 15) go with it instead of the foreign key failing the delete.
+    await db.sequelize.transaction(async (transaction) => {
+      if (target) {
+        await db.vehicle.update({ areaId: target.id }, { where: { areaId }, transaction });
+      }
+      await db.vehicleTypeInstruction.destroy({ where: { areaId }, transaction });
+      await db.area.destroy({ where: { id: areaId }, transaction });
+    });
     await removeAreaFolder(areaId);
 
     return res.status(200).send({ message: "Area deleted successfully." });

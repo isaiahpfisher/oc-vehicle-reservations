@@ -5,21 +5,41 @@ export const VEHICLE_STATUSES = {
   service_overdue: { label: "Service Overdue", color: "error", icon: "mdi-wrench-clock" },
   plate_expired: { label: "Plate Expired", color: "warning", icon: "mdi-card-bulleted-off-outline" },
   service_due_soon: { label: "Service Due Soon", color: "warning", icon: "mdi-wrench-outline" },
+  plate_expiring: { label: "Plate Expiring", color: "warning", icon: "mdi-calendar-alert" },
   available: { label: "Available", color: "success", icon: "mdi-check-circle-outline" },
 };
 
 export const VEHICLE_STATUS_OPTIONS = Object.entries(VEHICLE_STATUSES).map(([value, { label }]) => ({ value, title: label }));
 
 /** US-18.13: statuses a maintenance user should work on. Retired and available vehicles need nothing. */
-export const NEEDS_ATTENTION_STATUSES = ["out_of_service", "service_overdue", "plate_expired", "service_due_soon"];
+export const NEEDS_ATTENTION_STATUSES = ["out_of_service", "service_overdue", "plate_expired", "service_due_soon", "plate_expiring"];
 
 export const vehicleStatusMeta = (status) =>
   VEHICLE_STATUSES[status] ?? { label: status ?? "Unknown", color: "secondary", icon: "mdi-help-circle-outline" };
 
 export const needsAttention = (vehicle) => NEEDS_ATTENTION_STATUSES.includes(vehicle.condition?.status);
 
+/** UI/UX backlog: a VIN is 17 letters and digits, never I, O, or Q (the API checks the same). */
+export const VIN_CHARACTERS_MESSAGE = "VIN can only use letters and numbers, and never I, O, or Q.";
+
+export const isVinCharacters = (vin) => /^[A-HJ-NPR-Z0-9]*$/i.test(String(vin ?? ""));
+
+/**
+ * UI/UX backlog: a vehicle can't be bought before the year before its model year (a 2027 model sells in 2026).
+ * Returns the API's message, or "" when the year or date is missing or they fit.
+ */
+export const purchaseDateMessage = (year, purchasedAt) => {
+  const modelYear = Number(year);
+  const purchaseYear = Number(String(purchasedAt ?? "").slice(0, 4));
+  if (!modelYear || !purchaseYear || purchaseYear >= modelYear - 1) return "";
+  return `Purchase date must be in ${modelYear - 1} or later for a ${modelYear} vehicle.`;
+};
+
 /** "2015 Toyota Sienna". */
 export const vehicleName = (vehicle) => [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
+
+/** UI/UX backlog #37: the one label for a vehicle everywhere a list or picker names it: "V-100 · 2015 Toyota Sienna". */
+export const vehicleLabel = (vehicle) => [vehicle?.universityId, vehicle ? vehicleName(vehicle) : ""].filter(Boolean).join(" · ");
 
 export const formatMiles = (miles) => `${Math.round(miles).toLocaleString()} mi`;
 
@@ -177,6 +197,9 @@ export const statusLines = ({ status, reasons = [], services = [], outOfServiceN
     .filter((reason) => reason.status === "plate_expired")
     .forEach(({ message }) => lines.push({ status: "plate_expired", text: message.replace(/\.$/, "") }));
   if (names("due_soon").length) lines.push({ status: "service_due_soon", text: `Due soon: ${nameList(names("due_soon"))}` });
+  reasons
+    .filter((reason) => reason.status === "plate_expiring")
+    .forEach(({ message }) => lines.push({ status: "plate_expiring", text: message.replace(/\.$/, "") }));
   return lines;
 };
 

@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
+import { useNoticeStore } from "../../stores/notice.js";
 import { useRouter } from "vue-router";
 import userServices from "../../services/userServices.js";
 import areaServices from "../../services/areaServices.js";
@@ -7,7 +8,7 @@ import { useDeleteUser } from "../../composables/useDeleteUser.js";
 import { useRequest } from "../../composables/useRequest.js";
 import { useAuthStore } from "../../stores/auth.js";
 import UserAccessCard from "../../components/users/UserAccessCard.vue";
-import ComingSoon from "../../components/common/ComingSoon.vue";
+import UserActivity from "../../components/users/UserActivity.vue";
 import PageShell from "../../components/layout/PageShell.vue";
 import DetailLayout from "../../components/layout/DetailLayout.vue";
 import DetailHeader from "../../components/layout/DetailHeader.vue";
@@ -15,6 +16,8 @@ import SectionCard from "../../components/layout/SectionCard.vue";
 import { driverStatusLabel } from "../../models/drivers.js";
 import { fullName, initials, memberSince, roleLabel, sortRolesForDisplay } from "../../models/users.js";
 
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const props = defineProps({
   id: { type: [String, Number], required: true },
 });
@@ -31,12 +34,10 @@ const { data: areas, loading: areasLoading, error: areasError, run: loadAreas } 
 });
 const loading = computed(() => userLoading.value || areasLoading.value);
 const loadError = computed(() => userError.value || areasError.value);
-const tab = ref("requests");
 
 const userId = computed(() => Number(props.id));
 const isSelf = computed(() => userId.value === auth.user?.userId);
 const name = computed(() => (user.value ? fullName(user.value) : "User"));
-const isMaintenance = computed(() => user.value?.roles.some((role) => role.role === "maintenance") ?? false);
 
 const breadcrumbs = computed(() => [
   { title: "Users", to: { name: "users" } },
@@ -55,29 +56,16 @@ const driverRows = computed(() => {
   ];
 });
 
-// Placeholders for later features (see "Delivered to later features" in the Feature 3 spec).
-const tabs = computed(() => [
-  { value: "requests", title: "Requests", icon: "mdi-car-outline", text: "This user's vehicle requests and the trips they drive will show here." },
-  { value: "issues", title: "Issue reports", icon: "mdi-alert-circle-outline", text: "Issue reports this user filed or is assigned to will show here." },
-  ...(isMaintenance.value
-    ? [{ value: "maintenance", title: "Maintenance", icon: "mdi-wrench-outline", text: "Maintenance needs, service logs, and odometer readings for this user will show here." }]
-    : []),
-]);
-
 const onRolesSaved = (updated) => {
   user.value = { ...user.value, roles: updated.roles };
   if (isSelf.value) auth.setRoles(updated.roles);
 };
 
-// Keep the selected tab valid when the Maintenance tab disappears.
-watch(tabs, (list) => {
-  if (!list.some((item) => item.value === tab.value)) tab.value = list[0].value;
-});
-
 const confirmDeleteUser = useDeleteUser();
 
 const deleteUser = async () => {
   if (await confirmDeleteUser(user.value)) {
+    notify("User deleted.");
     await router.push({ name: "users" });
   }
 };
@@ -142,20 +130,8 @@ watch(userId, (id) => Promise.all([loadUser(id), loadAreas()]), { immediate: tru
         </SectionCard>
       </template>
 
-      <!-- What they've done (filled in by later features) -->
-      <v-card>
-        <v-tabs v-model="tab" color="primary" class="px-2">
-          <v-tab v-for="item in tabs" :key="item.value" :value="item.value" :prepend-icon="item.icon">
-            {{ item.title }}
-          </v-tab>
-        </v-tabs>
-        <v-divider />
-        <v-tabs-window v-model="tab">
-          <v-tabs-window-item v-for="item in tabs" :key="item.value" :value="item.value">
-            <ComingSoon :icon="item.icon" :text="item.text" />
-          </v-tabs-window-item>
-        </v-tabs-window>
-      </v-card>
+      <!-- What they've done (UI/UX backlog #13 replaced the "Coming soon" tabs) -->
+      <UserActivity :person="user" :self="isSelf" />
     </DetailLayout>
   </PageShell>
 </template>

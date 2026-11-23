@@ -1,10 +1,11 @@
 import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { canAccessArea, holdsAnyRole } from "../authorization/authorization.js";
+import { odometerProblem } from "../helpers/odometer.js";
 
 const exports = {};
 
-const FUTURE_DATE = "serviced_at cannot be after current date.";
+const FUTURE_DATE = "Serviced date can't be in the future.";
 const WRONG_AREA = "Not authorized for the specified area.";
 
 const withRelations = [
@@ -120,13 +121,13 @@ const maintenanceNeedField = (value) => {
 
 const servicedAtField = (value) => {
   if (value === undefined || value === null || String(value).trim() === "") {
-    return { message: "Missing serviced at." };
+    return { message: "Missing serviced date." };
   }
 
   const text = String(value).trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (!match) {
-    return { message: "Invalid serviced at." };
+    return { message: "Enter a real serviced date." };
   }
 
   const year = Number(match[1]);
@@ -134,7 +135,7 @@ const servicedAtField = (value) => {
   const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    return { message: "Invalid serviced at." };
+    return { message: "Enter a real serviced date." };
   }
 
   if (text > todayString()) {
@@ -322,15 +323,56 @@ exports.findOne = async (req, res) => {
   }
 };
 
+/**
+ * UI/UX backlog #26: one visit can cover several services. `serviceTypeIds: [..]` (instead of `serviceTypeId`) logs
+ * each of them at the same visit, sharing one odometer reading, and responds with the array of created logs.
+ */
+const readServiceTypeIds = async (value) => {
+  if (!Array.isArray(value)) {
+    return { value: null };
+  }
+
+  const texts = [...new Set(value.map((id) => String(id).trim()))];
+  if (!texts.length) {
+    return { message: "Missing service type." };
+  }
+
+  if (texts.some((text) => !/^\d+$/.test(text) || Number(text) < 1)) {
+    return { message: "Invalid service type." };
+  }
+
+  const ids = texts.map(Number);
+  if ((await db.serviceType.count({ where: { id: ids } })) !== ids.length) {
+    return { status: 404, message: "Service type not found." };
+  }
+
+  return { value: ids };
+};
+
 exports.create = async (req, res) => {
   try {
-    const result = await readBody(req.body);
+    const typeIds = await readServiceTypeIds(req.body?.serviceTypeIds);
+    if (typeIds.message) {
+      return sendReadError(res, typeIds);
+    }
+
+    const result = await readBody(typeIds.value ? { ...req.body, serviceTypeId: typeIds.value[0] } : req.body);
     if (result.message) {
       return sendReadError(res, result);
     }
 
     if (!allowVehicle(req.user, result.value.vehicle, res)) {
       return;
+    }
+
+    const problem = await odometerProblem({
+      vehicleId: result.value.vehicle.id,
+      reading: result.value.miles,
+      day: result.value.servicedAt,
+      dateLabel: "Serviced date",
+    });
+    if (problem) {
+      return res.status(400).send({ message: problem });
     }
 
     const created = await db.sequelize.transaction(async (transaction) => {
@@ -344,21 +386,31 @@ exports.create = async (req, res) => {
         { transaction },
       );
 
-      return db.serviceLog.create(
-        {
-          userId: result.value.userId,
-          vehicleId: result.value.vehicle.id,
-          serviceTypeId: result.value.serviceTypeId,
-          mileageLogId: mileageLog.id,
-          maintenanceNeedId: result.value.maintenanceNeedId,
-          servicedAt: result.value.servicedAt,
-        },
-        { transaction },
-      );
+      const logs = [];
+      for (const serviceTypeId of typeIds.value ?? [result.value.serviceTypeId]) {
+        logs.push(
+          await db.serviceLog.create(
+            {
+              userId: result.value.userId,
+              vehicleId: result.value.vehicle.id,
+              serviceTypeId,
+              mileageLogId: mileageLog.id,
+              maintenanceNeedId: result.value.maintenanceNeedId,
+              servicedAt: result.value.servicedAt,
+            },
+            { transaction },
+          ),
+        );
+      }
+      return logs;
     });
 
-    const log = await db.serviceLog.findByPk(created.id, { include: withRelations });
-    return res.status(201).send(present(log));
+    const logs = await db.serviceLog.findAll({
+      where: { id: created.map(({ id }) => id) },
+      include: withRelations,
+      order: [["id", "ASC"]],
+    });
+    return res.status(201).send(typeIds.value ? logs.map(present) : present(logs[0]));
   } catch (err) {
     logger.error(`service log create failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to create service log." });
@@ -379,6 +431,17 @@ exports.update = async (req, res) => {
 
     if (!allowVehicle(req.user, log.vehicle, res) || !allowVehicle(req.user, result.value.vehicle, res)) {
       return;
+    }
+
+    const problem = await odometerProblem({
+      vehicleId: result.value.vehicle.id,
+      reading: result.value.miles,
+      day: result.value.servicedAt,
+      excludeId: log.mileageLogId,
+      dateLabel: "Serviced date",
+    });
+    if (problem) {
+      return res.status(400).send({ message: problem });
     }
 
     await db.sequelize.transaction(async (transaction) => {
@@ -432,6 +495,131 @@ exports.remove = async (req, res) => {
   } catch (err) {
     logger.error(`service log delete failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to delete service log." });
+  }
+};
+
+/*
+ * UI/UX backlog #54: a service visit is the service logs that share one odometer reading (`mileageLogId`). The service
+ * log page lists visits, so a visit is edited and deleted as a whole. No schema change: these work on the same rows.
+ */
+const loadVisit = async (req, res) => {
+  const mileageLogId = idFrom(req.params.mileageLogId);
+  if (mileageLogId === null) {
+    res.status(400).send({ message: "Invalid service visit id." });
+    return null;
+  }
+
+  const logs = await db.serviceLog.findAll({
+    where: { mileageLogId },
+    include: withRelations,
+    order: [["id", "ASC"]],
+  });
+  if (!logs.length) {
+    res.status(404).send({ message: `Service visit with id=${mileageLogId} not found.` });
+    return null;
+  }
+
+  if (!allowVehicle(req.user, logs[0].vehicle, res)) {
+    return null;
+  }
+
+  return logs;
+};
+
+/** `PUT /service-logs/visits/:mileageLogId`: the create body (`serviceTypeIds: [..]`); services added or removed. */
+exports.updateVisit = async (req, res) => {
+  try {
+    const logs = await loadVisit(req, res);
+    if (!logs) {
+      return;
+    }
+
+    const typeIds = await readServiceTypeIds(req.body?.serviceTypeIds);
+    if (typeIds.message) {
+      return sendReadError(res, typeIds);
+    }
+
+    if (!typeIds.value) {
+      return res.status(400).send({ message: "Missing service type." });
+    }
+
+    const result = await readBody({ ...req.body, serviceTypeId: typeIds.value[0] });
+    if (result.message) {
+      return sendReadError(res, result);
+    }
+
+    const visitId = logs[0].mileageLogId;
+    if (result.value.vehicle.id !== logs[0].vehicleId) {
+      return res.status(400).send({ message: "Vehicle cannot be changed." });
+    }
+
+    const problem = await odometerProblem({
+      vehicleId: result.value.vehicle.id,
+      reading: result.value.miles,
+      day: result.value.servicedAt,
+      excludeId: visitId,
+      dateLabel: "Serviced date",
+    });
+    if (problem) {
+      return res.status(400).send({ message: problem });
+    }
+
+    await db.sequelize.transaction(async (transaction) => {
+      await db.mileageLog.update(
+        { odometerReading: result.value.miles, recordedAt: result.value.servicedAt },
+        { where: { id: visitId }, transaction },
+      );
+
+      const shared = {
+        userId: result.value.userId,
+        maintenanceNeedId: result.value.maintenanceNeedId,
+        servicedAt: result.value.servicedAt,
+      };
+      const kept = new Set();
+      for (const log of logs) {
+        // A service taken off the visit, or a second log of the same service, goes.
+        if (!typeIds.value.includes(log.serviceTypeId) || kept.has(log.serviceTypeId)) {
+          await log.destroy({ transaction });
+          continue;
+        }
+
+        kept.add(log.serviceTypeId);
+        await log.update(shared, { transaction });
+      }
+
+      for (const serviceTypeId of typeIds.value.filter((id) => !kept.has(id))) {
+        await db.serviceLog.create(
+          { ...shared, vehicleId: logs[0].vehicleId, serviceTypeId, mileageLogId: visitId },
+          { transaction },
+        );
+      }
+    });
+
+    const updated = await db.serviceLog.findAll({
+      where: { mileageLogId: visitId },
+      include: withRelations,
+      order: [["id", "ASC"]],
+    });
+    return res.send(updated.map(present));
+  } catch (err) {
+    logger.error(`service visit update failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to save service visit." });
+  }
+};
+
+/** `DELETE /service-logs/visits/:mileageLogId`: every service at the visit. The reading stays (Feature 13). */
+exports.removeVisit = async (req, res) => {
+  try {
+    const logs = await loadVisit(req, res);
+    if (!logs) {
+      return;
+    }
+
+    await db.serviceLog.destroy({ where: { mileageLogId: logs[0].mileageLogId } });
+    return res.status(200).send({ message: "Service visit deleted successfully." });
+  } catch (err) {
+    logger.error(`service visit delete failed: ${err.message}`);
+    return res.status(500).send({ message: "Failed to delete service visit." });
   }
 };
 

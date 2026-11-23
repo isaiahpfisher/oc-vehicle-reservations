@@ -42,3 +42,11 @@ const localStorageMock = (() => {
 Object.defineProperty(global, "localStorage", {
   value: localStorageMock,
 });
+
+// UI/UX backlog #48: the success toast lives in a store shared by the whole run; start every test without one,
+// so a toast from one test isn't on screen in the next.
+import { beforeEach } from "vitest";
+beforeEach(async () => {
+  const { useNoticeStore } = await import("../src/stores/notice.js");
+  useNoticeStore().clear();
+});

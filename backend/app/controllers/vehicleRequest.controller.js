@@ -13,6 +13,8 @@ import {
 import { requestInclude, toRequestResponse } from "../helpers/vehicleRequests.js";
 import { REQUEST_STATUSES } from "../models/vehicleRequest.model.js";
 import { canManageRequest, canViewRequest, managedRequestsWhere } from "../authorization/vehicleRequestScope.js";
+import { noteCountsFor } from "../helpers/noteCounts.js";
+import { existingDestinationAt, sameAddress } from "../helpers/destinations.js";
 
 const exports = {};
 
@@ -158,7 +160,7 @@ const resolveStops = async (value, currentStops = []) => {
 
   const saved = new Map((await db.destination.findAll({ where: { id: ids } })).map((row) => [row.id, row]));
 
-  const stops = value.map((stop, i) => {
+  const stops = await Promise.all(value.map(async (stop, i) => {
     if (stop.id !== undefined) {
       const destination = saved.get(requiredInt(stop.id));
       if (!destination) {
@@ -182,35 +184,48 @@ const resolveStops = async (value, currentStops = []) => {
       throw httpError(400, `Destination ${i + 1} has a value longer than ${DESTINATION_FIELD_LIMIT} characters.`);
     }
 
+    // UI/UX backlog #6: an address that's already stored reuses that destination instead of adding a duplicate.
+    const existing = await existingDestinationAt(fields);
+    if (existing) {
+      return existing;
+    }
+
     return db.destination.build({
       ...fields,
       addressLine2: fields.addressLine2 || null,
       zipCode: fields.zipCode || null,
       isSaved: false,
     });
-  });
+  }));
+
+  // The same new address twice in one trip (A → B → A) is one new destination, not two.
+  const unique = stops.map((stop, i) =>
+    stop.isNewRecord ? (stops.slice(0, i).find((other) => other.isNewRecord && sameAddress(other, stop)) ?? stop) : stop,
+  );
 
   const key = (stop) => formatAddress(stop).toLowerCase();
-  if (stops.some((stop, i) => i > 0 && key(stop) === key(stops[i - 1]))) {
+  if (unique.some((stop, i) => i > 0 && key(stop) === key(unique[i - 1]))) {
     throw httpError(400, "A destination is listed twice in a row.");
   }
 
-  return stops;
+  return unique;
 };
 
 /** Merge `body` over `current` (omitted keys keep their stored values) and validate the result. */
 const resolveFields = async (body, current = {}) => {
   const value = (key) => (Object.hasOwn(body, key) ? body[key] : current[key]);
 
+  // UI/UX backlog #29: name the field the way the form does, not by its API key.
+  const LABELS = { areaId: "area", purpose: "purpose", startAt: "start date", endAt: "end date", numberOfPeople: "number of people" };
   for (const key of ["areaId", "purpose", "startAt", "endAt", "numberOfPeople"]) {
     if (isBlank(value(key))) {
-      throw httpError(400, `Missing ${key}.`);
+      throw httpError(400, `Missing ${LABELS[key]}.`);
     }
   }
 
   const areaId = requiredInt(value("areaId"));
   if (areaId === null || !(await db.area.findByPk(areaId))) {
-    throw httpError(400, "Invalid areaId.");
+    throw httpError(400, "Choose an area that exists.");
   }
 
   const allDay = value("allDay") ?? false;
@@ -220,21 +235,22 @@ const resolveFields = async (body, current = {}) => {
 
   const startAt = parseDate(value("startAt"), allDay);
   if (!startAt) {
-    throw httpError(400, "Invalid startAt.");
+    throw httpError(400, "Enter a real start date.");
   }
 
   const endAt = parseDate(value("endAt"), allDay);
   if (!endAt) {
-    throw httpError(400, "Invalid endAt.");
+    throw httpError(400, "Enter a real end date.");
   }
 
   if (endAt < startAt) {
-    throw httpError(400, "endAt cannot be before startAt.");
+    throw httpError(400, "The trip can't end before it starts.");
   }
 
   const numberOfPeople = requiredInt(value("numberOfPeople"));
-  if (numberOfPeople === null) {
-    throw httpError(400, "numberOfPeople must be a non-negative integer.");
+  // UI/UX backlog #64: it counts the drivers, so a trip has at least 1 person.
+  if (numberOfPeople === null || numberOfPeople < 1) {
+    throw httpError(400, "Number of people must be a whole number of 1 or more.");
   }
 
   return {
@@ -312,7 +328,15 @@ exports.findAll = async (req, res) => {
 
     // US-18.10: `GET /requests` is for managers, so every row carries its vehicle problems.
     const problems = await vehicleProblemsFor(requests);
-    return res.send(requests.map((request) => ({ ...toRequestResponse(request), vehicleProblems: problems.get(request.id) })));
+    // UI/UX backlog #73: each row says how many notes it has.
+    const notes = await noteCountsFor(req.user, "vehicleRequestId", requests.map(({ id }) => id));
+    return res.send(
+      requests.map((request) => ({
+        ...toRequestResponse(request),
+        vehicleProblems: problems.get(request.id),
+        ...notes(request.id),
+      })),
+    );
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle requests.");
   }
@@ -326,7 +350,8 @@ exports.findMine = async (req, res) => {
       order: listOrder,
     });
 
-    return res.send(requests.map(toRequestResponse));
+    const notes = await noteCountsFor(req.user, "vehicleRequestId", requests.map(({ id }) => id));
+    return res.send(requests.map((request) => ({ ...toRequestResponse(request), ...notes(request.id) })));
   } catch (err) {
     return sendError(res, err, "Failed to fetch vehicle requests.");
   }
@@ -432,6 +457,12 @@ exports.update = async (req, res) => {
       status = vehicleIds.length ? "reserved" : request.status === "reserved" ? "awaiting_vehicle" : request.status;
     } else if (next && request.approvedAt && approvalFieldsChanged(current, next)) {
       status = "pending";
+    }
+
+    // UI/UX backlog #5 (FR-006): a request with vehicles is reserved. Approving one that kept its vehicles while it went
+    // back to pending (or re-saving the same vehicles) must not leave it "awaiting" a vehicle it already has.
+    if (status === "awaiting_vehicle" && vehicleIds.length) {
+      status = "reserved";
     }
 
     let approval = {};

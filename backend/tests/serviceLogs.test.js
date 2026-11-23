@@ -11,7 +11,7 @@ const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 const unauthorized = { message: "Unauthorized! No token provided." };
 const forbidden = { message: "One of these roles is required: admin, area_admin, maintenance." };
 const wrongArea = { message: "Not authorized for the specified area." };
-const futureDate = { message: "serviced_at cannot be after current date." };
+const futureDate = { message: "Serviced date can't be in the future." };
 
 const signIn = async (roles = ["admin"], overrides = {}) => {
   const { body } = await createUserWithRoles(roles, overrides);
@@ -465,5 +465,156 @@ describe("Feature 13 — Maintenance Log Management", () => {
     it("Signed-in user without admin , area admin, or maintenance role API request to delete a service log", async () => {
       await withoutRole((headers, _fleet, log) => request(app).delete(`/api/service-logs/${log.id}`).set(headers));
     });
+  });
+
+  // UI/UX backlog #3: a service visit's reading follows the same rule as any mileage log.
+  describe("UI/UX backlog #3 — Odometer readings only go up", () => {
+    it("rejects a service log whose mileage is lower than an earlier reading", async () => {
+      const fleet = await seedFleet();
+      const { headers } = await signIn();
+      await createLog(fleet, headers, worker.userId, { miles: 12050, servicedAt: "2026-07-02" });
+
+      const response = await request(app)
+        .post("/api/service-logs")
+        .set(headers)
+        .send(bodyFor(fleet, worker.userId, { miles: 11000, servicedAt: "2026-08-01" }));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: "Odometer reading can't be lower than 12,050 mi, recorded Jul 2, 2026." });
+      expect(await db.serviceLog.count()).toBe(1);
+      expect(await db.mileageLog.count()).toBe(1);
+    });
+
+    it("lets a visit log several services at the same reading, and edit one without tripping over its own reading", async () => {
+      const fleet = await seedFleet();
+      const { headers } = await signIn();
+      const first = await createLog(fleet, headers, worker.userId, { miles: 12050 });
+      await createLog(fleet, headers, worker.userId, { miles: 12050, serviceTypeId: fleet.tires.id });
+
+      const edited = await request(app)
+        .put(`/api/service-logs/${first.id}`)
+        .set(headers)
+        .send(bodyFor(fleet, worker.userId, { miles: 12060 }));
+
+      expect(edited.status).toBe(200);
+    });
+  });
+
+  // UI/UX backlog #26: one visit, several services, one odometer reading.
+  describe("UI/UX backlog #26 — Several services in one visit", () => {
+    it("logs every service type at the same visit, sharing one mileage log", async () => {
+      const fleet = await seedFleet();
+      const { headers } = await signIn();
+      const { serviceTypeId: _single, ...body } = bodyFor(fleet, worker.userId);
+
+      const response = await request(app)
+        .post("/api/service-logs")
+        .set(headers)
+        .send({ ...body, serviceTypeIds: [fleet.oil.id, fleet.tires.id, fleet.oil.id] });
+
+      expect(response.status).toBe(201);
+      expect(response.body.map(({ serviceTypeId }) => serviceTypeId)).toEqual([fleet.oil.id, fleet.tires.id]);
+      expect(await db.mileageLog.count()).toBe(1);
+      const logs = await db.serviceLog.findAll();
+      expect(new Set(logs.map(({ mileageLogId }) => mileageLogId)).size).toBe(1);
+    });
+
+    it("rejects an empty or invalid list, and an unknown service type, without saving anything", async () => {
+      const fleet = await seedFleet();
+      const { headers } = await signIn();
+      const { serviceTypeId: _single, ...body } = bodyFor(fleet, worker.userId);
+      const send = (serviceTypeIds) => request(app).post("/api/service-logs").set(headers).send({ ...body, serviceTypeIds });
+
+      expect((await send([])).body).toEqual({ message: "Missing service type." });
+      expect((await send(["oil"])).body).toEqual({ message: "Invalid service type." });
+      const unknown = await send([fleet.oil.id, 999]);
+      expect(unknown.status).toBe(404);
+      expect(unknown.body).toEqual({ message: "Service type not found." });
+      expect(await db.serviceLog.count()).toBe(0);
+      expect(await db.mileageLog.count()).toBe(0);
+    });
+  });
+});
+
+// UI/UX backlog #54: a visit (the service logs sharing one reading) is edited and deleted as a whole.
+describe("UI/UX backlog #54 — Service visits", () => {
+  const visitBody = (fleet, overrides = {}) => {
+    const { serviceTypeId: _one, ...body } = bodyFor(fleet, worker.userId);
+    return { ...body, serviceTypeIds: [fleet.oil.id, fleet.tires.id], ...overrides };
+  };
+  const logVisit = async (fleet, headers, overrides) => {
+    const response = await request(app).post("/api/service-logs").set(headers).send(visitBody(fleet, overrides));
+    expect(response.status).toBe(201);
+    return response.body[0].mileageLogId;
+  };
+
+  it("edits the whole visit: reading, date and person for every service, and adds or removes services", async () => {
+    const fleet = await seedFleet();
+    const { headers } = await signIn();
+    const visitId = await logVisit(fleet, headers);
+    const brakes = await db.serviceType.create({ name: "Brake Check", service_frequency_miles: 10000 });
+    const need = await createNeed(fleet.athleticsVehicle.id, worker.userId, "Squeaky brakes");
+
+    const response = await request(app)
+      .put(`/api/service-logs/visits/${visitId}`)
+      .set(headers)
+      .send(visitBody(fleet, { serviceTypeIds: [fleet.oil.id, brakes.id], miles: 12100, servicedAt: "2026-07-03", maintenanceNeedId: need.id }));
+
+    expect(response.status).toBe(200);
+    expect(response.body.map(({ serviceType }) => serviceType.name)).toEqual(["Oil Change", "Brake Check"]);
+    expect(response.body.every((log) => log.mileageLogId === visitId && log.servicedAt === "2026-07-03")).toBe(true);
+    expect(response.body.every((log) => log.maintenanceNeedId === need.id)).toBe(true);
+    expect(await db.serviceLog.count({ where: { serviceTypeId: fleet.tires.id } })).toBe(0);
+    const reading = await db.mileageLog.findByPk(visitId);
+    expect(reading.odometerReading).toBe(12100);
+    expect(await db.mileageLog.count()).toBe(1);
+  });
+
+  it("checks the body like create, keeps the vehicle, and checks the reading against the others", async () => {
+    const fleet = await seedFleet();
+    const { headers } = await signIn();
+    const visitId = await logVisit(fleet, headers);
+    await logVisit(fleet, headers, { miles: 15000, servicedAt: "2026-07-10" });
+    const put = (overrides) => request(app).put(`/api/service-logs/visits/${visitId}`).set(headers).send(visitBody(fleet, overrides));
+
+    expect((await put({ serviceTypeIds: [] })).body).toEqual({ message: "Missing service type." });
+    expect((await put({ serviceTypeIds: undefined })).body).toEqual({ message: "Missing service type." });
+    expect((await put({ vehicleId: fleet.musicVehicle.id })).body).toEqual({ message: "Vehicle cannot be changed." });
+    const higher = await put({ miles: 16000 });
+    expect(higher.status).toBe(400);
+    expect(higher.body.message).toMatch(/^Odometer reading can't be higher than 15,000 mi/);
+    expect((await request(app).put("/api/service-logs/visits/999").set(headers).send(visitBody(fleet))).status).toBe(404);
+    expect((await request(app).put("/api/service-logs/visits/abc").set(headers).send(visitBody(fleet))).body).toEqual({
+      message: "Invalid service visit id.",
+    });
+  });
+
+  it("deletes every service at the visit and keeps the reading", async () => {
+    const fleet = await seedFleet();
+    const { headers } = await signIn();
+    const visitId = await logVisit(fleet, headers);
+
+    const response = await request(app).delete(`/api/service-logs/visits/${visitId}`).set(headers);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ message: "Service visit deleted successfully." });
+    expect(await db.serviceLog.count()).toBe(0);
+    expect(await db.mileageLog.findByPk(visitId)).not.toBeNull();
+  });
+
+  it("limits area admins to their areas' vehicles", async () => {
+    const fleet = await seedFleet();
+    const { headers } = await signIn();
+    const visitId = await logVisit(fleet, headers, { vehicleId: fleet.musicVehicle.id });
+    const area = await signIn([{ role: "area_admin", areaId: fleet.athletics.id }], { email: "area@example.com" });
+
+    const edit = await request(app)
+      .put(`/api/service-logs/visits/${visitId}`)
+      .set(area.headers)
+      .send(visitBody(fleet, { vehicleId: fleet.musicVehicle.id }));
+    expect(edit.status).toBe(403);
+    expect(edit.body).toEqual(wrongArea);
+    expect((await request(app).delete(`/api/service-logs/visits/${visitId}`).set(area.headers)).status).toBe(403);
+    expect(await db.serviceLog.count()).toBe(2);
   });
 });

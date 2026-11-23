@@ -172,6 +172,21 @@ describe("Auth store (auth-patterns.mdc)", () => {
       expect(auth.isSignedIn).toBe(false);
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
       await waitFor(() => expect(router.currentRoute.value.name).toBe("login"));
+      // UI/UX backlog #17: the login page says the session ended.
+      expect(router.currentRoute.value.query.expired).toBe("1");
+    });
+
+    // UI/UX backlog #1: a permission error must not end the session, even when its message says "Unauthorized".
+    it("a 403 response keeps the session, even with an Unauthorized message", async () => {
+      const auth = pageLoad();
+      auth.signIn(loginResponse);
+
+      await expect(
+        apiClient.get("maintenance-needs/9", { adapter: respondWith(403, { message: "Unauthorized for this area." }) }),
+      ).rejects.toThrow();
+
+      expect(auth.isSignedIn).toBe(true);
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)).token).toBe(loginResponse.token);
     });
 
     it("logoutUser signs out even when the server call fails", async () => {

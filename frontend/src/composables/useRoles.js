@@ -15,9 +15,12 @@ export const useRoles = () => {
   /** True if the user holds any of `roleNames` or is an admin. Use for access checks. */
   const hasAnyRole = (roleNames = []) => hasRole("admin") || roleNames.some((role) => hasRole(role));
 
+  /** True if the user has at least one role and every role they hold is `role` (e.g. maintenance and nothing else). */
+  const holdsOnlyRole = (role) => auth.roles.length > 0 && auth.roles.every((held) => held.role === role);
+
   const areaAdminAreaIds = computed(() =>
     auth.roles.filter((held) => held.role === "area_admin").map((held) => held.areaId),
   );
 
-  return { user: computed(() => auth.user), hasRole, hasAnyRole, areaAdminAreaIds };
+  return { user: computed(() => auth.user), hasRole, hasAnyRole, holdsOnlyRole, areaAdminAreaIds };
 };

@@ -3,6 +3,7 @@ import db from "../models/index.js";
 import logger from "../config/logger.js";
 import { canAccessArea } from "../authorization/authorization.js";
 import { CLOSED_ON_STATUSES, ISSUE_STATUSES, ISSUE_TYPES } from "../models/issueReport.model.js";
+import { noteCountsFor } from "../helpers/noteCounts.js";
 
 const exports = {};
 
@@ -168,16 +169,16 @@ const readBody = (body) => {
 const reload = (id) => db.issueReport.findByPk(id, { include: withRelations });
 
 /**
- * Feature 14 (US-14.6): who may be assigned a report on `vehicle`: admins, maintenance users,
- * and area admins of the vehicle's area.
+ * Feature 14 (US-14.6): who may be assigned a report on `vehicle`: admins and area admins of the vehicle's area.
+ * UI/UX backlog #28 removed maintenance users: they can't open issue reports, so they can't work one.
  */
-const ASSIGNEE_MESSAGE = "Assignee must be an admin, an area admin for this vehicle, or a maintenance user.";
+const ASSIGNEE_MESSAGE = "Assignee must be an admin or an area admin for this vehicle.";
 const assigneeRoles = [{ model: db.role, as: "roles", attributes: ["role", "areaId"] }];
 
 const assigneeRoleNames = (user, vehicle) => [
   ...new Set(
     user.roles
-      .filter(({ role, areaId }) => role === "admin" || role === "maintenance" || (role === "area_admin" && areaId === vehicle.areaId))
+      .filter(({ role, areaId }) => role === "admin" || (role === "area_admin" && areaId === vehicle.areaId))
       .map(({ role }) => role),
   ),
 ];
@@ -263,7 +264,9 @@ exports.findAll = async (req, res) => {
       order: [["id", "DESC"]],
     });
 
-    return res.send(reports.map(present));
+    // UI/UX backlog #73: each row says how many notes it has.
+    const notes = await noteCountsFor(req.user, "issueReportId", reports.map(({ id }) => id));
+    return res.send(reports.map((report) => ({ ...present(report), ...notes(report.id) })));
   } catch (err) {
     logger.error(`issue report findAll failed: ${err.message}`);
     return res.status(500).send({ message: "Failed to fetch issue reports." });
@@ -289,7 +292,7 @@ exports.assignees = async (req, res) => {
         {
           ...assigneeRoles[0],
           where: {
-            [Op.or]: [{ role: ["admin", "maintenance"] }, { role: "area_admin", areaId: vehicle.areaId }],
+            [Op.or]: [{ role: "admin" }, { role: "area_admin", areaId: vehicle.areaId }],
           },
         },
       ],

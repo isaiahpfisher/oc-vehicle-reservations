@@ -40,6 +40,7 @@ const seed = async () => {
     db.driver.create({
       firstName,
       lastName,
+      email: `${firstName}.${lastName}@example.com`.toLowerCase(),
       phoneNumber: `405-555-0${phone++}`, // Feature 7: unique, xxx-xxx-xxxx
       licenseState: "OK",
       licenseExpirationDate: "2035-01-01",
@@ -194,10 +195,12 @@ describe("Feature 8 — Vehicle Request Management", () => {
     it("User submits a request with missing required fields", async () => {
       const { headers } = await signIn();
 
+      // UI/UX backlog #29: messages name the field as the form does ("start date"), not its API key ("startAt").
+      const labels = { areaId: "area", purpose: "purpose", startAt: "start date", endAt: "end date", numberOfPeople: "number of people" };
       for (const field of ["areaId", "purpose", "startAt", "endAt", "numberOfPeople"]) {
         const response = await create(headers, { [field]: undefined });
         expect(response.status).toBe(400);
-        expect(response.body).toEqual({ message: `Missing ${field}.` });
+        expect(response.body).toEqual({ message: `Missing ${labels[field]}.` });
       }
 
       expect((await create(headers, { purpose: "   " })).body).toEqual({ message: "Missing purpose." });
@@ -206,16 +209,17 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(await db.vehicleRequest.count()).toBe(0);
     });
 
-    it("rejects a number of people that is not a non-negative integer", async () => {
+    // UI/UX backlog #64: the count includes the drivers, so 0 is no longer allowed.
+    it("rejects a number of people that is not a whole number of 1 or more", async () => {
       const { headers } = await signIn();
 
-      for (const value of [-1, 2.5, "nine"]) {
+      for (const value of [-1, 0, 2.5, "nine"]) {
         const response = await create(headers, { numberOfPeople: value });
         expect(response.status).toBe(400);
-        expect(response.body).toEqual({ message: "numberOfPeople must be a non-negative integer." });
+        expect(response.body).toEqual({ message: "Number of people must be a whole number of 1 or more." });
       }
 
-      expect((await create(headers, { numberOfPeople: 0 })).status).toBe(201);
+      expect((await create(headers, { numberOfPeople: 1 })).status).toBe(201);
     });
 
     it("User adds more than ten destinations", async () => {
@@ -235,14 +239,14 @@ describe("Feature 8 — Vehicle Request Management", () => {
       const response = await create(headers, { startAt: "2030-12-21", endAt: "2030-12-18" });
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "endAt cannot be before startAt." });
+      expect(response.body).toEqual({ message: "The trip can't end before it starts." });
     });
 
     it("rejects invalid dates and unknown areas", async () => {
       const { headers } = await signIn();
 
-      expect((await create(headers, { startAt: "not a date" })).body).toEqual({ message: "Invalid startAt." });
-      expect((await create(headers, { areaId: 999 })).body).toEqual({ message: "Invalid areaId." });
+      expect((await create(headers, { startAt: "not a date" })).body).toEqual({ message: "Enter a real start date." });
+      expect((await create(headers, { areaId: 999 })).body).toEqual({ message: "Choose an area that exists." });
       expect((await create(headers, { allDay: "yes" })).body).toEqual({ message: "Invalid allDay." });
     });
 
@@ -496,6 +500,24 @@ describe("Feature 8 — Vehicle Request Management", () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({ status: "pending", numberOfPeople: 14, approverId: null, approvedAt: null });
+    });
+
+    // UI/UX backlog #5 (FR-006): a request that kept its vehicles through re-approval goes straight back to reserved.
+    it("Re-approving an edited request that still has its vehicles reserves it", async () => {
+      const requester = await signIn();
+      const admin = await signInWithRoles(["admin"], "admin@example.com");
+      const created = await create(requester.headers);
+      await update(admin.headers, created.body.id, { status: "awaiting_vehicle" });
+      await update(admin.headers, created.body.id, { vehicles: [fx.van1.id] });
+      const edited = await update(admin.headers, created.body.id, { numberOfPeople: 4 });
+      expect(edited.body).toMatchObject({ status: "pending", vehicles: [expect.objectContaining({ id: fx.van1.id })] });
+
+      const approved = await update(admin.headers, created.body.id, { status: "awaiting_vehicle" });
+      const resaved = await update(admin.headers, created.body.id, { vehicles: [fx.van1.id] });
+
+      expect(approved.status).toBe(200);
+      expect(approved.body).toMatchObject({ status: "reserved", approverId: admin.userId });
+      expect(resaved.body.status).toBe("reserved");
     });
 
     it("Updating a request with missing required fields", async () => {
@@ -777,5 +799,45 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(row.approverId).toBeNull();
       expect(row.status).toBe("awaiting_vehicle");
     });
+  });
+});
+
+// UI/UX backlog #6 (option A, no schema change): a custom stop at an address that's already stored reuses that
+// destination instead of adding a duplicate.
+describe("UI/UX backlog #6 — Custom stops reuse existing destinations", () => {
+  it("uses the saved destination at the same address, ignoring case and punctuation", async () => {
+    const { headers } = await signIn();
+    const before = await db.destination.count();
+
+    const created = await create(headers, {
+      destinations: [{ name: "The Tulsa place", addressLine1: "1 tulsa center way.", city: "TULSA", state: "ok" }],
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.destinations[0].id).toBe(fx.tulsa.id);
+    expect(await db.destination.count()).toBe(before);
+  });
+
+  it("reuses an earlier custom stop at that address, and adds one new destination for a repeated new address", async () => {
+    const { headers } = await signIn();
+    const custom = { name: "Grandma's House", addressLine1: "1 Main St", city: "Guthrie", state: "OK", zipCode: "73044" };
+    const first = await create(headers, { destinations: [custom] });
+    const before = await db.destination.count();
+
+    // Same place, no ZIP this time: still a match.
+    const second = await create(headers, { destinations: [{ ...custom, name: "Grandma", zipCode: "" }] });
+    expect(second.body.destinations[0].id).toBe(first.body.destinations[0].id);
+    expect(await db.destination.count()).toBe(before);
+
+    // A different ZIP is a different place.
+    const elsewhere = await create(headers, { destinations: [{ ...custom, zipCode: "73099" }] });
+    expect(elsewhere.body.destinations[0].id).not.toBe(first.body.destinations[0].id);
+
+    const cabin = { name: "Cabin", addressLine1: "9 Lake Rd", city: "Guthrie", state: "OK" };
+    const roundTrip = await create(headers, { destinations: [cabin, { id: fx.tulsa.id }, cabin] });
+    expect(roundTrip.status).toBe(201);
+    const [out, , back] = roundTrip.body.destinations;
+    expect(back.id).toBe(out.id);
+    expect(await db.destination.count({ where: { addressLine1: "9 Lake Rd" } })).toBe(1);
   });
 });

@@ -180,7 +180,7 @@ describe("Feature 6 — Destinations", () => {
       const response = await request(app).post("/api/destinations").set(headers).send(body);
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "Missing is_saved." });
+      expect(response.body).toEqual({ message: "Choose whether the destination is official." });
     });
 
     it("Admin user requests to create a destination with an is_saved other than true or false", async () => {
@@ -188,7 +188,7 @@ describe("Feature 6 — Destinations", () => {
       const response = await createDestination(headers, { is_saved: "yes" });
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "is_saved must be true or false." });
+      expect(response.body).toEqual({ message: "Official must be yes or no." });
     });
 
     it("Admin user requests to create a destination with miles from campus less than 0", async () => {
@@ -355,7 +355,7 @@ describe("Feature 6 — Destinations", () => {
       const response = await request(app).put(`/api/destinations/${created.body.id}`).set(headers).send(body);
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "Missing is_saved." });
+      expect(response.body).toEqual({ message: "Choose whether the destination is official." });
     });
 
     it("Admin user requests to edit a destination to have an is_saved other than true or false", async () => {
@@ -368,7 +368,7 @@ describe("Feature 6 — Destinations", () => {
         .send(validDestination({ is_saved: "yes" }));
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: "is_saved must be true or false." });
+      expect(response.body).toEqual({ message: "Official must be yes or no." });
     });
 
     it("Admin user requests to edit a destination to have miles from campus less than 0", async () => {
@@ -564,6 +564,56 @@ describe("Feature 6 — Destinations", () => {
       const headers = await signInAreaAdmin();
       const response = await request(app).delete(`/api/destinations/${created.body.id}`).set(headers);
       expect(response.status).toBe(200);
+    });
+  });
+
+  // UI/UX backlog #69: the trips that stop at a destination, scoped like the request list.
+  describe("UI/UX backlog #69 — Trips to a destination", () => {
+    it("lists the trips that stop there, newest first, only in the caller's areas", async () => {
+      const athletics = await createArea("Athletics");
+      const music = await createArea("Music");
+      const admin = await signIn(["admin"], { email: "admin@oc.edu" });
+      const coach = await signIn([{ role: "area_admin", areaId: athletics.id }], { email: "coach@oc.edu" });
+      const destination = await createDestination(admin);
+      const other = await createDestination(admin, { name: "Elsewhere", address_line_1: "1 Other Rd" });
+      const requester = await db.user.findOne();
+      const trip = async (areaId, purpose, start, destinationIds) => {
+        const created = await db.vehicleRequest.create({
+          userId: requester.id,
+          areaId,
+          purpose,
+          status: "reserved",
+          numberOfPeople: 4,
+          allDay: true,
+          startAt: new Date(`${start}T00:00:00.000Z`),
+          endAt: new Date(`${start}T00:00:00.000Z`),
+        });
+        await db.vehicleRequestDestination.bulkCreate(
+          destinationIds.map((destinationId, stopOrder) => ({ vehicleRequestId: created.id, destinationId, stopOrder })),
+        );
+        return created;
+      };
+      const older = await trip(athletics.id, "Older game", "2026-03-01", [destination.body.id]);
+      const newer = await trip(athletics.id, "Newer game", "2026-09-01", [other.body.id, destination.body.id]);
+      const concert = await trip(music.id, "Concert", "2026-05-01", [destination.body.id]);
+      await trip(athletics.id, "Not there", "2026-06-01", [other.body.id]);
+
+      const asAdmin = await request(app).get(`/api/destinations/${destination.body.id}/trips`).set(admin);
+      const asCoach = await request(app).get(`/api/destinations/${destination.body.id}/trips`).set(coach);
+
+      expect(asAdmin.status).toBe(200);
+      expect(asAdmin.body.map(({ id }) => id)).toEqual([newer.id, concert.id, older.id]);
+      expect(asAdmin.body[0]).toMatchObject({ purpose: "Newer game", startAt: "2026-09-01", status: "reserved", area: { name: "Athletics" } });
+      expect(asCoach.body.map(({ id }) => id)).toEqual([newer.id, older.id]);
+    });
+
+    it("rejects a bad or missing destination, and requesters", async () => {
+      const admin = await signIn(["admin"], { email: "admin@oc.edu" });
+
+      expect((await request(app).get("/api/destinations/abc/trips").set(admin)).status).toBe(400);
+      expect((await request(app).get("/api/destinations/999/trips").set(admin)).status).toBe(404);
+      expect((await request(app).get("/api/destinations/1/trips").set(await signIn([], { email: "req@oc.edu" }))).status).toBe(403);
+      expect((await request(app).get("/api/destinations/1/trips")).status).toBe(401);
     });
   });
 });

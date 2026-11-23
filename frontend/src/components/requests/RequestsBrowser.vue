@@ -1,5 +1,8 @@
 <script setup>
+import NoteCount from "../common/NoteCount.vue";
 import { computed, ref, watch } from "vue";
+import EmptyIllustration from "../common/EmptyIllustration.vue";
+import { PAGE_SIZES } from "../../utils/lists.js";
 import ListState from "../common/ListState.vue";
 import ProblemList from "../vehicles/ProblemList.vue";
 import { groupProblems } from "../../models/vehicles.js";
@@ -17,6 +20,7 @@ import {
   searchText,
   toDateInput,
   tripBounds,
+  tripTitle,
   vehicleLabel,
 } from "../../models/requests.js";
 
@@ -31,6 +35,11 @@ const props = defineProps({
   admin: Boolean,
   emptyTitle: { type: String, required: true },
   emptyText: { type: String, default: "" },
+  /** Start with "Needs my action" on (UI/UX backlog #14: where area admins land after signing in). */
+  needsActionFirst: Boolean,
+  /** Start filtered to one area (an id) and/or statuses, e.g. from an area's "requests waiting" link. */
+  startArea: { type: [Number, String], default: null },
+  startStatuses: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(["open"]);
@@ -38,8 +47,8 @@ const emit = defineEmits(["open"]);
 const blankFilters = () => ({ area: null, destination: null, driver: null, vehicle: null, from: "", to: "" });
 
 const search = ref("");
-const statuses = ref([]);
-const needsAction = ref(false);
+const statuses = ref([...props.startStatuses]);
+const needsAction = ref(props.admin && props.needsActionFirst);
 const problemsOnly = ref(false);
 
 /** Feature 18, US-18.10: vehicles on the request with problems (the admin list sends `vehicleProblems`). */
@@ -50,8 +59,9 @@ const problemSummary = (request) =>
   problemVehicles(request)
     .map((vehicle) => `${vehicle.universityId}: ${groupProblems(request.vehicleProblems[vehicle.id]).map(({ text }) => text).join(" ")}`)
     .join(" ");
+const filters = ref({ ...blankFilters(), area: props.startArea != null && props.startArea !== "" ? Number(props.startArea) : null });
+// Starting filtered (from a link) keeps the panel closed; the Filters button's count shows a filter is on.
 const showFilters = ref(false);
-const filters = ref(blankFilters());
 
 /** Distinct `{ value, title }` options from every request's `pick(request)` list. */
 const optionsFrom = (pick, title) => {
@@ -102,25 +112,47 @@ const visible = computed(() => {
 });
 
 // Status leads. Admins see who asked (with the area underneath); requesters see the area. Vehicles sit under the head count.
+/**
+ * Sort value for the Dates column (UI/UX backlog #49): ascending puts trips that haven't ended first, soonest first,
+ * then ended trips, most recent first.
+ */
+const tripOrder = (request) => {
+  const [start, end] = tripBounds(request);
+  const today = new Date(new Date().toDateString());
+  return end >= today ? start.getTime() : 1e15 - start.getTime();
+};
+
 const headers = computed(() => [
   { title: "Status", key: "status" },
   { title: "Trip", key: "purpose", minWidth: "220px" },
-  { title: "Dates", key: "dates", value: (request) => tripBounds(request)[0].getTime() },
+  // UI/UX backlog #49: upcoming trips first, soonest at the top, then past trips, newest first.
+  { title: "Dates", key: "dates", value: tripOrder },
   props.admin
     ? { title: "Requester", key: "requester", value: (request) => personName(request.user) }
     : { title: "Area", key: "area", value: (request) => request.area?.name ?? "" },
   { title: "People", key: "numberOfPeople" },
 ]);
 
-const sortBy = ref([{ key: "dates", order: "desc" }]);
+const sortBy = ref([{ key: "dates", order: "asc" }]);
 const page = ref(1);
 
 // ui-style-system.mdc: changing search or filters returns to page 1.
 watch([search, statuses, needsAction, problemsOnly, filters], () => (page.value = 1), { deep: true });
 
 const focus = ref(toDateInput(new Date()));
-const events = computed(() => visible.value.map(calendarEvent));
+// UI/UX backlog #49: the calendar leaves out trips that won't happen unless the status filter asks for them.
+const HIDDEN_ON_CALENDAR = ["cancelled", "denied"];
+const hiddenOnCalendar = computed(() =>
+  visible.value.filter((request) => HIDDEN_ON_CALENDAR.includes(request.status) && !statuses.value.includes(request.status)).length,
+);
+const events = computed(() =>
+  visible.value
+    .filter((request) => !HIDDEN_ON_CALENDAR.includes(request.status) || statuses.value.includes(request.status))
+    .map(calendarEvent),
+);
 const title = computed(() => calendarTitle(focus.value, view.value));
+/** The key explains the calendar's vehicle-problem mark only when one is showing. */
+const problemsOnCalendar = computed(() => events.value.some(({ request }) => hasVehicleProblems(request)));
 
 const moveCalendar = (direction) => {
   const date = new Date(`${focus.value}T00:00:00`);
@@ -284,17 +316,18 @@ const moveCalendar = (direction) => {
       :empty="!requests.length"
       :empty-title="emptyTitle"
       :empty-text="emptyText"
-      empty-icon="mdi-car-outline"
+      empty-art="trips"
     >
       <template #empty-actions><slot name="empty-actions" /></template>
 
       <template v-if="view === 'table'">
+        <!-- UI/UX backlog #46: the app's own drawing, not a stock icon. -->
         <v-empty-state
           v-if="!visible.length"
-          icon="mdi-magnify"
           title="No matching requests"
           text="Try a different search, or clear your filters to see everything."
         >
+          <template #media><EmptyIllustration name="search" /></template>
           <template #actions>
             <v-btn variant="outlined" color="primary" class="oc-cta" @click="clearAll">Clear search and filters</v-btn>
           </template>
@@ -304,7 +337,7 @@ const moveCalendar = (direction) => {
           <v-data-table
             v-model:sort-by="sortBy"
             v-model:page="page"
-            :items-per-page="10"
+            :items-per-page-options="PAGE_SIZES"
             :headers
             :items="visible"
             item-value="id"
@@ -315,16 +348,21 @@ const moveCalendar = (direction) => {
           >
             <template #item.purpose="{ item }">
               <div class="py-3">
+                <!-- UI/UX backlog #44: named like the trip's page ("Trip to BOK Center +1 more"); the purpose under it. -->
                 <router-link
                   :to="{ name: 'request', params: { requestId: item.id } }"
                   class="trip-link d-block text-truncate font-weight-bold"
-                  :title="item.purpose"
+                  :title="routeSummary(item)"
                   @click.stop
                 >
-                  {{ item.purpose }}
+                  {{ tripTitle(item) }}
                 </router-link>
-                <div class="trip-route d-block text-truncate text-body-medium text-medium-emphasis" :title="routeSummary(item)">
-                  {{ routeSummary(item) }}
+                <!-- UI/UX backlog #73: which trips have a conversation. -->
+                <div class="d-flex align-center ga-2">
+                  <div class="trip-route d-block text-truncate text-body-medium text-medium-emphasis" :title="item.purpose">
+                    {{ item.purpose }}
+                  </div>
+                  <NoteCount :record="item" class="flex-shrink-0" />
                 </div>
               </div>
             </template>
@@ -391,7 +429,15 @@ const moveCalendar = (direction) => {
             <span class="calendar-legend-swatch" :class="`bg-${meta.color}`" />
             {{ meta.label }}
           </li>
+          <li v-if="problemsOnCalendar" class="d-flex align-center ga-1" data-test="calendar-problem-key">
+            <v-icon icon="mdi-alert" color="warning" size="16" />
+            Vehicle problem
+          </li>
         </ul>
+        <div v-if="hiddenOnCalendar" class="px-4 pb-3 text-body-small text-medium-emphasis" data-test="calendar-hidden">
+          {{ hiddenOnCalendar }} cancelled or denied trip{{ hiddenOnCalendar === 1 ? " is" : "s are" }} hidden. Filter by status to show
+          {{ hiddenOnCalendar === 1 ? "it" : "them" }}.
+        </div>
         <v-divider />
         <v-calendar
           v-model="focus"
@@ -405,7 +451,26 @@ const moveCalendar = (direction) => {
           event-overlap-mode="stack"
           class="browser-calendar"
           @click:event="(_event, { event }) => emit('open', event.request)"
-        />
+        >
+          <!-- Like the table's flag: a small mark before the trip's name when one of its vehicles has a problem. -->
+          <template #event="{ event, eventSummary }">
+            <div
+              class="pl-1 calendar-event"
+              :title="hasVehicleProblems(event.request) ? `Vehicle problems. ${problemSummary(event.request)}` : undefined"
+            >
+              <v-icon
+                v-if="hasVehicleProblems(event.request)"
+                icon="mdi-alert"
+                size="13"
+                class="calendar-event__flag"
+                role="img"
+                aria-label="Vehicle problems"
+                data-test="calendar-problem-flag"
+              />
+              <component :is="eventSummary" />
+            </div>
+          </template>
+        </v-calendar>
       </v-card>
     </ListState>
   </div>
@@ -485,5 +550,23 @@ const moveCalendar = (direction) => {
 
 .browser-calendar :deep(.v-event) {
   cursor: pointer;
+}
+
+/* The mark sits before the name, in the event's own text color, so it reads on every status color. The name keeps
+   Vuetify's own clipping ("…" when it runs out of room). */
+.calendar-event {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.calendar-event__flag {
+  flex: 0 0 auto;
+  margin: 3px 2px 0 0;
+}
+
+.calendar-event :deep(.v-event-summary) {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 </style>

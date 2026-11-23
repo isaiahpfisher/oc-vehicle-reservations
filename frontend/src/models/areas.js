@@ -48,3 +48,13 @@ export const areaNameMessage = (name, areas, exceptId) => {
 
   return "";
 };
+
+/**
+ * What stands in for an area's logo: "Support Central" → "SC"; one word takes two letters ("Admissions" → "AD") so
+ * areas don't share a letter.
+ */
+export const areaInitials = (name) => {
+  const words = String(name ?? "").split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? words.slice(0, 2).map((word) => word[0]) : [...(words[0] ?? "").slice(0, 2)];
+  return letters.join("").toUpperCase();
+};

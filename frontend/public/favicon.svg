@@ -1,5 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Matches the app logo (AppLogo.vue): the "OC" monogram, in the theme's primary maroon. -->
+  <!-- The OC Vehicles mark (BrandMark.vue): a van on the road, in the theme's primary maroon. -->
   <rect width="64" height="64" rx="14" fill="#801328"/>
-  <text x="32" y="33" fill="#FFFFFF" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="700" text-anchor="middle" dominant-baseline="central" letter-spacing="-1">OC</text>
+  <!-- road -->
+  <path d="M8 50h48" stroke="#FFDAD9" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="6 5"/>
+  <!-- van body -->
+  <path d="M9 41V25a4 4 0 0 1 4-4h27.5a4 4 0 0 1 2.9 1.2L51 30h2a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2Z" fill="#FFFFFF"/>
+  <!-- windows -->
+  <rect x="14" y="25" width="9" height="7" rx="1.5" fill="#801328"/>
+  <rect x="26" y="25" width="9" height="7" rx="1.5" fill="#801328"/>
+  <path d="M38 25h2.4a2 2 0 0 1 1.4.6l5.8 6.4H38Z" fill="#801328"/>
+  <!-- wheels -->
+  <circle cx="19" cy="43" r="5.5" fill="#801328" stroke="#FFFFFF" stroke-width="2.5"/>
+  <circle cx="45" cy="43" r="5.5" fill="#801328" stroke="#FFFFFF" stroke-width="2.5"/>
 </svg>

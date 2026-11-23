@@ -258,16 +258,10 @@ const savedTrip = computed(() => props.trips.find(({ id }) => id === props.repor
           </div>
         </div>
 
-        <v-text-field
-          v-if="closesOnDate(form.status)"
-          v-model="form.resolvedAt"
-          :label="closedOnLabel(form.status)"
-          type="date"
-          :max="todayInput()"
-          :rules="rules.resolvedAt"
-          hide-details="auto"
-          data-test="resolved-at"
-        />
+        <!-- UI/UX backlog #62: the date is set for you when the report closes, not typed in. -->
+        <div v-if="closesOnDate(form.status)" class="text-body-medium text-medium-emphasis" data-test="resolved-at">
+          {{ closedOnLabel(form.status) }} {{ formatDay(form.resolvedAt) }}
+        </div>
 
         <v-autocomplete
           v-model="form.assigneeId"

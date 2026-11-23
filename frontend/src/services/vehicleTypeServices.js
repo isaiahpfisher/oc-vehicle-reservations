@@ -17,8 +17,9 @@ const vehicleTypeServices = {
     return apiClient.put(`vehicle-types/${vehicleTypeId}`, payload);
   },
 
-  removeVehicleType(vehicleTypeId) {
-    return apiClient.delete(`vehicle-types/${vehicleTypeId}`);
+  /** UI/UX backlog #33: `moveVehiclesTo` (an id) moves its vehicles there as part of the delete. */
+  removeVehicleType(vehicleTypeId, moveVehiclesTo) {
+    return apiClient.delete(`vehicle-types/${vehicleTypeId}`, moveVehiclesTo ? { params: { moveVehiclesTo } } : undefined);
   },
 };
 

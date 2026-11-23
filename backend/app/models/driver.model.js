@@ -21,6 +21,11 @@ export default (sequelize, Sequelize) => {
       type: Sequelize.STRING,
       allowNull: false,
     },
+    // Where trip emails (pickup instructions, reminders) go. Not unique: a parent and child might share one.
+    email: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
     phoneNumber: {
       type: Sequelize.STRING,
       allowNull: false,

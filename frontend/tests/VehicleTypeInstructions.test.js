@@ -121,12 +121,45 @@ const field = async (name, label) =>
   });
 
 const textArea = (label) => field("VTextarea", label);
-const selectField = (label) => field("VSelect", label);
 
-const openNewInstruction = async () => {
-  namedButton("+ New Instruction").click();
+// UI/UX backlog #9: instructions live on each vehicle type's page (`/vehicle-types/:id`): the default, then only the
+// areas with their own, each written in a dialog. The areas that use the default are one line.
+const byTest = (name) => document.body.querySelector(`[data-test="${name}"]`);
+const openTypePage = async (rows = []) => {
+  vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: rows });
+  await mountAppAt("/vehicle-types/1");
+  await waitFor(() => expect(byTest("instructions")).not.toBeNull());
+};
+const openDialog = async (button) => {
+  await waitFor(() => expect(byTest(button)).not.toBeNull());
+  byTest(button).click();
   await settle();
-  await waitFor(() => expect(document.body.textContent).toContain("Vehicle type"));
+  return waitFor(() => {
+    const box = wrapper.findAllComponents({ name: "VTextarea" }).find((component) => component.props("label") === "Instructions");
+    expect(box).toBeDefined();
+    return box;
+  });
+};
+const chooseArea = async (areaId) => {
+  const select = await field("VSelect", "Area");
+  await select.setValue(areaId);
+  await settle();
+};
+const openMenuItem = async (menu, item) => {
+  await waitFor(() => expect(byTest(menu)).not.toBeNull());
+  byTest(menu).click();
+  await settle();
+  const match = await waitFor(() => {
+    const found = [...document.body.querySelectorAll(`.v-overlay--active [data-test="${item}"]`)].pop();
+    expect(found).toBeDefined();
+    return found;
+  });
+  match.click();
+  await settle();
+};
+const saveDialog = async () => {
+  byTest("instruction-save").click();
+  await settle();
 };
 
 const clickNamed = async (text) => {
@@ -153,6 +186,7 @@ beforeEach(async () => {
     return { data: [] };
   });
   vehicleTypeServices.getVehicleTypes.mockResolvedValue({ data: [van] });
+  vehicleTypeServices.getVehicleTypeById.mockResolvedValue({ data: { ...van, identifier: "VIN" } });
   vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: [] });
   vehicleTypeInstructionServices.createVehicleTypeInstruction.mockResolvedValue({
     status: 201,
@@ -174,353 +208,349 @@ afterEach(() => {
 });
 
 describe("Feature 15 — Vehicle Type Instructions", () => {
+  // UI/UX backlog #9: the type and area come from where you click, so "missing vehicle type" / "missing area" can't
+  // happen in the UI any more (the API still checks them).
   describe("US-15.1 — Create vehicle type instructions", () => {
-    it("Admin user creates a vehicle type instruction", async () => {
-      signIn();
-      await mountAppAt("/vehicle-type-instructions");
-
-      await openNewInstruction();
-
-      expect(await selectField("Vehicle type")).toBeDefined();
-      expect(await selectField("Area")).toBeDefined();
-      const message = await textArea("Instruction message");
-      expect(message.props("modelValue")).toBe(`Pickup the vehicle from the lot behind Garvey.
-You will be driving ___.
-Pickup the keys from Support Central during office hours.
-On return, fill with gas, clean up, and put the keys in the drop box outside support.
-Contact the area admin if there is an issue.`);
-      await message.setValue("Keys are in the lockbox.");
-      expect(message.props("modelValue")).toBe("Keys are in the lockbox.");
-    });
-
-    it("Area admin user creates a vehicle type instruction", async () => {
-      signIn(areaAdminUser);
-      await mountAppAt("/vehicle-type-instructions");
-
-      await openNewInstruction();
-
-      expect(await selectField("Vehicle type")).toBeDefined();
-      expect(await selectField("Area")).toBeDefined();
-      expect(await textArea("Instruction message")).toBeDefined();
-    });
-
     it("Admin user saves a default vehicle type instruction", async () => {
       signIn();
-      const saved = {
-        id: 1,
-        vehicleTypeId: 1,
-        areaId: null,
-        content: defaultMessage,
-        vehicleType: van,
-        area: null,
-      };
-      vehicleTypeInstructionServices.createVehicleTypeInstruction.mockResolvedValue({ status: 201, data: saved });
-      vehicleTypeInstructionServices.getVehicleTypeInstructions
-        .mockResolvedValueOnce({ data: [] })
-        .mockResolvedValueOnce({ data: [saved] });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage();
 
-      await openNewInstruction();
-      await (await selectField("Vehicle type")).setValue(1);
-      await (await textArea("Instruction message")).setValue(defaultMessage);
-      await clickNamed("Create");
+      expect(byTest("instruction-default").textContent).toContain("No default yet.");
+      const box = await openDialog("edit-default");
+      expect(document.body.textContent).toContain("Default instructions");
+      expect(document.body.textContent).toContain("Shown on Van trips in every area that doesn't have its own.");
+      // A new default starts from an example to edit, not an empty box, and the example shows off variables.
+      expect(box.props("modelValue")).toContain("Pickup: {{pickup_time}}");
+      expect(box.props("modelValue")).toContain("pick up {{vehicle}}");
+      expect(box.props("modelValue")).toContain("Return: {{return_time}}");
+      // An emptied box shows an example too.
+      expect(box.props("placeholder")).toContain("{{pickup_time}}");
+      await box.setValue(defaultMessage);
+      await saveDialog();
 
-      await waitFor(() => expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledTimes(1));
-      expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledWith({
-        vehicleTypeId: 1,
-        areaId: null,
-        content: defaultMessage,
-      });
-      await waitFor(() => {
-        expect(document.body.textContent).toContain("Van");
-        expect(document.body.textContent).toContain("Default");
-        expect(document.body.textContent).toContain(defaultMessage);
-      });
+      await waitFor(() =>
+        expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledWith({
+          vehicleTypeId: 1,
+          areaId: null,
+          content: defaultMessage,
+        }),
+      );
+      expect(vehicleTypeInstructionServices.getVehicleTypeInstructions).toHaveBeenCalledWith({ vehicleTypeId: "1" });
+    });
+
+    it("Admin user saves an area vehicle type instruction, starting from the default", async () => {
+      signIn();
+      await openTypePage([defaultInstruction]);
+
+      expect(byTest("instruction-area-1")).toBeNull();
+      expect(byTest("areas-using-default").textContent).toContain("Athletics and Music use the default.");
+      // Two areas could get their own, so the dialog asks which.
+      const box = await openDialog("add-area-instructions");
+      expect(box.props("modelValue")).toBe(defaultInstruction.content);
+      await box.setValue(athleticsMessage);
+      await saveDialog();
+      await waitFor(() => expect(document.body.textContent).toContain("Required field."));
+      expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).not.toHaveBeenCalled();
+      await chooseArea(1);
+      await saveDialog();
+
+      await waitFor(() =>
+        expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledWith({
+          vehicleTypeId: 1,
+          areaId: 1,
+          content: athleticsMessage,
+        }),
+      );
+    });
+
+    it("An area's own instructions start from the example when there's no default to copy", async () => {
+      signIn(areaAdminUser);
+      await openTypePage();
+
+      const box = await openDialog("add-area-instructions");
+      expect(box.props("modelValue")).toContain("Hi {{driver_first_name}}");
     });
 
     it("Area admin user saves an area vehicle type instruction", async () => {
       signIn(areaAdminUser);
-      const saved = {
-        id: 2,
-        vehicleTypeId: 1,
-        areaId: 1,
-        content: athleticsMessage,
-        vehicleType: van,
-        area: athletics,
-      };
-      vehicleTypeInstructionServices.createVehicleTypeInstruction.mockResolvedValue({ status: 201, data: saved });
-      vehicleTypeInstructionServices.getVehicleTypeInstructions
-        .mockResolvedValueOnce({ data: [] })
-        .mockResolvedValueOnce({ data: [saved] });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage([defaultInstruction]);
 
-      await openNewInstruction();
-      await (await selectField("Vehicle type")).setValue(1);
-      await (await selectField("Area")).setValue(1);
-      await (await textArea("Instruction message")).setValue(athleticsMessage);
-      await clickNamed("Create");
+      // They read the default but can't change it, and see only their own areas.
+      expect(byTest("instruction-default").textContent).toContain(defaultInstruction.content);
+      expect(byTest("edit-default")).toBeNull();
+      expect(byTest("areas-using-default").textContent).toBe("Athletics uses the default.");
+      // Their one area is the only choice, so the dialog doesn't ask.
+      const box = await openDialog("add-area-instructions");
+      expect(wrapper.findAllComponents({ name: "VSelect" }).find((select) => select.props("label") === "Area")).toBeUndefined();
+      expect(document.body.textContent).toContain("Athletics instructions");
+      await box.setValue(athleticsMessage);
+      await saveDialog();
 
-      await waitFor(() => expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledTimes(1));
-      expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledWith({
-        vehicleTypeId: 1,
-        areaId: 1,
-        content: athleticsMessage,
-      });
-      await waitFor(() => {
-        expect(document.body.textContent).toContain("Van");
-        expect(document.body.textContent).toContain("Athletics");
-        expect(document.body.textContent).toContain(athleticsMessage);
-      });
+      await waitFor(() =>
+        expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledWith({
+          vehicleTypeId: 1,
+          areaId: 1,
+          content: athleticsMessage,
+        }),
+      );
     });
 
-    it("Admin user saves an area vehicle type instruction", async () => {
+    it("Admin user creates a vehicle type instruction with a missing or whitespace-only message", async () => {
       signIn();
-      const saved = {
-        id: 3,
-        vehicleTypeId: 1,
-        areaId: 1,
-        content: lotMessage,
-        vehicleType: van,
-        area: athletics,
-      };
-      vehicleTypeInstructionServices.createVehicleTypeInstruction.mockResolvedValue({ status: 201, data: saved });
-      vehicleTypeInstructionServices.getVehicleTypeInstructions
-        .mockResolvedValueOnce({ data: [] })
-        .mockResolvedValueOnce({ data: [saved] });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage();
 
-      await openNewInstruction();
-      await (await selectField("Vehicle type")).setValue(1);
-      await (await selectField("Area")).setValue(1);
-      await (await textArea("Instruction message")).setValue(lotMessage);
-      await clickNamed("Create");
-
-      await waitFor(() => expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).toHaveBeenCalledWith({
-        vehicleTypeId: 1,
-        areaId: 1,
-        content: lotMessage,
-      }));
-      await waitFor(() => {
-        expect(document.body.textContent).toContain("Van");
-        expect(document.body.textContent).toContain("Athletics");
-      });
-    });
-
-    it("Admin user creates a vehicle type instruction with a missing vehicle type", async () => {
-      signIn();
-      await mountAppAt("/vehicle-type-instructions");
-
-      await openNewInstruction();
-      await (await textArea("Instruction message")).setValue(defaultMessage);
-      await clickNamed("Create");
-
+      for (const value of ["", "   "]) {
+        const box = await openDialog("edit-default");
+        await box.setValue(value);
+        await saveDialog();
+        await waitFor(() => expect(document.body.textContent).toContain("Required field."));
+        await clickNamed("Cancel");
+        await waitFor(() => expect(document.body.querySelector(".v-dialog.v-overlay--active")).toBeNull());
+      }
       expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
-    });
-
-    it("Admin user creates a vehicle type instruction with a missing instruction message", async () => {
-      signIn();
-      await mountAppAt("/vehicle-type-instructions");
-
-      await openNewInstruction();
-      await (await selectField("Vehicle type")).setValue(1);
-      await (await textArea("Instruction message")).setValue("");
-      await clickNamed("Create");
-
-      expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
-    });
-
-    it("Admin user creates a vehicle type instruction with a whitespace-only instruction message", async () => {
-      signIn();
-      await mountAppAt("/vehicle-type-instructions");
-
-      await openNewInstruction();
-      await (await selectField("Vehicle type")).setValue(1);
-      await (await textArea("Instruction message")).setValue(" ");
-      await clickNamed("Create");
-
-      expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
-    });
-
-    it("Area admin user creates a vehicle type instruction with a missing area", async () => {
-      signIn(areaAdminUser);
-      await mountAppAt("/vehicle-type-instructions");
-
-      await openNewInstruction();
-      await (await selectField("Vehicle type")).setValue(1);
-      await (await textArea("Instruction message")).setValue(athleticsMessage);
-      await clickNamed("Create");
-
-      expect(vehicleTypeInstructionServices.createVehicleTypeInstruction).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
     });
   });
 
   describe("US-15.2 — View vehicle type instructions", () => {
-    it("Admin vehicle type instructions view lists every instruction", async () => {
+    it("Admin sees the default and every area's instructions", async () => {
       signIn();
-      vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({
-        data: [defaultInstruction, athleticsInstruction],
-      });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage([defaultInstruction, athleticsInstruction]);
 
-      await waitFor(() => {
-        expect(document.body.textContent).toContain("Van");
-        expect(document.body.textContent).toContain("Default");
-        expect(document.body.textContent).toContain("Keys are in the office.");
-        expect(document.body.textContent).toContain("Athletics");
-        expect(document.body.textContent).toContain(lotMessage);
-      });
+      expect(byTest("instruction-default").textContent).toContain("Keys are in the office.");
+      expect(byTest("instruction-area-1").textContent).toContain(lotMessage);
+      expect(byTest("instruction-area-2")).toBeNull();
+      expect(byTest("areas-using-default").textContent).toBe("Music uses the default.");
+      expect(byTest("default-usage").textContent).toBe("Used by 1 of 2 areas");
     });
 
-    it("Area admin vehicle type instructions view lists instructions for their areas", async () => {
+    it("Area admin sees the default and their own areas only", async () => {
       signIn(areaAdminUser);
-      vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: [athleticsInstruction] });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage([defaultInstruction, athleticsInstruction]);
 
-      await waitFor(() => {
-        expect(document.body.textContent).toContain("Van");
-        expect(document.body.textContent).toContain("Athletics");
-        expect(document.body.textContent).toContain(lotMessage);
-      });
-      expect(document.body.textContent).not.toContain("Default");
-      expect(document.body.textContent).not.toContain("Music");
+      expect(byTest("instruction-area-1").textContent).toContain(lotMessage);
+      expect(byTest("instruction-area-2")).toBeNull();
+      expect(byTest("areas-using-default")).toBeNull();
+      expect(byTest("add-area-instructions")).toBeNull();
     });
 
-    it("Admin vehicle type instructions empty state", async () => {
+    it("A type with no instructions says what its trips will show", async () => {
       signIn();
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage();
 
-      await waitFor(() => {
-        expect(document.body.textContent).toContain(
-          "No vehicle type instructions yet. Create your first vehicle type instruction.",
-        );
-      });
+      expect(byTest("instruction-default").textContent).toContain("No default yet.");
+      expect(byTest("areas-using-default").textContent).toBe("Athletics and Music have none, so their drivers see no instructions.");
     });
-  });
 
-  describe("US-15.3 — Manage vehicle type instruction rows", () => {
-    it("Admin vehicle type instruction rows have edit and delete actions", async () => {
+    it("The vehicle types list sums up each type's instructions", async () => {
       signIn();
-      vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: [defaultInstruction] });
-      await mountAppAt("/vehicle-type-instructions");
+      vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: [defaultInstruction, athleticsInstruction] });
+      await mountAppAt("/vehicle-types");
 
-      await waitFor(() => {
-        expect(document.body.querySelector('[aria-label="Edit vehicle type instruction"]')).toBeTruthy();
-        expect(document.body.querySelector('[aria-label="Delete vehicle type instruction"]')).toBeTruthy();
-      });
+      const card = () => document.body.querySelector('[data-test="type-card"]');
+      await waitFor(() => expect(card()?.querySelector('[data-test="type-instructions"]')?.textContent).toContain("Instructions: Default + 1 area"));
+      expect(card().querySelector('[data-test="type-instructions"]').classList).not.toContain("text-warning");
     });
 
-    it("Area admin vehicle type instruction rows have edit and delete actions", async () => {
-      signIn(areaAdminUser);
+    // UI/UX backlog #74: without a default, trips in areas without their own show nothing, so the card warns.
+    it("The vehicle types list warns when a type has no default instructions", async () => {
+      signIn();
       vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: [athleticsInstruction] });
-      await mountAppAt("/vehicle-type-instructions");
+      await mountAppAt("/vehicle-types");
 
-      await waitFor(() => {
-        expect(document.body.querySelector('[aria-label="Edit vehicle type instruction"]')).toBeTruthy();
-        expect(document.body.querySelector('[aria-label="Delete vehicle type instruction"]')).toBeTruthy();
-      });
+      const card = () => document.body.querySelector('[data-test="type-card"]');
+      await waitFor(() => expect(card()?.querySelector('[data-test="type-instructions"]')?.textContent.trim()).toBe("No default instructions"));
+      expect(card().querySelector('[data-test="type-instructions"]').classList).toContain("text-warning");
+      expect(card().querySelector('[data-test="type-area-instructions"]').textContent.trim()).toBe("1 area with their own");
     });
   });
 
   describe("US-15.4 — Edit and delete vehicle type instructions", () => {
-    it("Admin edits a vehicle type instruction message", async () => {
+    it("Admin edits the default instruction message", async () => {
       signIn();
-      const updated = { ...defaultInstruction, content: "Keys are in the lockbox." };
-      vehicleTypeInstructionServices.getVehicleTypeInstructions
-        .mockResolvedValueOnce({ data: [defaultInstruction] })
-        .mockResolvedValueOnce({ data: [updated] });
-      vehicleTypeInstructionServices.updateVehicleTypeInstruction.mockResolvedValue({ status: 200, data: updated });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage([defaultInstruction]);
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit vehicle type instruction"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Edit vehicle type instruction"]').click();
-      await settle();
-      await (await textArea("Instruction message")).setValue("Keys are in the lockbox.");
-      await clickNamed("Save");
+      const box = await openDialog("edit-default");
+      expect(box.props("modelValue")).toBe(defaultInstruction.content);
+      await box.setValue(defaultMessage);
+      await saveDialog();
 
-      await waitFor(() => expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).toHaveBeenCalledWith(1, {
-        vehicleTypeId: 1,
-        areaId: null,
-        content: "Keys are in the lockbox.",
-      }));
-      await waitFor(() => expect(document.body.textContent).toContain("Keys are in the lockbox."));
+      await waitFor(() =>
+        expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).toHaveBeenCalledWith(1, {
+          vehicleTypeId: 1,
+          areaId: null,
+          content: defaultMessage,
+        }),
+      );
     });
 
     it("Area admin edits a vehicle type instruction in their area", async () => {
       signIn(areaAdminUser);
-      const updated = { ...athleticsInstruction, content: lotMessage };
-      vehicleTypeInstructionServices.getVehicleTypeInstructions
-        .mockResolvedValueOnce({ data: [{ ...athleticsInstruction, content: "Old message." }] })
-        .mockResolvedValueOnce({ data: [updated] });
-      vehicleTypeInstructionServices.updateVehicleTypeInstruction.mockResolvedValue({ status: 200, data: updated });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage([defaultInstruction, athleticsInstruction]);
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit vehicle type instruction"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Edit vehicle type instruction"]').click();
-      await settle();
-      await (await textArea("Instruction message")).setValue(lotMessage);
-      await clickNamed("Save");
+      const box = await openDialog("edit-area-1");
+      await box.setValue(athleticsMessage);
+      await saveDialog();
 
-      await waitFor(() => expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).toHaveBeenCalled());
-      await waitFor(() => expect(document.body.textContent).toContain(lotMessage));
+      await waitFor(() =>
+        expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).toHaveBeenCalledWith(2, {
+          vehicleTypeId: 1,
+          areaId: 1,
+          content: athleticsMessage,
+        }),
+      );
     });
 
-    it("Admin edits a vehicle type instruction to have a missing instruction message", async () => {
+    it("Admin removes an area's instructions, so its trips go back to the default", async () => {
       signIn();
-      vehicleTypeInstructionServices.getVehicleTypeInstructions.mockResolvedValue({ data: [defaultInstruction] });
-      await mountAppAt("/vehicle-type-instructions");
+      await openTypePage([defaultInstruction, athleticsInstruction]);
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Edit vehicle type instruction"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Edit vehicle type instruction"]').click();
-      await settle();
-      await (await textArea("Instruction message")).setValue("");
-      await clickNamed("Save");
-
-      expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Required field.");
-    });
-
-    it("Admin deletes a vehicle type instruction", async () => {
-      signIn();
-      vehicleTypeInstructionServices.getVehicleTypeInstructions
-        .mockResolvedValueOnce({ data: [defaultInstruction] })
-        .mockResolvedValueOnce({ data: [] });
-      await mountAppAt("/vehicle-type-instructions");
-
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete vehicle type instruction"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete vehicle type instruction"]').click();
-      await settle();
-      await clickNamed("Delete");
-
-      await waitFor(() => expect(vehicleTypeInstructionServices.removeVehicleTypeInstruction).toHaveBeenCalledWith(1));
-      await waitFor(() => {
-        expect(document.body.textContent).toContain(
-          "No vehicle type instructions yet. Create your first vehicle type instruction.",
-        );
+      await openMenuItem("area-actions-1", "remove-area-1");
+      const dialog = await waitFor(() => {
+        const match = document.body.querySelector(".v-dialog.v-overlay--active");
+        expect(match?.textContent).toContain("Remove the Athletics instructions for Van? Athletics trips will show the default instead.");
+        return match;
       });
+      [...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Remove").click();
+      await settle();
+
+      await waitFor(() => expect(vehicleTypeInstructionServices.removeVehicleTypeInstruction).toHaveBeenCalledWith(2));
+    });
+  });
+
+  // Variables ({{vehicle}}, …) are filled in from each trip when the instructions go out to drivers.
+  describe("Instruction variables", () => {
+    const textareaEl = () => document.body.querySelector('.v-overlay--active [data-test="instruction-content"] textarea');
+    const insert = async (name) => {
+      [...document.body.querySelectorAll(`.v-overlay--active [data-test="insert-${name}"]`)].pop().click();
+      await settle();
+    };
+
+    it("The page shows variables as labels and says what they are", async () => {
+      signIn();
+      await openTypePage([{ ...defaultInstruction, content: "Pick up {{vehicle}} by {{pickup_time}}." }]);
+
+      const labels = [...byTest("instruction-default").querySelectorAll('[data-test="instruction-variable"]')];
+      expect(labels.map((label) => label.textContent.trim())).toEqual(["Vehicle", "Pickup time"]);
+      expect(byTest("instruction-default").textContent).not.toContain("{{");
+      expect(byTest("variables-hint").textContent).toContain("are variables: each trip fills in its own details");
+    });
+
+    it("Without any variables yet, the page says where to find them", async () => {
+      signIn();
+      await openTypePage([defaultInstruction]);
+
+      expect(byTest("variables-hint").textContent).toContain("from the Variables list when you edit");
+    });
+
+    it("Clicking a variable adds it where the cursor was, or at the end", async () => {
+      signIn();
+      await openTypePage([defaultInstruction]);
+      const box = await openDialog("edit-default");
+
+      // Before the box is clicked, it goes at the end with a space.
+      await insert("vehicle");
+      expect(box.props("modelValue")).toBe("Keys are in the office. {{vehicle}}");
+
+      // After it, at the cursor.
+      await box.setValue("Pick up  by noon.");
+      textareaEl().setSelectionRange(8, 8);
+      textareaEl().dispatchEvent(new Event("blur"));
+      await insert("pickup_time");
+      expect(box.props("modelValue")).toBe("Pick up {{pickup_time}} by noon.");
+
+      await saveDialog();
+      await waitFor(() =>
+        expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).toHaveBeenCalledWith(1, {
+          vehicleTypeId: 1,
+          areaId: null,
+          content: "Pick up {{pickup_time}} by noon.",
+        }),
+      );
+    });
+
+    it("Preview fills the variables in from a sample trip", async () => {
+      signIn();
+      await openTypePage([defaultInstruction, { ...athleticsInstruction, content: "Keys for {{vehicle}}. Ask {{area_admins}}." }]);
+      await openDialog("edit-area-1");
+
+      [...document.body.querySelectorAll('.v-overlay--active [data-test="instruction-preview"]')].pop().click();
+      await settle();
+
+      const preview = await waitFor(() => {
+        const match = [...document.body.querySelectorAll('.v-overlay--active [data-test="instruction-preview-text"]')].pop();
+        expect(match).toBeDefined();
+        return match;
+      });
+      expect(preview.textContent).toContain("Keys for ATH-V02 · 2022 Ford Transit 350. Ask Taylor Athletics (areaadmin@oc.edu).");
+      expect(preview.textContent).not.toContain("{{");
+
+      // A trip with two vehicles of this type: {{vehicle}} lists both, since a driver isn't tied to one.
+      [...document.body.querySelectorAll('.v-overlay--active [data-test="preview-two-vehicles"]')].pop().click();
+      await settle();
+      expect(preview.textContent).toContain("Keys for ATH-V01 · 2021 Ford Transit 350 and ATH-V02 · 2022 Ford Transit 350.");
+      expect([...document.body.querySelectorAll('.v-overlay--active [data-test="preview-note"]')].pop().textContent).toContain(
+        "each in their own email",
+      );
+    });
+
+    // The {{ autocomplete was cut; the Variables panel is the way to add one.
+    it("Typing {{ doesn't open a list", async () => {
+      signIn();
+      await openTypePage([defaultInstruction]);
+      const box = await openDialog("edit-default");
+
+      await box.setValue("Pick up {{");
+      textareaEl().dispatchEvent(new KeyboardEvent("keyup", { key: "{", bubbles: true }));
+      await settle();
+      expect(document.body.querySelector('[data-test="variable-suggestions"]')).toBeNull();
+    });
+
+    it("A name that isn't a variable can't be saved", async () => {
+      signIn();
+      await openTypePage([defaultInstruction]);
+      const box = await openDialog("edit-default");
+
+      await box.setValue("Pick up {{vehical}} at the lot.");
+      await saveDialog();
+
+      await waitFor(() => expect(document.body.textContent).toContain("{{vehical}} isn't a variable. Pick one from Variables."));
+      expect(vehicleTypeInstructionServices.updateVehicleTypeInstruction).not.toHaveBeenCalled();
+    });
+
+    it("The API's message shows if it refuses a variable", async () => {
+      signIn();
+      vehicleTypeInstructionServices.updateVehicleTypeInstruction.mockRejectedValue({
+        response: { status: 400, data: { message: "Unknown variable {{old_name}}." } },
+      });
+      await openTypePage([defaultInstruction]);
+      const box = await openDialog("edit-default");
+
+      await box.setValue("Pick up {{vehicle}}.");
+      await saveDialog();
+
+      await waitFor(() => expect(document.body.textContent).toContain("Unknown variable {{old_name}}."));
     });
   });
 
   describe("US-15.5 — Signed-in admin or area admin access only", () => {
-    it("Un-signed-in user accesses vehicle type instructions page", async () => {
-      await mountAppAt("/vehicle-type-instructions");
+    it("Un-signed-in user accesses a vehicle type page", async () => {
+      await mountAppAt("/vehicle-types/1");
 
       expect(router.currentRoute.value.path).toBe("/login");
     });
 
-    it("Signed-in user without admin or area admin role accesses vehicle type instructions page", async () => {
-      signIn({
-        ...adminUser,
-        roles: [{ id: 4, role: "maintenance", areaId: null, area: null }],
-      });
+    it("Signed-in user without admin or area admin role accesses a vehicle type page", async () => {
+      signIn({ ...adminUser, roles: [{ id: 9, role: "maintenance", areaId: null, area: null }] });
+      await mountAppAt("/vehicle-types/1");
+
+      expect(router.currentRoute.value.path).toBe("/");
+    });
+
+    it("The old instructions page opens Vehicle Types", async () => {
+      signIn();
       await mountAppAt("/vehicle-type-instructions");
 
-      // Feature 8's home route is `/`, named `home`.
-      expect(router.currentRoute.value.name).toBe("home");
-      expect(router.currentRoute.value.path).toBe("/");
+      expect(router.currentRoute.value.name).toBe("vehicle-types");
     });
   });
 });

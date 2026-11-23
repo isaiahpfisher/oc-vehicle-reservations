@@ -2,13 +2,14 @@
  * Feature 7 — Drivers list, row actions, and access
  * Spec: features/feature-7-drivers.md
  */
+import { formatDay } from "../src/models/vehicles.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import App from "../src/App.vue";
 import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import driverServices from "../src/services/driverServices.js";
-import { apiError, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
+import { apiError, chooseMoreAction, settle, signInAs, vuetify, waitFor } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -42,14 +43,15 @@ const john = {
   userId: null,
   firstName: "John",
   lastName: "Doe",
+  email: "john.doe@example.com",
   phoneNumber: "405-425-1234",
   licenseState: "OK",
   licenseExpirationDate: "2999-09-01",
   status: "pending",
   approvedAt: null,
 };
-const mary = { ...john, id: 2, firstName: "Mary", lastName: "Smith", phoneNumber: "918-555-0000", status: "approved" };
-const ruth = { ...john, id: 3, firstName: "Ruth", lastName: "Adams", phoneNumber: "214-777-9999", status: "revoked" };
+const mary = { ...john, id: 2, firstName: "Mary", lastName: "Smith", email: "msmith@oc.edu", phoneNumber: "918-555-0000", status: "approved" };
+const ruth = { ...john, id: 3, firstName: "Ruth", lastName: "Adams", email: "ruth.adams@example.com", phoneNumber: "214-777-9999", status: "revoked" };
 
 let roles = adminRoles;
 let wrapper;
@@ -80,6 +82,8 @@ const navLabels = () =>
   [...document.body.querySelectorAll('[aria-label="Main navigation"] a, [aria-label="Pinned navigation"] a')].map((link) =>
     link.textContent.trim(),
   );
+
+const byTest = (name) => document.body.querySelector(`[data-test="${name}"]`);
 
 const search = async (text) => {
   await wrapper.find('input[aria-label="Search drivers"]').setValue(text);
@@ -129,7 +133,7 @@ describe("Feature 7 — Drivers", () => {
       for (const nextRoles of [adminRoles, areaAdminRoles]) {
         signIn(nextRoles);
         await mountAppAt("/drivers");
-        expect(wrapper.find("h2").text()).toBe("Driver Management");
+        expect(wrapper.find("h2").text()).toBe("Drivers");
 
         const create = wrapper.findAllComponents({ name: "VBtn" }).find((button) => button.text() === "+ New Driver");
         await create.trigger("click");
@@ -169,7 +173,7 @@ describe("Feature 7 — Drivers", () => {
       signIn();
       await mountAppAt("/drivers");
 
-      await waitFor(() => expect(document.body.textContent).toContain("No drivers yet. Create your first driver."));
+      await waitFor(() => expect(document.body.textContent).toContain("No drivers yet"));
       expect(document.body.querySelector(".v-data-table")).toBeNull();
     });
 
@@ -181,19 +185,97 @@ describe("Feature 7 — Drivers", () => {
 
       await waitFor(() => expect(rows()).toHaveLength(10));
       const headers = [...document.body.querySelectorAll(".v-data-table thead th")].map((th) => th.textContent.trim());
-      expect(headers).toEqual(["Name", "Status", "Phone Number", "License Expiration", "Actions"]);
+      expect(headers).toEqual(["Name", "Status", "Contact", "License Expiration", "Actions"]);
       const name = rows()[0].querySelector("td a");
       expect(name.textContent.trim()).toBe("Mary Smith");
       expect(name.getAttribute("href")).toBe("/drivers/2");
       expect(rows()[0].textContent).toContain("Approved");
       expect(rows()[0].textContent).toContain("918-555-0000");
-      expect(rows()[0].textContent).toContain("2999-09-01");
+      expect(rows()[0].querySelector('[data-test="driver-email"]').textContent.trim()).toBe("msmith@oc.edu");
+      // UI/UX backlog #40: dates are shown formatted.
+      expect(rows()[0].textContent).toContain("Sep 1, 2999");
 
       // The 12th driver is on page 2.
       expect(document.body.querySelector(".v-data-table-footer").textContent).toContain("1-10 of 12");
       document.body.querySelector(".v-data-table-footer .v-pagination__next button").click();
       await settle();
       await waitFor(() => expect(rows()).toHaveLength(2));
+    });
+
+    // UI/UX backlog #51: a license running out within 30 days gets a warning, before it expires.
+    // UI/UX backlog #47: icon-only row actions name themselves in a tooltip, not just to screen readers.
+    it("Row actions have tooltips", async () => {
+      signIn();
+      driverServices.getDrivers.mockResolvedValue({ data: [john] });
+      await mountAppAt("/drivers");
+      await waitFor(() => expect(rows()).toHaveLength(1));
+
+      const tooltips = wrapper.findAllComponents({ name: "VTooltip" }).map((tooltip) => tooltip.props("text"));
+      expect(tooltips).toEqual(expect.arrayContaining(["Edit driver"]));
+      // UI/UX backlog #36: delete moved to the driver page's ⋮ menu.
+      expect(tooltips).not.toContain("Delete driver");
+    });
+
+    it("License expiring soon is flagged", async () => {
+      signIn();
+      driverServices.getDrivers.mockResolvedValue({
+        data: [
+          { ...john, licenseExpirationDate: dateString(10) },
+          { ...mary, licenseExpirationDate: dateString(90) },
+        ],
+      });
+      await mountAppAt("/drivers");
+
+      await waitFor(() => expect(rows()).toHaveLength(2));
+      // Said in words, with the date on hover.
+      expect(rows()[0].querySelector(".license-expiring").textContent.trim()).toBe("Expires in 10 days");
+      expect(rows()[0].querySelector(".license-expiring").getAttribute("title")).toBe(`Expires ${formatDay(dateString(10))}`);
+      expect(rows()[1].querySelector(".license-expiring")).toBeNull();
+      expect(rows()[0].querySelector(".license-expired")).toBeNull();
+    });
+
+    it("Licenses to renew shows only approved and pending drivers whose license has run out or runs out soon", async () => {
+      signIn();
+      driverServices.getDrivers.mockResolvedValue({
+        data: [
+          { ...john, status: "pending", licenseExpirationDate: dateString(-3) },
+          { ...mary, status: "approved", licenseExpirationDate: dateString(12) },
+          { ...ruth, status: "approved", licenseExpirationDate: dateString(200) },
+          // A former driver's lapsed license needs no one's attention: no chip, a muted date, not counted.
+          { ...ruth, id: 4, firstName: "Wes", lastName: "Hart", status: "former", licenseExpirationDate: dateString(-40) },
+        ],
+      });
+      await mountAppAt("/drivers");
+      await waitFor(() => expect(rows()).toHaveLength(4));
+
+      const button = byTest("license-renewals");
+      expect(button.textContent).toContain("Licenses to renew");
+      expect(button.textContent).toContain("2");
+      const wes = rows().find((row) => row.textContent.includes("Wes Hart"));
+      expect(wes.querySelector(".license-expired, .license-expiring")).toBeNull();
+      const wesLicense = wes.querySelectorAll("td")[3];
+      expect(wesLicense.textContent.trim()).toBe(formatDay(dateString(-40)));
+      expect(wesLicense.querySelector("span").classList).toContain("text-medium-emphasis");
+      const john_ = rows().find((row) => row.textContent.includes("John Doe"));
+      expect(john_.querySelector(".license-expired").textContent.trim()).toBe(`Expired ${formatDay(dateString(-3))}`);
+
+      button.click();
+      await settle();
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      await waitFor(() => expect(rows()).toHaveLength(2));
+      expect(rows().map((row) => row.textContent.includes("John Doe") || row.textContent.includes("Mary Smith"))).toEqual([true, true]);
+    });
+
+    it("With every license current, Licenses to renew says so", async () => {
+      signIn();
+      driverServices.getDrivers.mockResolvedValue({ data: [{ ...mary, licenseExpirationDate: dateString(200) }] });
+      await mountAppAt("/drivers");
+      await waitFor(() => expect(rows()).toHaveLength(1));
+
+      expect(byTest("license-renewals").querySelector(".v-badge")).toBeNull();
+      byTest("license-renewals").click();
+      await settle();
+      await waitFor(() => expect(document.body.textContent).toContain("Every license is current."));
     });
 
     it("License Expiration", async () => {
@@ -209,10 +291,15 @@ describe("Feature 7 — Drivers", () => {
 
       await waitFor(() => expect(rows()).toHaveLength(3));
       const highlighted = (row) => row.querySelector(".license-expired");
-      expect(highlighted(rows()[0]).textContent).toContain(dateString(-1));
+      // UI/UX backlog #40: dates are shown formatted ("Nov 19, 2026").
+      const shown = (offset) => formatDay(dateString(offset));
+      expect(highlighted(rows()[0]).textContent).toContain(`Expired ${shown(-1)}`);
+      // Good through its expiration date, but expiring.
       expect(highlighted(rows()[1])).toBeNull();
-      expect(rows()[1].textContent).toContain(dateString(0));
+      expect(rows()[1].querySelector(".license-expiring").textContent.trim()).toBe("Expires today");
+      // Ruth is revoked, so her license gets no warning.
       expect(highlighted(rows()[2])).toBeNull();
+      expect(rows()[2].textContent).toContain(shown(1));
     });
 
     it("Search drivers", async () => {
@@ -225,6 +312,7 @@ describe("Feature 7 — Drivers", () => {
         ["JOHN", "John"],
         ["smith", "Mary"],
         ["214-777", "Ruth"],
+        ["msmith@", "Mary"],
         ["  mary   smith ", "Mary"],
       ]) {
         await search(text);
@@ -260,7 +348,7 @@ describe("Feature 7 — Drivers", () => {
       await mountAppAt("/drivers");
       await waitFor(() => expect(rows()).toHaveLength(3));
 
-      const filter = await field("VSelect", "Filter by status");
+      const filter = await field("VSelect", "Status");
       expect(filter.props("items").map(({ value }) => value)).toEqual(["pending", "approved", "denied", "revoked", "former"]);
 
       await filter.setValue("revoked");
@@ -302,51 +390,52 @@ describe("Feature 7 — Drivers", () => {
       expect((await field("VTextField", "Phone Number")).props("modelValue")).toBe("918-555-0000");
     });
 
-    it("Delete driver row", async () => {
+    // UI/UX backlog #36: delete is in the driver page's ⋮ menu, not on the row.
+    it("Delete driver from the driver page", async () => {
       signIn();
-      driverServices.getDrivers.mockResolvedValue({ data: [john] });
-      await mountAppAt("/drivers");
+      await mountAppAt(`/drivers/${john.id}`);
 
-      await clickLabeled("Delete driver");
+      await chooseMoreAction("delete-driver");
 
       const confirm = await dialogButton("Delete Driver");
-      expect(confirm.closest(".v-overlay--active").textContent).toContain('Delete "John Doe"? This action is permanent.');
+      expect(confirm.closest(".v-overlay--active:not(.v-snackbar)").textContent).toContain('Delete "John Doe"? This action is permanent.');
       expect(driverServices.removeDriver).not.toHaveBeenCalled();
 
       (await dialogButton("Cancel")).click();
       await settle();
       expect(driverServices.removeDriver).not.toHaveBeenCalled();
-      expect(rows()).toHaveLength(1);
+      expect(router.currentRoute.value.name).toBe("driverDetails");
     });
   });
 
   describe("US-7.4 — Edit and delete drivers", () => {
     it("Driver is deleted", async () => {
       signIn();
-      driverServices.getDrivers.mockResolvedValueOnce({ data: [john] }).mockResolvedValue({ data: [] });
-      await mountAppAt("/drivers");
+      driverServices.getDrivers.mockResolvedValue({ data: [] });
+      await mountAppAt(`/drivers/${john.id}`);
 
-      await clickLabeled("Delete driver");
+      await chooseMoreAction("delete-driver");
       (await dialogButton("Delete Driver")).click();
       await settle();
 
-      expect(driverServices.removeDriver).toHaveBeenCalledWith(john.id);
-      await waitFor(() => expect(document.body.textContent).toContain("No drivers yet. Create your first driver."));
+      expect(driverServices.removeDriver).toHaveBeenCalledWith(String(john.id));
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("drivers"));
+      await waitFor(() => expect(document.body.textContent).toContain("No drivers yet"));
     });
 
     it("Failed delete stays in the dialog with the API message", async () => {
       signIn();
       driverServices.getDrivers.mockResolvedValue({ data: [john] });
       driverServices.removeDriver.mockRejectedValue(apiError(400, "Driver cannot be deleted."));
-      await mountAppAt("/drivers");
+      await mountAppAt(`/drivers/${john.id}`);
 
-      await clickLabeled("Delete driver");
+      await chooseMoreAction("delete-driver");
       (await dialogButton("Delete Driver")).click();
       await settle();
 
       const confirm = await dialogButton("Delete Driver");
-      expect(confirm.closest(".v-overlay--active").textContent).toContain("Driver cannot be deleted.");
-      expect(rows()).toHaveLength(1);
+      expect(confirm.closest(".v-overlay--active:not(.v-snackbar)").textContent).toContain("Driver cannot be deleted.");
+      expect(router.currentRoute.value.name).toBe("driverDetails");
       (await dialogButton("Cancel")).click();
       await settle();
     });

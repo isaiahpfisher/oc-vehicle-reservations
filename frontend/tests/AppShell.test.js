@@ -34,9 +34,12 @@ beforeEach(() => {
   vi.resetAllMocks();
   // Role refresh echoes the stored roles.
   // Feature 8 (US-8.2): home now loads `me/requests`, so only the role refresh gets a user back.
-  apiClient.get.mockImplementation(async (url) =>
-    url.startsWith("users/") ? { data: { roles: JSON.parse(localStorage.getItem("user"))?.roles ?? [] } } : { data: [] },
-  );
+  // A vehicle's service log loads the maintenance need options, an object rather than a list.
+  apiClient.get.mockImplementation(async (url) => {
+    if (url.startsWith("users/")) return { data: { roles: JSON.parse(localStorage.getItem("user"))?.roles ?? [] } };
+    if (url === "maintenance-needs/options") return { data: { vehicles: [], assignees: [] } };
+    return { data: [] };
+  });
 });
 
 afterEach(() => {
@@ -55,7 +58,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     expect(appBar()).not.toBeNull();
     expect(drawer()).toBeNull();
     expect(appBar().textContent).toContain("OC");
-    expect(appBar().textContent).toContain("Vehicle Registration");
+    expect(appBar().textContent).toContain("OC Vehicles");
     expect(appBar().textContent).toContain("Oklahoma Christian University");
     expect(appBar().querySelector('[aria-label="Open profile menu"]')).not.toBeNull();
   });
@@ -72,22 +75,22 @@ describe("App shell (ui-style-system.mdc)", () => {
     expect(content.textContent).toContain("OC");
     // Pages come from route `meta.nav` (Features 3–8, 10–12), grouped into sections by `meta.navGroup`.
     // Feature 11 adds Maintenance Needs in Fleet, after Service Types.
-    // Feature 15 adds Vehicle Type Instructions in Fleet, after Vehicle Types.
+    // Feature 15 added Vehicle Type Instructions after Vehicle Types; UI/UX backlog #9 moved them into each type's page.
+    // UI/UX backlog #38: the lists that configure the fleet moved from Fleet into a Setup section.
     const mainNav = content.querySelector('[aria-label="Main navigation"]');
     expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
       "Requests",
       "Drivers",
       "Destinations",
       "Vehicles",
-      "Vehicle Types",
-      "Vehicle Type Instructions",
       "Issue Reports",
-      "Service Types",
       "Maintenance Needs",
+      "Vehicle Types",
+      "Service Types",
       "Users",
       "Areas",
     ]);
-    expect(sectionTitles(mainNav)).toEqual(["Trips", "Fleet", "Administration"]);
+    expect(sectionTitles(mainNav)).toEqual(["Trips", "Fleet", "Setup", "Administration"]);
     expect(mainNav.textContent.indexOf("Trips")).toBeLessThan(mainNav.textContent.indexOf("Requests"));
     expect(mainNav.textContent.indexOf("Administration")).toBeLessThan(mainNav.textContent.indexOf("Users"));
 
@@ -105,13 +108,25 @@ describe("App shell (ui-style-system.mdc)", () => {
     await openApp("/");
 
     const mainNav = drawer().querySelector('[aria-label="Main navigation"]');
+    // UI/UX backlog #28: a user whose only role is maintenance doesn't get Issue Reports.
     expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toEqual([
       "Vehicles",
-      "Issue Reports",
-      "Service Types",
       "Maintenance Needs",
+      "Service Types",
     ]);
-    expect(sectionTitles(mainNav)).toEqual(["Fleet"]);
+    expect(sectionTitles(mainNav)).toEqual(["Fleet", "Setup"]);
+  });
+
+  // UI/UX backlog #28: another role brings Issue Reports back.
+  it("shows Issue Reports to a maintenance user who is also an area admin", async () => {
+    signIn([
+      { id: 1, role: "maintenance", areaId: null, area: null },
+      { id: 2, role: "area_admin", areaId: 3, area: { id: 3, name: "Athletics" } },
+    ]);
+    await openApp("/");
+
+    const mainNav = drawer().querySelector('[aria-label="Main navigation"]');
+    expect([...mainNav.querySelectorAll("a")].map((a) => a.textContent.trim())).toContain("Issue Reports");
   });
 
   it("highlights the Sidebar link for the page's section, including nested pages", async () => {
@@ -125,6 +140,8 @@ describe("App shell (ui-style-system.mdc)", () => {
       ["/drivers/new", ["Drivers"]],
       ["/drivers/3", ["Drivers"]],
       ["/vehicles/4", ["Vehicles"]],
+      // Feature 21, US-21.1: a vehicle's service log is under Vehicles.
+      ["/service-logs/4", ["Vehicles"]],
       ["/destinations/new", ["Destinations"]],
       ["/requests/5", ["Requests"]],
       ["/", ["My Requests"]],
@@ -135,12 +152,49 @@ describe("App shell (ui-style-system.mdc)", () => {
     }
   });
 
+  // UI/UX backlog #43: each tab is named for its page.
+  it("names the browser tab after the page", async () => {
+    signIn([{ id: 1, role: "admin", areaId: null, area: null }]);
+    await openApp("/drivers");
+    expect(document.title).toBe("Drivers · OC Vehicles");
+
+    await router.push("/drivers/new");
+    await settle();
+    expect(document.title).toBe("New driver · OC Vehicles");
+  });
+
   it("highlights My Requests on a requester's own request page", async () => {
     signIn([]);
     await openApp("/requests/5");
 
     const highlighted = [...appBar().querySelectorAll("a.v-btn--active")].map((link) => link.textContent.trim());
     expect(highlighted).toEqual(["My Requests"]);
+  });
+
+  // UI/UX backlog #15: links show what's waiting (`meta.badge`); zero shows nothing, collapsed shows a dot.
+  it("shows count badges on Sidebar links, and a dot when collapsed", async () => {
+    apiClient.get.mockImplementation(async (url) => {
+      if (url.startsWith("users/")) return { data: { roles: JSON.parse(localStorage.getItem("user"))?.roles ?? [] } };
+      if (url === "nav-counts") return { data: { requests: 3, issueReports: 0, maintenanceNeeds: 12, vehicles: 2, drivers: 4 } };
+      return { data: [] };
+    });
+    signIn([{ id: 1, role: "admin", areaId: null, area: null }]);
+    await openApp("/");
+
+    const badgeText = (name) => drawer().querySelector(`[data-test="nav-badge-${name}"]`)?.textContent.trim();
+    await waitFor(() => expect(badgeText("adminRequests")).toBe("3"));
+    expect(badgeText("maintenance-needs")).toBe("12");
+    expect(badgeText("issue-reports")).toBeUndefined();
+    expect(drawer().querySelector('[aria-label="Requests, 3 waiting"]')).not.toBeNull();
+    // Vehicles needing attention, and drivers whose license has expired or expires within 30 days.
+    expect(badgeText("vehicles")).toBe("2");
+    expect(badgeText("drivers")).toBe("4");
+    expect(drawer().querySelector('[aria-label="Vehicles, 2 need attention"]')).not.toBeNull();
+    expect(drawer().querySelector('[aria-label="Drivers, 4 to renew"]')).not.toBeNull();
+
+    drawer().querySelector('[aria-label="Collapse sidebar"]').click();
+    await settle();
+    expect(drawer().querySelectorAll('[data-test="nav-badge-dot"]')).toHaveLength(4);
   });
 
   it("collapses and expands the Sidebar", async () => {
@@ -151,7 +205,7 @@ describe("App shell (ui-style-system.mdc)", () => {
     drawer().querySelector('[aria-label="Collapse sidebar"]').click();
     await settle();
     expect(drawer().classList).toContain("v-navigation-drawer--rail");
-    expect(drawer().textContent).not.toContain("Vehicle Registration");
+    expect(drawer().textContent).not.toContain("OC Vehicles");
     // Collapsed, section titles give way to icons only.
     expect(drawer().querySelectorAll(".v-list-subheader")).toHaveLength(0);
     // Collapsed links name their page in a tooltip; expanded, the label shows, so tooltips stay off.
@@ -159,9 +213,8 @@ describe("App shell (ui-style-system.mdc)", () => {
       wrapper.findComponent({ name: "VNavigationDrawer" }).findAllComponents({ name: "VTooltip" }).map((tooltip) => tooltip.props());
     expect(tooltips().map(({ text, disabled }) => [text, disabled])).toEqual([
       ["Vehicles", false],
-      ["Issue Reports", false],
-      ["Service Types", false],
       ["Maintenance Needs", false],
+      ["Service Types", false],
       ["My Requests", false],
     ]);
 

@@ -14,7 +14,7 @@ import vehicleRequestServices from "../src/services/vehicleRequestServices.js";
 import maintenanceNeedServices from "../src/services/maintenanceNeedServices.js";
 import noteServices from "../src/services/noteServices.js";
 import { todayInput } from "../src/models/issueReports.js";
-import { signInAs, vuetify } from "./testUtils.js";
+import { chooseMoreAction, signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -139,6 +139,14 @@ const namedButton = (text) =>
 const field = async (name, label) =>
   waitFor(() => {
     const match = wrapper.findAllComponents({ name }).find((component) => component.props("label") === label);
+    expect(match).toBeDefined();
+    return match;
+  });
+
+// The search box has a placeholder, not a label, like every list's search.
+const searchField = () =>
+  waitFor(() => {
+    const match = wrapper.findAllComponents({ name: "VTextField" }).find((component) => String(component.props("placeholder")).startsWith("Search"));
     expect(match).toBeDefined();
     return match;
   });
@@ -300,13 +308,13 @@ describe("Feature 10 — Issue Report", () => {
       await openCreate();
       await fillRequired({ type: "other", description: "Spare key is missing.", status: "resolved" });
       // Resolving starts the date at today; it can be changed.
-      expect((await field("VTextField", "Resolved on")).props("modelValue")).toBe(todayInput());
-      await (await field("VTextField", "Resolved on")).setValue("2026-10-23");
+      // UI/UX backlog #62: the resolved date is set for you (today), not typed.
+      expect(byTest("resolved-at").textContent).toContain("Resolved on");
       await submit();
 
       await waitFor(() => expect(issueReportServices.createIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.createIssueReport.mock.calls[0][0].status).toBe("resolved");
-      expect(issueReportServices.createIssueReport.mock.calls[0][0].resolvedAt).toBe("2026-10-23");
+      expect(issueReportServices.createIssueReport.mock.calls[0][0].resolvedAt).toBe(todayInput());
       expect(saved.status).toBe(201);
     });
 
@@ -371,16 +379,17 @@ describe("Feature 10 — Issue Report", () => {
       expect(issueReportServices.createIssueReport.mock.calls[0][0].status).toBe("pending");
     });
 
-    it("User creates a resolved issue report with missing resolved date", async () => {
+    // UI/UX backlog #62 replaced "missing resolved date": there's no date to leave out, closing sets today.
+    it("User creates a resolved issue report and its date is set for them", async () => {
       signIn();
       await mountAppAt("/issue-reports");
       await openCreate();
       await fillRequired({ status: "resolved" });
-      await (await field("VTextField", "Resolved on")).setValue("");
+      expect(document.body.querySelector('[data-test="resolved-at"] input')).toBeNull();
       await submit();
 
-      expect(issueReportServices.createIssueReport).not.toHaveBeenCalled();
-      await waitFor(() => expect(byTest("section-status").textContent).toContain("Enter the date it was closed."));
+      await waitFor(() => expect(issueReportServices.createIssueReport).toHaveBeenCalledTimes(1));
+      expect(issueReportServices.createIssueReport.mock.calls[0][0].resolvedAt).toBe(todayInput());
     });
   });
 
@@ -405,7 +414,7 @@ describe("Feature 10 — Issue Report", () => {
       await mountAppAt("/issue-reports");
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No issue reports yet. Create your first issue report.");
+        expect(document.body.textContent).toContain("No issue reports");
       });
     });
   });
@@ -422,25 +431,27 @@ describe("Feature 10 — Issue Report", () => {
   });
 
   describe("US-10.4 — Manage issue report rows", () => {
-    it("Admin issue report rows have edit and delete actions", async () => {
+    // UI/UX backlog #36: rows keep edit; delete moved to the report page's ⋮ menu.
+    it("Admin issue report rows have an edit action, and no delete", async () => {
       signIn();
       issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
       await mountAppAt("/issue-reports");
 
       await waitFor(() => {
         expect(document.body.querySelector('[aria-label="Edit issue report"]')).toBeTruthy();
-        expect(document.body.querySelector('[aria-label="Delete issue report"]')).toBeTruthy();
+        expect(document.body.querySelector('[aria-label="Delete issue report"]')).toBeNull();
       });
     });
 
-    it("Area admin issue report rows have edit and delete actions", async () => {
+    // UI/UX backlog #36: rows keep edit; delete moved to the report page's ⋮ menu.
+    it("Area admin issue report rows have an edit action, and no delete", async () => {
       signIn(areaAdminRoles);
       issueReportServices.getIssueReports.mockResolvedValue({ data: [janeReport] });
       await mountAppAt("/issue-reports");
 
       await waitFor(() => {
         expect(document.body.querySelector('[aria-label="Edit issue report"]')).toBeTruthy();
-        expect(document.body.querySelector('[aria-label="Delete issue report"]')).toBeTruthy();
+        expect(document.body.querySelector('[aria-label="Delete issue report"]')).toBeNull();
       });
     });
 
@@ -498,15 +509,16 @@ describe("Feature 10 — Issue Report", () => {
       await mountAppAt("/issue-reports");
       await openEdit();
       await clickTest("status-resolved");
-      await (await field("VTextField", "Resolved on")).setValue("2026-10-24");
       await submit();
 
       await waitFor(() => expect(issueReportServices.updateIssueReport).toHaveBeenCalledTimes(1));
       expect(issueReportServices.updateIssueReport.mock.calls[0][1].status).toBe("resolved");
-      expect(issueReportServices.updateIssueReport.mock.calls[0][1].resolvedAt).toBe("2026-10-24");
+      // UI/UX backlog #62: closing records today.
+      expect(issueReportServices.updateIssueReport.mock.calls[0][1].resolvedAt).toBe(todayInput());
       expect(saved.status).toBe(200);
       await waitFor(() => expect(byTest("status-chip").textContent).toContain("Resolved"));
-      expect((await field("VTextField", "Resolved on")).props("modelValue")).toBe("2026-10-24");
+      // The saved date shows as text.
+      expect(byTest("resolved-at").textContent).toContain("Oct 24, 2026");
     });
 
     it("Admin clears an issue report assignee", async () => {
@@ -540,20 +552,20 @@ describe("Feature 10 — Issue Report", () => {
       await waitFor(() => expect(byTest("section-problem").textContent).toContain("Describe the problem."));
     });
 
+    // UI/UX backlog #36: from the report page's ⋮ menu, then back to the list.
     it("Admin deletes an issue report", async () => {
       signIn();
       issueReportServices.getIssueReports.mockResolvedValueOnce({ data: [janeReport] }).mockResolvedValue({ data: [] });
       await mountAppAt("/issue-reports");
+      await openEdit();
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete issue report"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete issue report"]').click();
-      await settle();
-      await clickNamed("Delete");
+      await chooseMoreAction("delete-report");
+      await clickNamed("Delete Issue Report");
 
       await waitFor(() => expect(issueReportServices.removeIssueReport).toHaveBeenCalledWith(1));
       await expect(issueReportServices.removeIssueReport.mock.results[0].value).resolves.toMatchObject({ status: 200 });
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No issue reports yet. Create your first issue report.");
+        expect(document.body.textContent).toContain("No issue reports");
       });
     });
 
@@ -742,12 +754,44 @@ describe("Feature 14 — Notes", () => {
     const rowTexts = () => [...document.body.querySelectorAll(".v-data-table tbody tr")].map((row) => row.textContent);
     const descriptions = () => rowTexts().map((text) => reports.find((report) => text.includes(report.description))?.description);
 
-    const mountList = async () => {
+    /** The list starts on Pending; most tests then clear the status to see every report. */
+    const mountList = async ({ allStatuses = true } = {}) => {
       signIn();
       issueReportServices.getIssueReports.mockResolvedValue({ data: reports });
       await mountAppAt("/issue-reports");
-      await waitFor(() => expect(rowTexts()).toHaveLength(3));
+      await waitFor(() => expect(rowTexts()).toHaveLength(2));
+      if (allStatuses) {
+        await (await field("VSelect", "Status")).setValue(null);
+        await settle();
+        await waitFor(() => expect(rowTexts()).toHaveLength(3));
+      }
     };
+
+    it("Only pending reports show at first; clearing the filters shows every report", async () => {
+      await mountList({ allStatuses: false });
+
+      expect((await field("VSelect", "Status")).props("modelValue")).toBe("pending");
+      expect(descriptions()).toEqual(["Music issue.", "Tank is on empty."]);
+      expect(byTest("result-count").textContent).toContain("Showing 2 of 3");
+
+      await clickTest("clear-filters");
+      await waitFor(() => expect(rowTexts()).toHaveLength(3));
+      expect((await field("VSelect", "Status")).props("modelValue")).toBeNull();
+    });
+
+    it("With nothing pending, the list says so instead of looking like a search that missed", async () => {
+      signIn();
+      issueReportServices.getIssueReports.mockResolvedValue({ data: [reports[2]] });
+      await mountAppAt("/issue-reports");
+
+      await waitFor(() => expect(document.body.textContent).toContain("No pending issue reports"));
+      expect(document.body.textContent).toContain("Clear the filters to see past reports.");
+      expect(byTest("result-count").textContent).toContain("Showing 0 of 1");
+
+      await (await searchField()).setValue("mud");
+      await settle();
+      expect(document.body.textContent).toContain("No issue reports match");
+    });
 
     it("Issue reports table shows only the key columns", async () => {
       await mountList();
@@ -764,7 +808,8 @@ describe("Feature 14 — Notes", () => {
       // Desktop: the short columns have fixed widths; Issue takes the rest and truncates.
       await mountList();
       const widths = [...document.body.querySelectorAll(".v-data-table thead th")].map((th) => th.style.width);
-      expect(widths).toEqual(["", "120px", "136px", "136px", "104px"]);
+      // Status is wide enough for "Moved to maintenance" (UI/UX backlog: the chip was cropped).
+      expect(widths).toEqual(["", "120px", "216px", "136px", "104px"]);
       expect(document.body.querySelector('[data-test="issue-mobile-row"]')).toBeNull();
       wrapper.unmount();
 
@@ -789,7 +834,7 @@ describe("Feature 14 — Notes", () => {
 
     it("User searches issue reports", async () => {
       await mountList();
-      const search = await field("VTextField", "Search");
+      const search = await searchField();
 
       // Any of the report's details, any order, any case.
       for (const [text, expected] of [
@@ -849,5 +894,25 @@ describe("Feature 14 — Notes", () => {
       // Pending before Resolved.
       expect(descriptions()[2]).toBe("Mud on the floor mats.");
     });
+  });
+});
+
+// UI/UX backlog #73: rows with notes say so, with the count and when the latest came.
+describe("UI/UX backlog #73 — Note counts on list rows", () => {
+  it("marks a report that has notes and leaves one without notes unmarked", async () => {
+    signIn();
+    issueReportServices.getIssueReports.mockResolvedValue({
+      data: [
+        { ...janeReport, noteCount: 3, lastNoteAt: "2026-10-03T12:00:00.000Z" },
+        { ...janeReport, id: 2, description: "Seat is torn.", noteCount: 0, lastNoteAt: null },
+      ],
+    });
+    await mountAppAt("/issue-reports");
+
+    await waitFor(() => expect(wrapper.text()).toContain("Seat is torn."));
+    const markers = [...document.body.querySelectorAll('[data-test="note-count"]')];
+    expect(markers.length).toBeGreaterThan(0);
+    expect(markers.every((marker) => marker.textContent.trim() === "3")).toBe(true);
+    expect(markers[0].getAttribute("aria-label")).toMatch(/^3 notes, latest Oct 3$/);
   });
 });

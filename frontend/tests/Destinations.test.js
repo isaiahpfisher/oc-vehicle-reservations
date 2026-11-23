@@ -14,7 +14,7 @@ import router from "../src/router.js";
 import apiClient from "../src/services/services.js";
 import destinationServices from "../src/services/destinationServices.js";
 import placeServices from "../src/services/placeServices.js";
-import { signInAs, vuetify } from "./testUtils.js";
+import { chooseMoreAction, signInAs, vuetify } from "./testUtils.js";
 
 vi.mock("../src/services/services.js", () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -24,6 +24,7 @@ vi.mock("../src/services/destinationServices.js", () => ({
   default: {
     getDestinations: vi.fn(),
     getDestinationById: vi.fn(),
+    getDestinationTrips: vi.fn(),
     createDestination: vi.fn(),
     updateDestination: vi.fn(),
     removeDestination: vi.fn(),
@@ -183,6 +184,7 @@ beforeEach(async () => {
   roles = signedInUser.roles;
   signInAs(null);
   vi.resetAllMocks();
+  destinationServices.getDestinationTrips.mockResolvedValue({ data: [] });
   apiClient.get.mockImplementation(async (url) => {
     if (String(url).startsWith("users/")) {
       return { data: { roles } };
@@ -402,19 +404,20 @@ describe("Feature 6 — Destinations", () => {
       await mountAppAt("/destinations");
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No destinations yet. Create your first destination.");
+        expect(document.body.textContent).toContain("No destinations yet");
       });
     });
   });
 
   describe("US-6.3 — Manage destination rows", () => {
-    it("Destination rows have edit and delete actions", async () => {
+    // UI/UX backlog #36: rows keep edit; delete moved to the destination page's ⋮ menu.
+    it("Destination rows have an edit action, and no delete", async () => {
       signIn();
       destinationServices.getDestinations.mockResolvedValue({ data: [pops] });
       await mountAppAt("/destinations");
 
       await waitFor(() => expect(document.body.querySelector('[aria-label="Edit destination"]')).toBeTruthy());
-      expect(document.body.querySelector('[aria-label="Delete destination"]')).toBeTruthy();
+      expect(document.body.querySelector('[aria-label="Delete destination"]')).toBeNull();
     });
   });
 
@@ -546,15 +549,17 @@ describe("Feature 6 — Destinations", () => {
       destinationServices.getDestinations.mockResolvedValueOnce({ data: [pops] }).mockResolvedValueOnce({ data: [] });
       await mountAppAt("/destinations");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete destination"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete destination"]').click();
-      await settle();
+      // UI/UX backlog #36: from the destination page's ⋮ menu, then back to the list.
+      await openEdit("Pops");
+      await chooseMoreAction("delete-destination");
+      expect(document.body.textContent).toContain('Delete "Pops"? This action is permanent.');
       await clickNamed("Delete");
 
-      await waitFor(() => expect(destinationServices.removeDestination).toHaveBeenCalledWith(1));
+      await waitFor(() => expect(destinationServices.removeDestination).toHaveBeenCalledWith("1"));
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("destinations"));
       expect(removed.status).toBe(200);
       await waitFor(() => {
-        expect(document.body.textContent).toContain("No destinations yet. Create your first destination.");
+        expect(document.body.textContent).toContain("No destinations yet");
       });
     });
 
@@ -565,12 +570,14 @@ describe("Feature 6 — Destinations", () => {
       destinationServices.getDestinations.mockResolvedValueOnce({ data: [pops] }).mockResolvedValueOnce({ data: [] });
       await mountAppAt("/destinations");
 
-      await waitFor(() => expect(document.body.querySelector('[aria-label="Delete destination"]')).toBeTruthy());
-      document.body.querySelector('[aria-label="Delete destination"]').click();
-      await settle();
+      // UI/UX backlog #36: from the destination page's ⋮ menu, then back to the list.
+      await openEdit("Pops");
+      await chooseMoreAction("delete-destination");
+      expect(document.body.textContent).toContain('Delete "Pops"? This action is permanent.');
       await clickNamed("Delete");
 
-      await waitFor(() => expect(destinationServices.removeDestination).toHaveBeenCalledWith(1));
+      await waitFor(() => expect(destinationServices.removeDestination).toHaveBeenCalledWith("1"));
+      await waitFor(() => expect(router.currentRoute.value.name).toBe("destinations"));
       expect(removed.status).toBe(200);
       await waitFor(() => {
         expect(document.body.textContent).not.toContain("660 OK-66");
@@ -642,7 +649,7 @@ describe("Feature 8 — Vehicle Request Management", () => {
       await mountAppAt("/destinations");
       await waitFor(() => expect(listed()).toHaveLength(3));
 
-      const filter = await field("VSelect", "Filter by availability");
+      const filter = await field("VSelect", "Availability");
       expect(filter.props("items").map(({ title }) => title)).toEqual(["Official", "Unofficial"]);
 
       await filter.setValue(false);
@@ -780,6 +787,55 @@ describe("Feature 8 — Vehicle Request Management", () => {
       expect(destinationServices.createDestination.mock.calls[0][0].miles_from_campus).toBe(22);
     });
 
+    // UI/UX backlog #69: the destination's page lists the trips that stop there.
+    it("Shows the trips that stop at a destination", async () => {
+      signIn();
+      destinationServices.getDestinationById.mockResolvedValue({ data: pops });
+      destinationServices.getDestinationTrips.mockResolvedValue({
+        data: [
+          {
+            id: 12,
+            purpose: "Away game",
+            startAt: "2026-09-01",
+            endAt: "2026-09-02",
+            allDay: true,
+            status: "reserved",
+            area: { id: 1, name: "Athletics" },
+            user: { id: 3, firstName: "Jane", lastName: "Doe" },
+          },
+        ],
+      });
+      await mountAppAt(`/destinations/${pops.id}`);
+
+      const card = await waitFor(() => {
+        const element = document.body.querySelector('[data-test="destination-trips"]');
+        expect(element?.textContent).toContain("Away game");
+        return element;
+      });
+      expect(destinationServices.getDestinationTrips).toHaveBeenCalledWith(String(pops.id));
+      expect(card.textContent).toContain("1 trip stops here.");
+      expect(card.textContent).toContain("Athletics");
+      expect(card.querySelector('a[href="/requests/12"]')).not.toBeNull();
+    });
+
+    // UI/UX backlog #31: leaving an edited destination asks first; staying keeps the edit.
+    it("Asks before leaving a destination with unsaved changes", async () => {
+      signIn();
+      destinationServices.getDestinations.mockResolvedValue({ data: [pops] });
+      await mountAppAt("/destinations");
+      await openEdit("Pops");
+      await (await textField("Name")).setValue("Pops Arcadia");
+
+      const leaving = router.push({ name: "destinations" });
+      await waitFor(() => expect(document.body.textContent).toContain("Discard changes?"));
+      [...document.body.querySelectorAll("button")].find((el) => el.textContent.trim() === "Keep Editing").click();
+      await leaving;
+      await settle();
+
+      expect(router.currentRoute.value.name).toBe("destinationDetails");
+      expect((await textField("Name")).props("modelValue")).toBe("Pops Arcadia");
+    });
+
     it("Ignores a distance for a destination the user has moved on from", async () => {
       signIn();
       let answer;
@@ -793,7 +849,11 @@ describe("Feature 8 — Vehicle Request Management", () => {
       search.vm.$emit("update:modelValue", suggestion);
       await waitFor(() => expect(placeServices.getMilesFromCampus).toHaveBeenCalledTimes(1));
       // Same page component, new record: the answer for Pops must not land on the new form.
-      await router.push({ name: "destinationCreate" });
+      // UI/UX backlog #31: the picked address is an unsaved change, so leaving asks first; discard it.
+      const leaving = router.push({ name: "destinationCreate" });
+      await waitFor(() => expect(document.body.textContent).toContain("Discard changes?"));
+      [...document.body.querySelectorAll("button")].find((el) => el.textContent.trim() === "Discard Changes").click();
+      await leaving;
       await waitFor(() => expect(heading()).toBe("New Destination"));
       answer({ data: { milesFromCampus: 99 } });
       await settle();

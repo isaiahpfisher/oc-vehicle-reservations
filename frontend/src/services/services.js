@@ -24,12 +24,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.message || "";
-
-    if (error.response?.status === 401 || /Unauthorized/i.test(message)) {
+    // Only a 401 means the session is gone. A 403 (e.g. "Unauthorized for this area.") is a permission error and
+    // must not sign the user out, whatever its message says.
+    if (error.response?.status === 401) {
       useAuthStore().signOut();
-      if (router.hasRoute("login")) {
-        router.push({ name: "login" });
+      // UI/UX backlog #17: tell them their session ended, and bring them back to this page after they sign in.
+      const current = router.currentRoute.value;
+      if (router.hasRoute("login") && current.name !== "login") {
+        router.push({ name: "login", query: { expired: "1", ...(current.name === "home" ? {} : { redirect: current.fullPath }) } });
       }
     }
 

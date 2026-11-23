@@ -1,13 +1,22 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import { useNoticeStore } from "../stores/notice.js";
 import { useRouter } from "vue-router";
 import destinationServices from "../services/destinationServices.js";
 import placeServices from "../services/placeServices.js";
 import { useRequest } from "../composables/useRequest.js";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges.js";
 import AddressSearchField from "../components/common/AddressSearchField.vue";
 import FormSection from "../components/layout/FormSection.vue";
 import PageShell from "../components/layout/PageShell.vue";
+import MoreActionsMenu from "../components/common/MoreActionsMenu.vue";
+import { useConfirm } from "../composables/useConfirm.js";
+import SectionCard from "../components/layout/SectionCard.vue";
+import RequestStatusChip from "../components/requests/RequestStatusChip.vue";
+import { formatTripDates, personName } from "../models/requests.js";
 
+// UI/UX backlog #48: the app-wide success toast.
+const { notify } = useNoticeStore();
 const props = defineProps({
   /** The destination being edited; none on the create route. */
   id: { type: [String, Number], default: null },
@@ -29,6 +38,23 @@ const blank = () => ({
 });
 
 const form = ref(blank());
+
+/** UI/UX backlog #69: the trips that stop here (your areas only), newest first. */
+const TRIPS_SHOWN = 10;
+const {
+  data: trips,
+  loading: tripsLoading,
+  error: tripsError,
+  run: getTrips,
+} = useRequest(destinationServices.getDestinationTrips, { initial: [], fallback: "Couldn't load the trips." });
+// UI/UX backlog #31: ask before leaving with unsaved changes. `baseline` is the form as loaded.
+const baseline = ref("");
+const snapshot = () => {
+  baseline.value = JSON.stringify(form.value);
+};
+const dirty = computed(() => baseline.value !== "" && JSON.stringify(form.value) !== baseline.value);
+const { allowLeave } = useUnsavedChanges(dirty);
+
 
 const {
   data: destination,
@@ -133,11 +159,16 @@ const save = async () => {
   if (!valid) return;
 
   if (await saveDestination(toPayload(form.value))) {
+    notify(props.id ? "Destination saved." : "Destination created.");
+    allowLeave();
     await router.push({ name: "destinations" });
   }
 };
 
-const cancel = () => router.push({ name: "destinations" });
+const cancel = () => {
+  allowLeave();
+  router.push({ name: "destinations" });
+};
 
 watch(
   () => props.id,
@@ -150,15 +181,36 @@ watch(
     if (!id) {
       destination.value = null;
       form.value = blank();
+      snapshot();
       return;
     }
 
     if (await load(id)) {
       form.value = toForm(destination.value);
+      snapshot();
+      getTrips(id);
     }
   },
   { immediate: true },
 );
+
+/** UI/UX backlog #36: delete lives in the page's ⋮ menu, not on every list row. */
+const confirmDelete = useConfirm();
+const deleteDestination = async () => {
+  const deleted = await confirmDelete({
+    title: "Delete destination",
+    message: `Delete "${title.value}"? This action is permanent.`,
+    confirmText: "Delete",
+    confirmColor: "error",
+    onConfirm: () => destinationServices.removeDestination(props.id),
+  });
+
+  if (deleted) {
+    notify("Destination deleted.");
+    allowLeave();
+    await router.push({ name: "destinations" });
+  }
+};
 </script>
 
 <template>
@@ -171,6 +223,18 @@ watch(
     :max-width="1040"
     centered
   >
+    <template v-if="id" #actions>
+      <MoreActionsMenu>
+        <v-list-item
+          prepend-icon="mdi-delete-outline"
+          title="Delete destination"
+          base-color="error"
+          data-test="delete-destination"
+          @click="deleteDestination"
+        />
+      </MoreActionsMenu>
+    </template>
+
     <v-form ref="formRef" @submit.prevent="save">
       <FormSection
         title="Find on Google Maps"
@@ -253,5 +317,38 @@ watch(
         <v-btn color="primary" variant="elevated" class="oc-cta" type="submit" :loading="saving">Save</v-btn>
       </div>
     </v-form>
+
+    <SectionCard
+      v-if="id"
+      title="Trips"
+      :subtitle="trips.length ? (trips.length === 1 ? '1 trip stops here.' : `${trips.length} trips stop here.`) : ''"
+      class="mt-8"
+      data-test="destination-trips"
+    >
+      <v-skeleton-loader v-if="tripsLoading && !trips.length" type="list-item-two-line@2" />
+      <v-alert v-else-if="tripsError" type="error" density="compact">{{ tripsError }}</v-alert>
+      <p v-else-if="!trips.length" class="text-body-medium text-medium-emphasis mb-0">No trips in your areas stop here yet.</p>
+      <v-list v-else density="compact" class="py-0 bg-transparent">
+        <v-list-item
+          v-for="trip in trips.slice(0, TRIPS_SHOWN)"
+          :key="trip.id"
+          :to="{ name: 'request', params: { requestId: trip.id } }"
+          :subtitle="`${formatTripDates(trip)} · ${trip.area?.name ?? ''} · ${personName(trip.user)}`"
+          class="trip-row px-0"
+        >
+          <v-list-item-title class="text-truncate" :title="trip.purpose">{{ trip.purpose }}</v-list-item-title>
+          <template #append><RequestStatusChip :status="trip.status" /></template>
+        </v-list-item>
+      </v-list>
+      <div v-if="trips.length > TRIPS_SHOWN" class="text-body-small text-medium-emphasis mt-2">
+        Showing the latest {{ TRIPS_SHOWN }} of {{ trips.length }}.
+      </div>
+    </SectionCard>
   </PageShell>
 </template>
+
+<style scoped>
+.trip-row + .trip-row {
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+</style>

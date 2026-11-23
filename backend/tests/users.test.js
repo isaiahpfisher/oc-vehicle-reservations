@@ -295,6 +295,7 @@ describe("Feature 7 — Driver Management API", () => {
   const driverRow = (overrides = {}) => ({
     firstName: "Bob",
     lastName: "Jones",
+    email: "bob.jones@example.com",
     phoneNumber: "405-425-1234",
     licenseState: "OK",
     licenseExpirationDate: "2999-09-01",
@@ -353,6 +354,48 @@ describe("Feature 7 — Driver Management API", () => {
       await driver.reload();
       expect(driver.userId).toBeNull();
       expect(driver.firstName).toBe("Bob");
+    });
+  });
+
+  // UI/UX backlog #4: records that name the user as author keep them, with a message instead of a 500.
+  describe("UI/UX backlog #4 — Delete guards", () => {
+    it("Deleting a user who logged mileage and wrote an issue report and a maintenance need is refused", async () => {
+      const admin = await signInAdmin();
+      const bob = await registerUser({ email: "bob@eagles.oc.edu" });
+      const area = await db.area.create({ name: "Athletics", logo: "" });
+      const type = await db.vehicleType.create({ name: "Car", identifier: "VIN" });
+      const vehicle = await db.vehicle.create({
+        areaId: area.id,
+        vehicleTypeId: type.id,
+        universityId: "V-1",
+        make: "Toyota",
+        model: "Sienna",
+        year: 2015,
+        identifier: "1HGCM82633A004352",
+        purchasedAt: "2018-01-01",
+        color: "gray",
+        passengerCapacity: 8,
+        status: "active",
+      });
+      const userId = bob.body.userId;
+      await db.mileageLog.create({ vehicleId: vehicle.id, userId, odometerReading: 10, recordedAt: "2026-01-02" });
+      await db.issueReport.create({ vehicleId: vehicle.id, authorId: userId, type: "dirty", description: "Mud", status: "pending" });
+      await db.maintenanceNeed.create({
+        vehicleId: vehicle.id,
+        authorId: userId,
+        title: "Brakes",
+        outOfService: false,
+        priority: "None",
+        status: "Open",
+      });
+
+      const response = await request(app).delete(`/api/users/${userId}`).set(bearer(admin.body.token));
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        message: "User has mileage logs, issue reports, and maintenance needs and can't be deleted.",
+      });
+      expect(await db.user.findByPk(userId)).not.toBeNull();
     });
   });
 });
